@@ -1,0 +1,45 @@
+/* Untangle — shared theme tokens
+   Loaded by both app/index.html and app/widget.html so the planner and
+   the Quick Access widget always match. Switch themes by setting
+   data-theme="grey" (or removing it / setting "foundry-basic") on <html>.
+
+   --accent-rgb / --red-rgb / --green-rgb hold the same colors as
+   --accent / --red / --green as comma-separated RGB triplets, so the rest
+   of the CSS can do rgba(var(--accent-rgb), 0.1) and stay theme-agnostic. */
+
+:root,
+[data-theme="foundry-basic"] {
+  --bg: #0a0911;
+  --bg-card: #16131f;
+  --bg-elevated: #201c2c;
+  --accent: #ee9b3a;
+  --accent-dim: #b8752a;
+  --accent-rgb: 238, 155, 58;
+  --text: #e1cbac;
+  --text-dim: #9c8b73;
+  --red: #c0524f;
+  --red-rgb: 192, 82, 79;
+  --green: #7c9a5c;
+  --green-rgb: 124, 154, 92;
+  --border: rgba(225, 203, 172, 0.15);
+  --border-hover: rgba(238, 155, 58, 0.4);
+  --radius: 6px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+[data-theme="grey"] {
+  --bg: #1e1f22;
+  --bg-card: #26272b;
+  --bg-elevated: #2d2f34;
+  --accent: #7c93a8;
+  --accent-dim: #566878;
+  --accent-rgb: 124, 147, 168;
+  --text: #d8d9dc;
+  --text-dim: #8a8d94;
+  --red: #c0524f;
+  --red-rgb: 192, 82, 79;
+  --green: #5c9077;
+  --green-rgb: 92, 144, 119;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.22);
+}

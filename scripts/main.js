@@ -181,6 +181,56 @@ class UntangleDataConfig extends Application {
   }
 }
 
+// ── API keys ───────────────────────────────────────────────
+// A dedicated form instead of plain config:true string settings, because
+// Foundry's default settings list renders String settings as plain text
+// inputs — no masking. type="password" here hides the value as it's
+// typed/pasted and whenever the form reopens.
+
+class UntangleApiKeyConfig extends Application {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: 'untangle-api-key-config',
+      title: 'Untangle — API Keys',
+      width: 420,
+      height: 'auto',
+    });
+  }
+
+  async _renderInner(_data) {
+    const claude = game.settings.get(MODULE_ID, 'claudeApiKey') || '';
+    const openai = game.settings.get(MODULE_ID, 'openaiApiKey') || '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:4px 2px;display:flex;flex-direction:column;gap:14px;';
+    wrap.innerHTML = `
+      <div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Claude API Key</label>
+        <p style="margin:0 0 6px;font-size:0.85em;opacity:0.8">Used for AI transcript analysis and Find Duplicates. Get one at console.anthropic.com.</p>
+        <input type="password" name="claude" value="${claude.replace(/"/g, '&quot;')}" placeholder="sk-ant-…" autocomplete="off" style="width:100%">
+      </div>
+      <div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">OpenAI API Key</label>
+        <p style="margin:0 0 6px;font-size:0.85em;opacity:0.8">Used for session audio transcription (Whisper). Get one at platform.openai.com/api-keys.</p>
+        <input type="password" name="openai" value="${openai.replace(/"/g, '&quot;')}" placeholder="sk-…" autocomplete="off" style="width:100%">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button type="button" data-action="save">Save</button>
+      </div>
+    `;
+    return $(wrap);
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    html.find('[data-action="save"]').on('click', async () => {
+      await game.settings.set(MODULE_ID, 'claudeApiKey', html.find('input[name="claude"]').val());
+      await game.settings.set(MODULE_ID, 'openaiApiKey', html.find('input[name="openai"]').val());
+      ui.notifications.info('Untangle API keys saved.');
+      this.close();
+    });
+  }
+}
+
 // ── Settings: world-scoped backup mirror ──────────────────
 // index.html writes a full copy of its state here (via window.parent.game)
 // on every save, so a campaign survives a cleared browser cache/profile —
@@ -239,22 +289,28 @@ Hooks.on('init', () => {
 
   // API keys — used by the planner's AI extraction (Claude) and audio
   // transcription (Whisper) features. Read directly from these settings by
-  // app/index.html via window.parent.game.settings.get(...).
+  // app/index.html via window.parent.game.settings.get(...). config:false
+  // because they're edited through UntangleApiKeyConfig (masked inputs)
+  // instead of Foundry's default plain-text settings list.
   game.settings.register(MODULE_ID, 'claudeApiKey', {
-    name: 'Claude API Key',
-    hint: 'Used for AI transcript analysis and Find Duplicates. Get one at console.anthropic.com.',
     scope: 'world',
-    config: true,
+    config: false,
     type: String,
     default: '',
   });
   game.settings.register(MODULE_ID, 'openaiApiKey', {
-    name: 'OpenAI API Key',
-    hint: 'Used for session audio transcription (Whisper). Get one at platform.openai.com/api-keys.',
     scope: 'world',
-    config: true,
+    config: false,
     type: String,
     default: '',
+  });
+  game.settings.registerMenu(MODULE_ID, 'apiKeyConfig', {
+    name: 'API Keys',
+    label: 'Manage API Keys',
+    hint: 'Set your Claude and OpenAI API keys. Values are masked once entered.',
+    icon: 'fas fa-key',
+    type: UntangleApiKeyConfig,
+    restricted: true,
   });
 
   // Data management (export/import/clear) — a menu button rather than a

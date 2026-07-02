@@ -9,7 +9,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
 
 const DEFAULT_STATE = () => ({
-  settings: { onboarded: false },
+  settings: { onboarded: false, theme: 'foundry-basic' },
   currentCampaignId: null,
   campaigns: [],
 });
@@ -36,8 +36,11 @@ if (!state) {
   // Ensure newer settings fields exist after update
   if (!state.settings) state.settings = {};
   if (state.settings.onboarded === undefined) state.settings.onboarded = true; // existing users aren't "first run"
+  if (!state.settings.theme) state.settings.theme = 'foundry-basic';
   if (!state.campaigns) state.campaigns = [];
 }
+
+document.documentElement.setAttribute('data-theme', state.settings.theme === 'grey' ? 'grey' : 'foundry-basic');
 
 if (!state.campaigns.length) {
   const first = blankCampaign('My Campaign');
@@ -67,6 +70,12 @@ function _mirrorBackup() {
 
 function save() { localStorage.setItem('cp_v1', JSON.stringify(state)); _mirrorBackup(); }
 function camp() { return state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0]; }
+
+function setTheme(theme) {
+  state.settings.theme = theme === 'grey' ? 'grey' : 'foundry-basic';
+  document.documentElement.setAttribute('data-theme', state.settings.theme);
+  save();
+}
 
 // API keys live in Foundry's world settings (Configure Settings → Untangle),
 // not in this localStorage-backed state — set there, they're visible to the
