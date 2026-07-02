@@ -1,0 +1,48 @@
+/* Untangle — Foundry VTT Module styles */
+
+/* Make the planner iframe fill the entire window with no padding */
+#untangle-app .window-content {
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#untangle-app .window-content > div {
+  flex: 1;
+  min-height: 0;
+}
+
+#untangle-app .window-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Journal sidebar button */
+.cp-sidebar-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 6px 8px 2px;
+  padding: 6px 10px;
+  background: #1a1a2e;
+  color: #c9a84c;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.cp-sidebar-btn:hover {
+  background: rgba(201, 168, 76, 0.1);
+}
+
+.cp-sidebar-btn i {
+  margin-right: 6px;
+}
