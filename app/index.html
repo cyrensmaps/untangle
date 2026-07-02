@@ -336,6 +336,41 @@ state.campaigns.forEach(c => {
 save();
 
 // ═══════════════════════════════════════════════
+// PAID ACTION CONFIRMATION
+// Every call site that spends the user's Claude/OpenAI balance shows this
+// first. Add new paid actions by calling
+// `if (!(await confirmPaidAction(['claude'], 'Doing the thing'))) return;`
+// ═══════════════════════════════════════════════
+
+const BALANCE_LINKS = {
+  claude: { label: 'Anthropic (Claude)', url: 'https://console.anthropic.com/settings/billing' },
+  openai: { label: 'OpenAI (Whisper)', url: 'https://platform.openai.com/settings/organization/billing/overview' },
+};
+
+function confirmPaidAction(serviceKeys, actionLabel) {
+  return new Promise(resolve => {
+    const services = serviceKeys.map(k => BALANCE_LINKS[k]).filter(Boolean);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:460px">
+        <div class="modal-header"><h3>This costs money</h3></div>
+        <p class="text-sm" style="line-height:1.7;margin-bottom:12px">${esc(actionLabel)} uses ${services.length>1?'API keys that draw':'an API key that draws'} from your own account balance${services.length>1?'s':''} — this module never charges you directly, but the provider${services.length>1?'s':''} will:</p>
+        <ul class="text-sm" style="line-height:2;margin:0 0 18px 18px">
+          ${services.map(s => `<li>${esc(s.label)} — <a href="${s.url}" target="_blank">check your balance</a></li>`).join('')}
+        </ul>
+        <div class="flex gap-8" style="justify-content:flex-end">
+          <button class="btn btn-ghost" data-act="cancel">Cancel</button>
+          <button class="btn btn-primary" data-act="confirm">Yes, continue</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.querySelector('[data-act="confirm"]').addEventListener('click', () => { overlay.remove(); resolve(true); });
+  });
+}
+
+// ═══════════════════════════════════════════════
 // CAMPAIGN SWITCHER
 // ═══════════════════════════════════════════════
 
@@ -588,12 +623,16 @@ function renderNewSession() {
         </div>
         <input type="file" id="audio-file-input" accept=".mp3,.ogg,.flac,.wav,.m4a,.webm,.opus" style="display:none" onchange="onAudioSelected(this)">
         <p class="text-xs text-dim" style="margin-top:10px;line-height:1.6">
-          Download as <strong style="color:var(--text)">MP3</strong> or <strong style="color:var(--text)">OGG</strong> from Craig. Large files are automatically split and transcribed in chunks — no size limit. Requires your OpenAI key in Settings.
+          Download as <strong style="color:var(--text)">MP3</strong> or <strong style="color:var(--text)">OGG</strong> from Craig. Large files are automatically split and transcribed in chunks — no size limit.
+        </p>
+        <p class="text-xs" style="margin-top:8px;line-height:1.6;padding:10px 12px;background:rgba(var(--red-rgb),0.08);border:1px solid rgba(var(--red-rgb),0.25);border-radius:6px;color:var(--text)">
+          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money — roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
           <button class="btn btn-ghost" onclick="saveManual()">Save without AI</button>
           <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>Transcribe &amp; Process</button>
         </div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money — OpenAI (transcription) + Claude (analysis)</div>
       </div>
 
       <!-- LOCAL WHISPER MODE -->
@@ -663,6 +702,7 @@ The AI will extract:
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">Process with AI</button>
           </div>
         </div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money — uses your Claude API key</div>
       </div>
 
       <div id="status-box" style="display:none" class="status-box">
@@ -964,6 +1004,7 @@ async function transcribeAndProcess() {
     return;
   }
   if (!window._audioFile) { toast('Choose an audio file first.', 'error'); return; }
+  if (!(await confirmPaidAction(['openai', 'claude'], 'Transcribing and analysing this session'))) return;
 
   lockUI(true);
 
@@ -1459,6 +1500,8 @@ async function processWithAI() {
     }
   }
 
+  if (!(await confirmPaidAction(['claude'], 'Processing this session with AI'))) return;
+
   lockUI(true);
   setStatus('Analyzing with Claude…');
 
@@ -1870,6 +1913,7 @@ async function reanalyseSession(id) {
   if (!getClaudeKey()) { toast('Add your Claude API key in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const s = camp().sessions.find(x => x.id === id);
   if (!s?.rawTranscript) { toast('No transcript stored for this session.', 'error'); return; }
+  if (!(await confirmPaidAction(['claude'], 'Re-analysing this session with AI'))) return;
 
   // Close the session modal
   document.querySelector('.modal-overlay')?.remove();
@@ -2122,6 +2166,7 @@ async function findDuplicateCharacters() {
   if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.npcs.length < 2) { toast('Need at least 2 characters to compare.', 'error'); return; }
+  if (!(await confirmPaidAction(['claude'], 'Finding duplicate characters with AI'))) return;
 
   // Loading overlay
   const loadingEl = document.createElement('div');
@@ -2335,6 +2380,7 @@ async function findDuplicateLocations() {
   if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.locations.length < 2) { toast('Need at least 2 locations to compare.', 'error'); return; }
+  if (!(await confirmPaidAction(['claude'], 'Finding duplicate locations with AI'))) return;
 
   const loadingEl = document.createElement('div');
   loadingEl.id = 'merge-loading';
@@ -2502,6 +2548,7 @@ async function findDuplicateFactions() {
   if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.factions.length < 2) { toast('Need at least 2 factions to compare.', 'error'); return; }
+  if (!(await confirmPaidAction(['claude'], 'Finding duplicate factions with AI'))) return;
 
   const loadingEl = document.createElement('div');
   loadingEl.id = 'merge-loading';
@@ -3014,6 +3061,7 @@ async function generateVoiceDescription(npcId) {
   const c = camp();
   const n = c.npcs.find(x => x.id === npcId);
   if (!n) return;
+  if (!(await confirmPaidAction(['claude'], 'Generating a voice description with AI'))) return;
   const btn = document.getElementById('voice-gen-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   const context = [
@@ -3672,7 +3720,6 @@ function renderSettings() {
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">API keys &amp; data</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Claude and OpenAI API keys, plus exporting/importing/clearing campaign data, now live in Foundry's own settings — GM-only, and out of this window.</p>
       <button class="btn btn-ghost" onclick="window.parent.game.settings.sheet.render(true)">Open Foundry Configure Settings</button>
     </div>
 
