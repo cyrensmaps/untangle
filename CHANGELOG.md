@@ -1,0 +1,64 @@
+# Changelog
+
+All notable changes to this module are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+## [1.2.0]
+
+### Added
+- **Clocks** — Blades-in-the-Dark style progress clocks (4/6/8/12 segments), optionally linked to a Faction or Plot Thread, tickable from a new Clocks page or from the Quick Access widget.
+- **Stale Callbacks** — automatic surfacing of NPCs, Locations, Plot Threads, and Factions that haven't come up in the last few sessions, shown on the Session Prep page and in a new Quick Access widget tab.
+- Changelog: this repo now maintains CHANGELOG.md, and GitHub Releases pull their notes straight from it.
+
+## [1.1.3]
+
+### Added
+- Confirmation modal before any action that spends your Claude/OpenAI balance (transcribe & process, process with AI, re-analyse, find duplicates, generate voice description), linking to the relevant provider's billing page.
+- Inline "this costs money" reminders on the session-log page, and an expanded Whisper (OpenAI) tab notice spelling out that it needs your own paid API key.
+
+### Changed
+- Removed the descriptive paragraph under "API keys & data" in Settings, leaving just the button through to Foundry's Configure Settings.
+
+## [1.1.2]
+
+### Fixed
+- API Keys and Manage Data settings menus disappearing entirely — caused by `game.settings.registerMenu()` requiring a `FormApplication` subclass; both menu classes were plain `Application` and failed silently during registration.
+- Settings/keybinding registrations are now wrapped individually in `try/catch` so one failure can no longer cascade and silently disable the others.
+
+## [1.1.1]
+
+### Added
+- Theme system with two options: "Foundry Basic" (new default, amber/parchment palette) and "Grey" (the previous palette, preserved).
+- Password-masked input fields for the Claude and OpenAI API keys.
+
+### Changed
+- Extracted CSS/JS genuinely duplicated between `app/index.html` and `app/widget.html` into shared `theme.css` and `components.css`.
+- Removed the floating Note/Names buttons from the main window (redundant with the macro-bar buttons and covered content).
+
+## [1.1.0]
+
+### Added
+- Persistent quick-access button bar above Foundry's macro bar, extensible for future buttons.
+- Logo slot above the campaign switcher.
+- Module settings (quick-bar position offsets) moved into Foundry's native Configure Settings.
+
+### Changed
+- Full visual redesign: new color scheme, all emoji icons removed in favor of plain text.
+
+## [1.0.2]
+
+### Fixed
+- Scene control buttons not responding to clicks — Foundry's `tool.onClick` dispatch was unreliable across versions; replaced with direct DOM event binding.
+
+## [1.0.1]
+
+### Added
+- GM-only access gating across every entry point (the module holds GM secrets and previously had no check).
+- Global search, onboarding modal, "Previously on…" recap generator, "Post to Journal," "Pull from Foundry" (Actor → Character import), and a Foundry-native world-setting backup mirror.
+- Quick Access widget (Field Notes + Name Generator tabs).
+
+## [1.0.0]
+
+### Added
+- Initial release: campaign tracker with Sessions, NPCs, Locations, Plot Threads, Factions, Relationship Web, Maps, and session editing.

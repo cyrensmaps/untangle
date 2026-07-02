@@ -282,6 +282,7 @@
 
   <div class="nav-section">Story</div>
   <button class="nav-btn" onclick="navigate('threads')" id="nav-threads">Plot Threads</button>
+  <button class="nav-btn" onclick="navigate('clocks')" id="nav-clocks">Clocks</button>
   <button class="nav-btn" onclick="navigate('web')" id="nav-web">Relationships</button>
   <button class="nav-btn" onclick="navigate('fieldnotes')" id="nav-fieldnotes">Field Notes</button>
 
@@ -312,6 +313,7 @@ state.campaigns.forEach(c => {
   if (!c.hooks) c.hooks = [];
   if (!c.factions) c.factions = [];
   if (!c.factionPositions) c.factionPositions = {};
+  if (!c.clocks) c.clocks = [];
   if (!c.sessionPrep) c.sessionPrep = { notes: '', scenes: [], questions: [] };
   // Migrate hooks → plotThreads
   if (c.hooks.length) {
@@ -457,7 +459,7 @@ function navigate(v) {
 function render() {
   const main = document.getElementById('main-content');
   document.getElementById('nav-campaign-name').textContent = camp().name;
-  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, prep: renderSessionPrep, settings: renderSettings };
+  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings };
   if (view === 'prep') {
     window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes || []));
     window._prepQuestions = JSON.parse(JSON.stringify(camp().sessionPrep?.questions || []));
@@ -4339,6 +4341,15 @@ function openThreadModal(t) {
       </div>
       <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea></div>
       <div class="form-group"><label>GM Truth <span class="text-dim text-xs">(hidden — what's actually happening)</span></label><textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…">${esc(t?.truth||'')}</textarea></div>
+      ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).length?`
+      <div class="form-group">
+        <label>Linked Clocks <span class="text-dim text-xs">(managed on the Clocks page)</span></label>
+        ${(c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).map(ck=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer" onclick="this.closest('.modal-overlay').remove();navigate('clocks')">
+            ${clockSegmentsHTML(ck, '', false)}
+            <span class="text-sm">${esc(ck.label)} <span class="text-dim text-xs">${ck.filled}/${ck.segments}</span></span>
+          </div>`).join('')}
+      </div>`:''}
       ${c.npcs.length?`<div class="form-group"><label>Involved characters</label><div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${npcCheckboxes}</div></div>`:''}
       ${c.locations.length?`<div class="form-group"><label>Involved locations</label><div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${locationCheckboxes}</div></div>`:''}
       ${c.hooks.length?`<div class="form-group"><label>Related hooks</label><div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${hookCheckboxes}</div></div>`:''}
@@ -4551,6 +4562,15 @@ function openFactionModal(id) {
       <div class="form-group"><label>Description</label><textarea id="fc-desc" rows="2" placeholder="Who are they? Who leads them?">${esc(f?.description||'')}</textarea></div>
       <div class="form-group"><label>Goals <span class="text-dim text-xs">(what do they want?)</span></label><textarea id="fc-goals" rows="2" placeholder="Control the docks, restore the old religion…">${esc(f?.goals||'')}</textarea></div>
       <div class="form-group"><label>GM Secrets <span class="text-dim text-xs">(hidden from players)</span></label><textarea id="fc-secrets" rows="2" placeholder="Hidden agenda, internal conflicts…">${esc(f?.secrets||'')}</textarea></div>
+      ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='faction'&&ck.linkedId===f.id).length?`
+      <div class="form-group">
+        <label>Linked Clocks <span class="text-dim text-xs">(managed on the Clocks page)</span></label>
+        ${(c.clocks||[]).filter(ck=>ck.linkedType==='faction'&&ck.linkedId===f.id).map(ck=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer" onclick="this.closest('.modal-overlay').remove();navigate('clocks')">
+            ${clockSegmentsHTML(ck, '', false)}
+            <span class="text-sm">${esc(ck.label)} <span class="text-dim text-xs">${ck.filled}/${ck.segments}</span></span>
+          </div>`).join('')}
+      </div>`:''}
       ${c.npcs.length?`<div class="form-group"><label>Members</label><div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${npcCBs}</div></div>`:''}
       ${c.plotThreads.length?`<div class="form-group"><label>Linked Plot Threads</label><div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${threadCBs}</div></div>`:''}
       <div class="flex gap-8" style="justify-content:space-between">
@@ -4604,6 +4624,137 @@ function deleteFaction(id) {
 }
 
 // ═══════════════════════════════════════════════
+// CLOCKS
+// ═══════════════════════════════════════════════
+
+const CLOCK_SIZES = [4, 6, 8, 12];
+
+function renderClocks() {
+  const c = camp();
+  if (!c.clocks) c.clocks = [];
+  const cards = c.clocks.map(ck => {
+    let linkedName = '';
+    if (ck.linkedType === 'faction') linkedName = c.factions.find(f => f.id === ck.linkedId)?.name || '';
+    if (ck.linkedType === 'thread') linkedName = c.plotThreads.find(t => t.id === ck.linkedId)?.title || '';
+    return `
+      <div class="card" onclick="openEditClockModal('${ck.id}')" style="cursor:pointer">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+          <div style="font-weight:600;font-size:0.95rem">${esc(ck.label)}</div>
+          <span class="text-xs text-dim">${ck.filled}/${ck.segments}</span>
+        </div>
+        ${clockSegmentsHTML(ck, 'tickClock', true)}
+        ${linkedName?`<div class="text-xs text-dim" style="margin-top:10px">Linked: ${esc(linkedName)}</div>`:''}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="page-header">
+      <div><h2>Clocks</h2><p class="subtitle">${c.clocks.length} clock${c.clocks.length!==1?'s':''} · background momentum — tick a segment whenever it advances</p></div>
+      <button class="btn btn-primary" onclick="openAddClockModal()">+ New Clock</button>
+    </div>
+    ${c.clocks.length===0
+      ? `<div class="empty-state"><h3>No clocks yet</h3><p>Track slow-building threats or plans — a ritual, a rival's patience, an approaching army. Tick a segment whenever it advances, no need to plan out what happens when it fills.</p></div>`
+      : `<div class="card-grid">${cards}</div>`}`;
+}
+
+function openAddClockModal() { openClockModal(null); }
+
+function openEditClockModal(id) {
+  const ck = camp().clocks.find(x => x.id === id);
+  if (!ck) return;
+  openClockModal(ck);
+}
+
+function openClockModal(ck) {
+  const c = camp();
+  const isEdit = !!ck;
+  const selectedColor = ck?.color || FACTION_COLORS[0];
+  window._clockColor = selectedColor;
+
+  const sizeOpts = CLOCK_SIZES.map(n => `<option value="${n}" ${(ck?.segments||6)===n?'selected':''}>${n}</option>`).join('');
+  const swatches = FACTION_COLORS.map(col =>
+    `<div class="fc-swatch" onclick="window._clockColor='${col}';document.querySelectorAll('#clock-swatches .fc-swatch').forEach(s=>{s.style.outline='none';s.style.outlineOffset='0'});this.style.outline='2px solid white';this.style.outlineOffset='2px'" style="width:22px;height:22px;border-radius:50%;background:${col};cursor:pointer;flex-shrink:0;${col===selectedColor?'outline:2px solid white;outline-offset:2px':''}"></div>`
+  ).join('');
+
+  const linkVal = ck ? (ck.linkedType ? `${ck.linkedType}:${ck.linkedId}` : '') : '';
+  const factionOpts = c.factions.map(f => `<option value="faction:${f.id}" ${linkVal===`faction:${f.id}`?'selected':''}>${esc(f.name)}</option>`).join('');
+  const threadOpts = c.plotThreads.map(t => `<option value="thread:${t.id}" ${linkVal===`thread:${t.id}`?'selected':''}>${esc(t.title)}</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header"><h3>${isEdit?'Edit':'New'} Clock</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Label</label><input type="text" id="ck-label" value="${esc(ck?.label||'')}" placeholder="The Ritual, Baron's Patience…"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Segments</label><select id="ck-segments">${sizeOpts}</select></div>
+        <div class="form-group"><label>Color</label><div id="clock-swatches" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:6px">${swatches}</div></div>
+      </div>
+      <div class="form-group">
+        <label>Link to <span class="text-dim text-xs">(optional)</span></label>
+        <select id="ck-link">
+          <option value="">No link</option>
+          ${c.factions.length?`<optgroup label="Factions">${factionOpts}</optgroup>`:''}
+          ${c.plotThreads.length?`<optgroup label="Threads">${threadOpts}</optgroup>`:''}
+        </select>
+      </div>
+      <div class="flex gap-8" style="justify-content:space-between">
+        ${isEdit?`<button class="btn btn-danger" onclick="deleteClock('${ck.id}')">Delete</button>`:'<span></span>'}
+        <div class="flex gap-8">
+          <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveClock(${isEdit?`'${ck.id}'`:'null'})">${isEdit?'Save':'Create'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function saveClock(id) {
+  const label = document.getElementById('ck-label')?.value.trim();
+  if (!label) { toast('Label is required.', 'error'); return; }
+  const c = camp();
+  const segments = parseInt(document.getElementById('ck-segments')?.value || '6', 10);
+  const linkVal = document.getElementById('ck-link')?.value || '';
+  const [linkedType, linkedId] = linkVal ? linkVal.split(':') : [null, null];
+  const data = {
+    label,
+    segments,
+    color: window._clockColor || FACTION_COLORS[0],
+    linkedType: linkedType || null,
+    linkedId: linkedId || null,
+  };
+  if (id) {
+    const ck = c.clocks.find(x => x.id === id);
+    if (ck) { Object.assign(ck, data); ck.filled = Math.min(ck.filled, segments); }
+  } else {
+    c.clocks.push({ id: uid(), filled: 0, ...data });
+  }
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast(id ? 'Clock updated.' : 'Clock created.', 'success');
+  render();
+}
+
+function deleteClock(id) {
+  if (!confirm('Delete this clock?')) return;
+  const c = camp();
+  c.clocks = c.clocks.filter(ck => ck.id !== id);
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast('Clock deleted.', 'success');
+  render();
+}
+
+function tickClock(id, segIndex) {
+  const c = camp();
+  const ck = c.clocks.find(x => x.id === id);
+  if (!ck) return;
+  tickClockValue(ck, segIndex);
+  save();
+  if (view === 'clocks') render();
+}
+
+// ═══════════════════════════════════════════════
 // SESSION PREP
 // ═══════════════════════════════════════════════
 
@@ -4617,6 +4768,7 @@ function renderSessionPrep() {
   const lastSession       = c.sessions[c.sessions.length - 1];
   const lastSessionNPCs   = lastSession ? c.npcs.filter(n => (n.sessions||[]).includes(lastSession.id)) : [];
   const activeFactions    = c.factions.filter(f => (f.status||'active') === 'active');
+  const staleEntities     = computeStaleEntities();
 
   const sceneRows = scenes.map((sc, i) => `
     <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
@@ -4659,6 +4811,21 @@ function renderSessionPrep() {
       </div>
 
       <div>
+        ${staleEntities.length?`
+        <div class="card" style="margin-bottom:16px">
+          <div class="flex-between" style="margin-bottom:12px">
+            <h3>Stale Callbacks</h3>
+            <span class="text-xs text-dim">hasn't come up in a while</span>
+          </div>
+          ${staleEntities.slice(0,8).map(e => {
+            const openFn = { npc:'openNPCModal', location:'openLocationModal', thread:'openEditThreadModal', faction:'openFactionModal' }[e.type];
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="${openFn}('${e.id}')">
+              <span style="width:8px;height:8px;border-radius:50%;background:${e.color};flex-shrink:0;display:inline-block"></span>
+              <span class="text-sm" style="font-weight:500;flex:1">${esc(e.name)}</span>
+              <span class="text-xs text-dim">${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago</span>
+            </div>`;
+          }).join('')}
+        </div>`:''}
         <div class="card" style="margin-bottom:16px">
           <div class="flex-between" style="margin-bottom:14px">
             <h3>Open Questions</h3>

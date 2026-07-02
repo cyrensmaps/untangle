@@ -9,10 +9,16 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: var(--font); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    .qa-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    .qa-tab { flex: 1; background: none; border: none; color: var(--text-dim); padding: 10px 8px; cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
+    .qa-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .qa-tab { background: none; border: none; border-bottom: 1px solid transparent; color: var(--text-dim); padding: 8px 6px; cursor: pointer; font-size: 0.75rem; font-family: var(--font); }
     .qa-tab.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
     .qa-tab:hover:not(.active) { color: var(--text); }
+    .qa-tab:nth-child(odd) { border-right: 1px solid var(--border); }
+    .qa-tab:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+
+    .qa-clock-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .qa-clock-row .clock-seg { width: 14px; height: 14px; }
+    .qa-callback-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
 
     .qa-campaign { font-size: 0.68rem; color: var(--text-dim); text-align: center; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .qa-campaign b { color: var(--accent); font-weight: 600; }
@@ -46,6 +52,8 @@
 <div class="qa-tabs">
   <button class="qa-tab active" id="qa-tab-notes" onclick="qaSwitch('notes')">Field Notes</button>
   <button class="qa-tab" id="qa-tab-names" onclick="qaSwitch('names')">Names</button>
+  <button class="qa-tab" id="qa-tab-clocks" onclick="qaSwitch('clocks')">Clocks</button>
+  <button class="qa-tab" id="qa-tab-callbacks" onclick="qaSwitch('callbacks')">Callbacks</button>
 </div>
 
 <div class="qa-panel active" id="qa-panel-notes">
@@ -61,6 +69,14 @@
   <button class="btn btn-ghost" style="width:100%;margin-top:6px" onclick="qaRegenerateNames()">↺ More</button>
 </div>
 
+<div class="qa-panel" id="qa-panel-clocks">
+  <div id="qa-clocks-list"></div>
+</div>
+
+<div class="qa-panel" id="qa-panel-callbacks">
+  <div id="qa-callbacks-list"></div>
+</div>
+
 <script src="state.js"></script>
 <script src="namegen.js"></script>
 <script>
@@ -71,6 +87,8 @@ function qaSwitch(tab) {
   document.querySelectorAll('.qa-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('qa-tab-' + tab).classList.add('active');
   document.getElementById('qa-panel-' + tab).classList.add('active');
+  if (tab === 'clocks') qaRenderClocks();
+  if (tab === 'callbacks') qaRenderCallbacks();
 }
 
 // ── Field notes ──
@@ -136,6 +154,42 @@ function qaCopyName(name) {
   const prev = hint.textContent;
   hint.textContent = `"${name}" copied!`;
   setTimeout(() => { hint.textContent = prev; }, 1200);
+}
+
+// ── Clocks ──
+function qaRenderClocks() {
+  const c = camp();
+  if (!c.clocks) c.clocks = [];
+  const list = document.getElementById('qa-clocks-list');
+  list.innerHTML = c.clocks.length === 0
+    ? `<div class="qa-empty">No clocks yet. Add some from the full Untangle window.</div>`
+    : c.clocks.map(ck => `
+      <div class="qa-clock-row">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ck.label)}</span>
+        ${clockSegmentsHTML(ck, 'qaTickClock', true)}
+      </div>`).join('');
+}
+
+function qaTickClock(id, segIndex) {
+  const c = camp();
+  const ck = (c.clocks||[]).find(x => x.id === id);
+  if (!ck) return;
+  tickClockValue(ck, segIndex);
+  save();
+  qaRenderClocks();
+}
+
+// ── Stale callbacks ──
+function qaRenderCallbacks() {
+  const stale = computeStaleEntities();
+  const list = document.getElementById('qa-callbacks-list');
+  list.innerHTML = stale.length === 0
+    ? `<div class="qa-empty">Nothing stale right now.</div>`
+    : stale.slice(0, 10).map(e => `
+      <div class="qa-callback-row">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</span>
+        <span style="flex-shrink:0;color:var(--text-dim)">${e.sessionsSince}s ago</span>
+      </div>`).join('');
 }
 
 qaRenderNotes();

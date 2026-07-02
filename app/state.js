@@ -6,7 +6,7 @@
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
+function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
 
 const DEFAULT_STATE = () => ({
   settings: { onboarded: false, theme: 'foundry-basic' },
@@ -75,6 +75,81 @@ function setTheme(theme) {
   state.settings.theme = theme === 'grey' ? 'grey' : 'foundry-basic';
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   save();
+}
+
+// ── Progress clocks (shared between index.html and widget.html) ──
+// Flat row of clickable segments, Blades-in-the-Dark style. Click a segment
+// to fill up to it; click the last filled segment again to remove a tick.
+function clockSegmentsHTML(clock, tickFnName, editable) {
+  let segs = '';
+  for (let i = 0; i < clock.segments; i++) {
+    const filled = i < clock.filled;
+    const click = editable ? ` onclick="event.stopPropagation();${tickFnName}('${clock.id}',${i})"` : '';
+    segs += `<div class="clock-seg${filled?' filled':''}"${click} style="${filled?`background:${clock.color};border-color:${clock.color}`:''}"></div>`;
+  }
+  return `<div class="clock-segments">${segs}</div>`;
+}
+
+function tickClockValue(clock, segIndex) {
+  clock.filled = (clock.filled === segIndex + 1) ? segIndex : segIndex + 1;
+}
+
+// ── Stale callback surfacing ──
+// Flags NPCs/Locations/Threads/Factions that had appeared in earlier sessions
+// but haven't come up in the last `threshold` sessions — resurfacing the
+// threads an improv-heavy GM is most likely to have forgotten about.
+const STALE_THRESHOLD = 3;
+
+function computeStaleEntities(threshold) {
+  threshold = threshold || STALE_THRESHOLD;
+  const c = camp();
+  const total = c.sessions.length;
+  if (total <= threshold) return [];
+
+  const sessionNumberById = {};
+  c.sessions.forEach(s => { sessionNumberById[s.id] = s.number; });
+  const maxSessionNumber = ids => ids.reduce((m, sid) => {
+    const n = sessionNumberById[sid];
+    return (n !== undefined && n > m) ? n : m;
+  }, 0);
+
+  const out = [];
+
+  (c.npcs||[]).forEach(n => {
+    if (!n.sessions || !n.sessions.length) return;
+    const last = maxSessionNumber(n.sessions);
+    const since = total - last;
+    if (since >= threshold) out.push({ type: 'npc', id: n.id, name: n.name, sessionsSince: since, color: 'var(--accent)' });
+  });
+
+  (c.locations||[]).forEach(l => {
+    if (!l.sessionIds || !l.sessionIds.length) return;
+    const last = maxSessionNumber(l.sessionIds);
+    const since = total - last;
+    if (since >= threshold) out.push({ type: 'location', id: l.id, name: l.name, sessionsSince: since, color: 'var(--green)' });
+  });
+
+  (c.plotThreads||[]).forEach(t => {
+    if (t.status === 'resolved' || t.status === 'abandoned') return;
+    const npcSessions = (t.npcIds||[]).flatMap(id => (c.npcs.find(n=>n.id===id)?.sessions)||[]);
+    const locSessions = (t.locationIds||[]).flatMap(id => (c.locations.find(l=>l.id===id)?.sessionIds)||[]);
+    const linked = [...npcSessions, ...locSessions];
+    if (!linked.length) return;
+    const last = maxSessionNumber(linked);
+    const since = total - last;
+    if (since >= threshold) out.push({ type: 'thread', id: t.id, name: t.title, sessionsSince: since, color: '#dd8800' });
+  });
+
+  (c.factions||[]).forEach(f => {
+    if (f.status === 'defeated') return;
+    const memberSessions = (f.memberIds||[]).flatMap(id => (c.npcs.find(n=>n.id===id)?.sessions)||[]);
+    if (!memberSessions.length) return;
+    const last = maxSessionNumber(memberSessions);
+    const since = total - last;
+    if (since >= threshold) out.push({ type: 'faction', id: f.id, name: f.name, sessionsSince: since, color: f.color || '#888888' });
+  });
+
+  return out.sort((a,b) => b.sessionsSince - a.sessionsSince);
 }
 
 // API keys live in Foundry's world settings (Configure Settings → Untangle),
