@@ -1842,10 +1842,55 @@ function openSessionModal(id) {
       <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
         <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')">Delete</button>
         ${s.rawTranscript ? `<button class="btn btn-ghost" onclick="reanalyseSession('${s.id}')">✨ Re-analyse with AI</button>` : ''}
+        <button class="btn btn-ghost" onclick="openEditSessionModal('${s.id}')">✎ Edit</button>
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+function openEditSessionModal(id) {
+  const s = camp().sessions.find(x => x.id === id);
+  if (!s) return;
+  document.querySelector('.modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:660px">
+      <div class="modal-header">
+        <h3>Edit Session</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Title</label><input type="text" id="es-title" value="${esc(s.title||'')}"></div>
+        <div class="form-group" style="max-width:160px"><label>Date</label><input type="date" id="es-date" value="${esc(s.date||'')}"></div>
+      </div>
+      <div class="form-group"><label>Summary</label><textarea id="es-summary" rows="3" placeholder="What happened this session…">${esc(s.summary||'')}</textarea></div>
+      <div class="form-group"><label>Key Events <span class="text-dim text-xs">(one per line)</span></label><textarea id="es-events" rows="5" placeholder="One event per line…">${esc((s.keyEvents||[]).join('\n'))}</textarea></div>
+      <div class="form-group"><label>Raw Notes / Transcript</label><textarea id="es-transcript" rows="6" placeholder="Session notes or transcript…">${esc(s.rawTranscript||'')}</textarea></div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove();openSessionModal('${s.id}')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSessionEdits('${s.id}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function saveSessionEdits(id) {
+  const s = camp().sessions.find(x => x.id === id);
+  if (!s) return;
+  const title = document.getElementById('es-title').value.trim();
+  if (!title) { toast('Title is required.', 'error'); return; }
+  s.title = title;
+  s.date = document.getElementById('es-date').value || s.date;
+  s.summary = document.getElementById('es-summary').value;
+  s.keyEvents = document.getElementById('es-events').value.split('\n').map(e => e.trim()).filter(Boolean);
+  s.rawTranscript = document.getElementById('es-transcript').value;
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast('Session updated.', 'success');
+  render();
+  openSessionModal(id);
 }
 
 async function reanalyseSession(id) {
