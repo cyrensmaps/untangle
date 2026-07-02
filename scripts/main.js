@@ -38,8 +38,13 @@ let _plannerApp = null;
 
 function openCampaignPlanner() {
   if (!game.user.isGM) return; // Untangle holds GM secrets — never open for players
-  if (!_plannerApp) _plannerApp = new CampaignPlannerApp();
-  _plannerApp.render(true, { focus: true });
+  try {
+    if (!_plannerApp) _plannerApp = new CampaignPlannerApp();
+    _plannerApp.render(true, { focus: true });
+  } catch (err) {
+    console.error('Untangle | Failed to open planner', err);
+    ui.notifications?.error('Untangle failed to open — see console (F12) for details.');
+  }
 }
 
 // ── Quick Access widget (field notes + name generator, always one click away) ──
@@ -72,12 +77,17 @@ let _quickAccessApp = null;
 
 function toggleQuickAccessWidget() {
   if (!game.user.isGM) return;
-  if (_quickAccessApp?.rendered) {
-    _quickAccessApp.close();
-    return;
+  try {
+    if (_quickAccessApp?.rendered) {
+      _quickAccessApp.close();
+      return;
+    }
+    if (!_quickAccessApp) _quickAccessApp = new QuickAccessApp();
+    _quickAccessApp.render(true);
+  } catch (err) {
+    console.error('Untangle | Failed to open Quick Access', err);
+    ui.notifications?.error('Untangle Quick Access failed to open — see console (F12) for details.');
   }
-  if (!_quickAccessApp) _quickAccessApp = new QuickAccessApp();
-  _quickAccessApp.render(true);
 }
 
 // ── Settings: world-scoped backup mirror ──────────────────
@@ -125,6 +135,19 @@ Hooks.on('renderJournalDirectory', (_app, html) => {
 });
 
 // ── Add icons to the scene controls (left) toolbar (GM only) ──
+//
+// We register the tool entries with the core hook so Foundry lays out and
+// styles the icons (this part is confirmed working — the icons render).
+// We do NOT rely on core calling `tool.onClick` to fire our handlers: that
+// dispatch has proven flaky across Foundry versions/builds (clicks landing
+// with no console error). Instead we bind our own click listeners straight
+// to the rendered DOM nodes in renderSceneControls, which is version-stable
+// and lets us see exactly what's happening if something still goes wrong.
+
+const UNTANGLE_TOOLS = [
+  { name: 'untangle-open', title: 'Open Untangle', icon: 'fas fa-scroll', fn: () => openCampaignPlanner() },
+  { name: 'untangle-quick', title: 'Untangle Quick Access', icon: 'fas fa-bolt', fn: () => toggleQuickAccessWidget() },
+];
 
 Hooks.on('getSceneControlButtons', (controls) => {
   if (!game.user.isGM) return;
@@ -135,15 +158,24 @@ Hooks.on('getSceneControlButtons', (controls) => {
   if (!tokenControls?.tools) return;
   if (Array.isArray(tokenControls.tools)) {
     if (tokenControls.tools.some(t => t.name === 'untangle-open')) return;
-    tokenControls.tools.push(
-      { name: 'untangle-open', title: 'Open Untangle', icon: 'fas fa-scroll', button: true, onClick: openCampaignPlanner },
-      { name: 'untangle-quick', title: 'Untangle Quick Access', icon: 'fas fa-bolt', button: true, onClick: toggleQuickAccessWidget },
-    );
+    tokenControls.tools.push(...UNTANGLE_TOOLS.map(t => ({ name: t.name, title: t.title, icon: t.icon, button: true })));
   } else {
     if (tokenControls.tools['untangle-open']) return;
-    tokenControls.tools['untangle-open'] = { name: 'untangle-open', title: 'Open Untangle', icon: 'fas fa-scroll', button: true, onClick: openCampaignPlanner };
-    tokenControls.tools['untangle-quick'] = { name: 'untangle-quick', title: 'Untangle Quick Access', icon: 'fas fa-bolt', button: true, onClick: toggleQuickAccessWidget };
+    UNTANGLE_TOOLS.forEach(t => { tokenControls.tools[t.name] = { name: t.name, title: t.title, icon: t.icon, button: true }; });
   }
+});
+
+Hooks.on('renderSceneControls', (_app, html) => {
+  if (!game.user.isGM) return;
+  const root = html instanceof HTMLElement ? html : html[0];
+  if (!root) return;
+  UNTANGLE_TOOLS.forEach(t => {
+    const el = root.querySelector(`[data-tool="${t.name}"]`);
+    if (el && !el.dataset.untangleBound) {
+      el.dataset.untangleBound = '1';
+      el.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); t.fn(); });
+    }
+  });
 });
 
 Hooks.on('ready', () => {
