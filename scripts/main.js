@@ -95,7 +95,7 @@ function toggleQuickAccessWidget() {
 // app/index.html reads/writes (key 'cp_v1') — so it works even without
 // opening the planner.
 
-class UntangleDataConfig extends Application {
+class UntangleDataConfig extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-data-config',
@@ -187,7 +187,7 @@ class UntangleDataConfig extends Application {
 // inputs — no masking. type="password" here hides the value as it's
 // typed/pasted and whenever the form reopens.
 
-class UntangleApiKeyConfig extends Application {
+class UntangleApiKeyConfig extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-api-key-config',
@@ -236,93 +236,110 @@ class UntangleApiKeyConfig extends Application {
 // on every save, so a campaign survives a cleared browser cache/profile —
 // it lives in the world data, not just one GM's local storage.
 
+// Each block below is independently try/caught: registerMenu throws if
+// `type` isn't a FormApplication (or ApplicationV2, v13+) subclass, and a
+// thrown error inside this hook would otherwise silently abort every
+// registration after it — which is exactly how the API Keys AND Data menus
+// both went missing at once previously. Isolating each block means one
+// bad registration can't take the others down with it, and logs loudly
+// instead of failing silently.
 Hooks.on('init', () => {
-  game.settings.register(MODULE_ID, 'campaignBackup', {
-    scope: 'world',
-    config: false,
-    type: Object,
-    default: {},
-  });
+  try {
+    game.settings.register(MODULE_ID, 'campaignBackup', {
+      scope: 'world',
+      config: false,
+      type: Object,
+      default: {},
+    });
+  } catch (err) { console.error('Untangle | Failed to register campaignBackup setting', err); }
 
-  // Restricted so only a GM/Assistant GM can even bind or trigger this
-  game.keybindings.register(MODULE_ID, 'open', {
-    name: 'Open Campaign Planner',
-    hint: 'Opens the Campaign Planner window',
-    editable: [{ key: 'KeyP', modifiers: ['CONTROL', 'SHIFT'] }],
-    restricted: true,
-    onDown: () => {
-      openCampaignPlanner();
-      return true;
-    },
-  });
+  try {
+    // Restricted so only a GM/Assistant GM can even bind or trigger this
+    game.keybindings.register(MODULE_ID, 'open', {
+      name: 'Open Campaign Planner',
+      hint: 'Opens the Campaign Planner window',
+      editable: [{ key: 'KeyP', modifiers: ['CONTROL', 'SHIFT'] }],
+      restricted: true,
+      onDown: () => {
+        openCampaignPlanner();
+        return true;
+      },
+    });
+  } catch (err) { console.error('Untangle | Failed to register keybinding', err); }
 
-  // All Untangle settings use scope 'world': it keeps them out of players'
-  // Configure Settings entirely (world-scoped entries are GM-only, both to
-  // see and to edit), which matters since this whole module is GM-only.
-  game.settings.register(MODULE_ID, 'quickbarEnabled', {
-    name: 'Show Quick Bar',
-    hint: 'Shows the Untangle quick-access buttons above the macro bar.',
-    scope: 'world',
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => renderQuickbar(),
-  });
-  game.settings.register(MODULE_ID, 'quickbarOffsetX', {
-    name: 'Quick Bar Horizontal Offset',
-    hint: 'Shifts the quick-access buttons left/right (in pixels) relative to the macro bar, in case it overlaps other UI.',
-    scope: 'world',
-    config: true,
-    type: Number,
-    default: 0,
-    onChange: () => renderQuickbar(),
-  });
-  game.settings.register(MODULE_ID, 'quickbarOffsetY', {
-    name: 'Quick Bar Vertical Offset',
-    hint: 'Shifts the quick-access buttons up/down (in pixels) relative to the macro bar.',
-    scope: 'world',
-    config: true,
-    type: Number,
-    default: 0,
-    onChange: () => renderQuickbar(),
-  });
+  try {
+    // All Untangle settings use scope 'world': it keeps them out of players'
+    // Configure Settings entirely (world-scoped entries are GM-only, both to
+    // see and to edit), which matters since this whole module is GM-only.
+    game.settings.register(MODULE_ID, 'quickbarEnabled', {
+      name: 'Show Quick Bar',
+      hint: 'Shows the Untangle quick-access buttons above the macro bar.',
+      scope: 'world',
+      config: true,
+      type: Boolean,
+      default: true,
+      onChange: () => renderQuickbar(),
+    });
+    game.settings.register(MODULE_ID, 'quickbarOffsetX', {
+      name: 'Quick Bar Horizontal Offset',
+      hint: 'Shifts the quick-access buttons left/right (in pixels) relative to the macro bar, in case it overlaps other UI.',
+      scope: 'world',
+      config: true,
+      type: Number,
+      default: 0,
+      onChange: () => renderQuickbar(),
+    });
+    game.settings.register(MODULE_ID, 'quickbarOffsetY', {
+      name: 'Quick Bar Vertical Offset',
+      hint: 'Shifts the quick-access buttons up/down (in pixels) relative to the macro bar.',
+      scope: 'world',
+      config: true,
+      type: Number,
+      default: 0,
+      onChange: () => renderQuickbar(),
+    });
+  } catch (err) { console.error('Untangle | Failed to register quick bar settings', err); }
 
-  // API keys — used by the planner's AI extraction (Claude) and audio
-  // transcription (Whisper) features. Read directly from these settings by
-  // app/index.html via window.parent.game.settings.get(...). config:false
-  // because they're edited through UntangleApiKeyConfig (masked inputs)
-  // instead of Foundry's default plain-text settings list.
-  game.settings.register(MODULE_ID, 'claudeApiKey', {
-    scope: 'world',
-    config: false,
-    type: String,
-    default: '',
-  });
-  game.settings.register(MODULE_ID, 'openaiApiKey', {
-    scope: 'world',
-    config: false,
-    type: String,
-    default: '',
-  });
-  game.settings.registerMenu(MODULE_ID, 'apiKeyConfig', {
-    name: 'API Keys',
-    label: 'Manage API Keys',
-    hint: 'Set your Claude and OpenAI API keys. Values are masked once entered.',
-    icon: 'fas fa-key',
-    type: UntangleApiKeyConfig,
-    restricted: true,
-  });
+  try {
+    // API keys — used by the planner's AI extraction (Claude) and audio
+    // transcription (Whisper) features. Read directly from these settings by
+    // app/index.html via window.parent.game.settings.get(...). config:false
+    // because they're edited through UntangleApiKeyConfig (masked inputs)
+    // instead of Foundry's default plain-text settings list.
+    game.settings.register(MODULE_ID, 'claudeApiKey', {
+      scope: 'world',
+      config: false,
+      type: String,
+      default: '',
+    });
+    game.settings.register(MODULE_ID, 'openaiApiKey', {
+      scope: 'world',
+      config: false,
+      type: String,
+      default: '',
+    });
+    game.settings.registerMenu(MODULE_ID, 'apiKeyConfig', {
+      name: 'API Keys',
+      label: 'Manage API Keys',
+      hint: 'Set your Claude and OpenAI API keys. Values are masked once entered.',
+      icon: 'fas fa-key',
+      type: UntangleApiKeyConfig,
+      restricted: true,
+    });
+  } catch (err) { console.error('Untangle | Failed to register API key settings/menu', err); }
 
-  // Data management (export/import/clear) — a menu button rather than a
-  // plain setting since these are one-off actions, not stored values.
-  game.settings.registerMenu(MODULE_ID, 'dataConfig', {
-    name: 'Campaign Data',
-    label: 'Manage Data',
-    hint: 'Export a backup, import a previous backup, or clear all Untangle data stored in this browser.',
-    icon: 'fas fa-database',
-    type: UntangleDataConfig,
-    restricted: true,
-  });
+  try {
+    // Data management (export/import/clear) — a menu button rather than a
+    // plain setting since these are one-off actions, not stored values.
+    game.settings.registerMenu(MODULE_ID, 'dataConfig', {
+      name: 'Campaign Data',
+      label: 'Manage Data',
+      hint: 'Export a backup, import a previous backup, or clear all Untangle data stored in this browser.',
+      icon: 'fas fa-database',
+      type: UntangleDataConfig,
+      restricted: true,
+    });
+  } catch (err) { console.error('Untangle | Failed to register data menu', err); }
 });
 
 // ── Add button to the Journal sidebar (GM only) ───────────
