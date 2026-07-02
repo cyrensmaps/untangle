@@ -2,7 +2,9 @@
 
 Do you run your best sessions by feel? The kind where a throwaway NPC becomes someone the whole table is obsessed with, a town you made up on the spot starts to feel like it has centuries of history, and the story goes somewhere nobody planned — including you.
 
-The trouble is, somewhere between sessions you're staring at scattered notes wondering which faction controls the northern road, what that merchant's actual name was, and which thread you accidentally pulled last week that now seems connected to everything.\n\nUntangle is a campaign tracker built for GMs who discover their story at the table. Log NPCs, locations, factions, sessions, and plot threads as they emerge. Map how they connect. Walk into next session knowing exactly where things stand — without changing the way you play.
+The trouble is, somewhere between sessions you're staring at scattered notes wondering which faction controls the northern road, what that merchant's actual name was, and which thread you accidentally pulled last week that now seems connected to everything.
+
+Untangle is a campaign tracker built for GMs who discover their story at the table. Log NPCs, locations, factions, sessions, and plot threads as they emerge. Map how they connect. Walk into next session knowing exactly where things stand — without changing the way you play.
 
 ---
 
