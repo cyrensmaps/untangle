@@ -90,6 +90,97 @@ function toggleQuickAccessWidget() {
   }
 }
 
+// ── Campaign data: export / import / clear ────────────────
+// Operates directly on this browser's localStorage — the same store
+// app/index.html reads/writes (key 'cp_v1') — so it works even without
+// opening the planner.
+
+class UntangleDataConfig extends Application {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: 'untangle-data-config',
+      title: 'Untangle — Campaign Data',
+      width: 420,
+      height: 'auto',
+    });
+  }
+
+  async _renderInner(_data) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:4px 2px;display:flex;flex-direction:column;gap:12px;';
+    wrap.innerHTML = `
+      <p>Export a full backup of all campaigns, import a previous backup, or clear all Untangle data stored in this browser.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" data-action="export">Export backup</button>
+        <button type="button" data-action="import">Import backup</button>
+        <button type="button" data-action="clear" style="color:#c0524f">Clear all data</button>
+      </div>
+      <input type="file" data-role="import-file" accept=".json" style="display:none">
+    `;
+    return $(wrap);
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    html.find('[data-action="export"]').on('click', () => this._export());
+    html.find('[data-action="import"]').on('click', () => html.find('[data-role="import-file"]')[0].click());
+    html.find('[data-role="import-file"]').on('change', (ev) => this._import(ev));
+    html.find('[data-action="clear"]').on('click', () => this._clear());
+  }
+
+  _export() {
+    const raw = localStorage.getItem('cp_v1');
+    if (!raw) { ui.notifications.warn('No Untangle data found in this browser.'); return; }
+    const blob = new Blob([raw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: `campaign-backup-${new Date().toISOString().split('T')[0]}.json` });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  _import(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imp = JSON.parse(e.target.result);
+        if (!imp.campaigns && !imp.sessions) throw new Error('Invalid file');
+        let final = imp;
+        if (imp.sessions && !imp.campaigns) {
+          // Legacy single-campaign export — wrap it as an additional campaign
+          // rather than replacing everything, matching the old in-app import.
+          const existing = JSON.parse(localStorage.getItem('cp_v1') || 'null') || { settings: {}, campaigns: [] };
+          const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          const wrapped = {
+            id: uid(),
+            name: imp.settings?.campaignName || 'Imported Campaign',
+            sessions: imp.sessions || [], npcs: imp.npcs || [], locations: imp.locations || [], hooks: imp.hooks || [],
+            maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [],
+            sessionPrep: { notes: '', scenes: [], questions: [] },
+          };
+          existing.campaigns = existing.campaigns || [];
+          existing.campaigns.push(wrapped);
+          existing.currentCampaignId = wrapped.id;
+          final = existing;
+        }
+        localStorage.setItem('cp_v1', JSON.stringify(final));
+        ui.notifications.info('Untangle data imported. Reopen the planner to see it.');
+      } catch {
+        ui.notifications.error('Invalid Untangle backup file.');
+      }
+      ev.target.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  _clear() {
+    if (!confirm('Clear all Untangle data stored in this browser? This cannot be undone — export a backup first if unsure.')) return;
+    localStorage.removeItem('cp_v1');
+    ui.notifications.info('Untangle data cleared.');
+  }
+}
+
 // ── Settings: world-scoped backup mirror ──────────────────
 // index.html writes a full copy of its state here (via window.parent.game)
 // on every save, so a campaign survives a cleared browser cache/profile —
@@ -114,6 +205,68 @@ Hooks.on('init', () => {
       return true;
     },
   });
+
+  // All Untangle settings use scope 'world': it keeps them out of players'
+  // Configure Settings entirely (world-scoped entries are GM-only, both to
+  // see and to edit), which matters since this whole module is GM-only.
+  game.settings.register(MODULE_ID, 'quickbarEnabled', {
+    name: 'Show Quick Bar',
+    hint: 'Shows the Untangle quick-access buttons above the macro bar.',
+    scope: 'world',
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => renderQuickbar(),
+  });
+  game.settings.register(MODULE_ID, 'quickbarOffsetX', {
+    name: 'Quick Bar Horizontal Offset',
+    hint: 'Shifts the quick-access buttons left/right (in pixels) relative to the macro bar, in case it overlaps other UI.',
+    scope: 'world',
+    config: true,
+    type: Number,
+    default: 0,
+    onChange: () => renderQuickbar(),
+  });
+  game.settings.register(MODULE_ID, 'quickbarOffsetY', {
+    name: 'Quick Bar Vertical Offset',
+    hint: 'Shifts the quick-access buttons up/down (in pixels) relative to the macro bar.',
+    scope: 'world',
+    config: true,
+    type: Number,
+    default: 0,
+    onChange: () => renderQuickbar(),
+  });
+
+  // API keys — used by the planner's AI extraction (Claude) and audio
+  // transcription (Whisper) features. Read directly from these settings by
+  // app/index.html via window.parent.game.settings.get(...).
+  game.settings.register(MODULE_ID, 'claudeApiKey', {
+    name: 'Claude API Key',
+    hint: 'Used for AI transcript analysis and Find Duplicates. Get one at console.anthropic.com.',
+    scope: 'world',
+    config: true,
+    type: String,
+    default: '',
+  });
+  game.settings.register(MODULE_ID, 'openaiApiKey', {
+    name: 'OpenAI API Key',
+    hint: 'Used for session audio transcription (Whisper). Get one at platform.openai.com/api-keys.',
+    scope: 'world',
+    config: true,
+    type: String,
+    default: '',
+  });
+
+  // Data management (export/import/clear) — a menu button rather than a
+  // plain setting since these are one-off actions, not stored values.
+  game.settings.registerMenu(MODULE_ID, 'dataConfig', {
+    name: 'Campaign Data',
+    label: 'Manage Data',
+    hint: 'Export a backup, import a previous backup, or clear all Untangle data stored in this browser.',
+    icon: 'fas fa-database',
+    type: UntangleDataConfig,
+    restricted: true,
+  });
 });
 
 // ── Add button to the Journal sidebar (GM only) ───────────
@@ -134,50 +287,52 @@ Hooks.on('renderJournalDirectory', (_app, html) => {
   if (header) header.insertAdjacentElement('afterend', btn);
 });
 
-// ── Add icons to the scene controls (left) toolbar (GM only) ──
+// ── Quick bar: persistent buttons anchored above the macro bar (GM only) ──
 //
-// We register the tool entries with the core hook so Foundry lays out and
-// styles the icons (this part is confirmed working — the icons render).
-// We do NOT rely on core calling `tool.onClick` to fire our handlers: that
-// dispatch has proven flaky across Foundry versions/builds (clicks landing
-// with no console error). Instead we bind our own click listeners straight
-// to the rendered DOM nodes in renderSceneControls, which is version-stable
-// and lets us see exactly what's happening if something still goes wrong.
-
-const UNTANGLE_TOOLS = [
-  { name: 'untangle-open', title: 'Open Untangle', icon: 'fas fa-scroll', fn: () => openCampaignPlanner() },
-  { name: 'untangle-quick', title: 'Untangle Quick Access', icon: 'fas fa-bolt', fn: () => toggleQuickAccessWidget() },
+// To add another quick-launch button later, just push another entry here —
+// { id, icon: '<Font Awesome class>', title, onClick } — renderQuickbar()
+// picks up any entries in this array automatically.
+const QUICK_BUTTONS = [
+  { id: 'open', icon: 'fa-scroll', title: 'Open Untangle', onClick: () => openCampaignPlanner() },
+  { id: 'quick', icon: 'fa-bolt', title: 'Untangle Quick Access', onClick: () => toggleQuickAccessWidget() },
 ];
 
-Hooks.on('getSceneControlButtons', (controls) => {
-  if (!game.user.isGM) return;
-  const tokenControls = Array.isArray(controls)
-    ? controls.find(c => c.name === 'token')
-    : controls.tokens; // v13+ object shape, kept for forward compatibility
+function renderQuickbar() {
+  const hotbar = document.getElementById('hotbar');
+  if (!hotbar) return;
 
-  if (!tokenControls?.tools) return;
-  if (Array.isArray(tokenControls.tools)) {
-    if (tokenControls.tools.some(t => t.name === 'untangle-open')) return;
-    tokenControls.tools.push(...UNTANGLE_TOOLS.map(t => ({ name: t.name, title: t.title, icon: t.icon, button: true })));
-  } else {
-    if (tokenControls.tools['untangle-open']) return;
-    UNTANGLE_TOOLS.forEach(t => { tokenControls.tools[t.name] = { name: t.name, title: t.title, icon: t.icon, button: true }; });
+  let bar = document.getElementById('untangle-quickbar');
+  if (!game.user.isGM) { bar?.remove(); return; }
+
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'untangle-quickbar';
+    hotbar.appendChild(bar);
   }
-});
 
-Hooks.on('renderSceneControls', (_app, html) => {
-  if (!game.user.isGM) return;
-  const root = html instanceof HTMLElement ? html : html[0];
-  if (!root) return;
-  UNTANGLE_TOOLS.forEach(t => {
-    const el = root.querySelector(`[data-tool="${t.name}"]`);
-    if (el && !el.dataset.untangleBound) {
-      el.dataset.untangleBound = '1';
-      el.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); t.fn(); });
-    }
+  const enabled = game.settings.get(MODULE_ID, 'quickbarEnabled');
+  bar.style.display = enabled ? 'flex' : 'none';
+  if (!enabled) return;
+
+  const offsetX = game.settings.get(MODULE_ID, 'quickbarOffsetX') || 0;
+  const offsetY = game.settings.get(MODULE_ID, 'quickbarOffsetY') || 0;
+  bar.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`;
+
+  bar.innerHTML = '';
+  QUICK_BUTTONS.forEach(b => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'untangle-quickbar-btn';
+    btn.title = b.title;
+    btn.innerHTML = `<i class="fas ${b.icon}"></i>`;
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); b.onClick(); });
+    bar.appendChild(btn);
   });
-});
+}
+
+Hooks.on('renderHotbar', renderQuickbar);
+Hooks.once('ready', renderQuickbar);
 
 Hooks.on('ready', () => {
-  console.log('Untangle | Loaded. Press Ctrl+Shift+P, click the button in the Journal tab, or use the scene controls toolbar to open.');
+  console.log('Untangle | Loaded. Press Ctrl+Shift+P, click the button in the Journal tab, or use the quick bar above the macro bar to open.');
 });

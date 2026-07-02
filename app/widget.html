@@ -5,15 +5,15 @@
   <title>Untangle — Quick Access</title>
   <style>
     :root {
-      --bg: #0f0f1a;
-      --bg-card: #1a1a2e;
-      --bg-elevated: #22223a;
-      --accent: #c9a84c;
-      --accent-dim: #8a6e2a;
-      --text: #e8e4d9;
-      --text-dim: #7a7a9a;
-      --border: rgba(201, 168, 76, 0.12);
-      --border-hover: rgba(201, 168, 76, 0.35);
+      --bg: #1e1f22;
+      --bg-card: #26272b;
+      --bg-elevated: #2d2f34;
+      --accent: #7c93a8;
+      --accent-dim: #566878;
+      --text: #d8d9dc;
+      --text-dim: #8a8d94;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.22);
       --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -42,7 +42,7 @@
     .qa-note { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 7px; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; position: relative; }
     .qa-note .qa-note-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.65rem; color: var(--text-dim); }
     .qa-note .qa-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.7rem; }
-    .qa-note .qa-del:hover { color: #c44444; }
+    .qa-note .qa-del:hover { color: #c0524f; }
     .qa-empty { color: var(--text-dim); font-size: 0.78rem; text-align: center; padding: 24px 8px; }
 
     .qa-style-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
@@ -56,10 +56,10 @@
 </head>
 <body>
 
-<div class="qa-campaign">📖 <b id="qa-camp-name">…</b></div>
+<div class="qa-campaign"><b id="qa-camp-name">…</b></div>
 <div class="qa-tabs">
-  <button class="qa-tab active" id="qa-tab-notes" onclick="qaSwitch('notes')">📝 Field Notes</button>
-  <button class="qa-tab" id="qa-tab-names" onclick="qaSwitch('names')">🎲 Names</button>
+  <button class="qa-tab active" id="qa-tab-notes" onclick="qaSwitch('notes')">Field Notes</button>
+  <button class="qa-tab" id="qa-tab-names" onclick="qaSwitch('names')">Names</button>
 </div>
 
 <div class="qa-panel active" id="qa-panel-notes">

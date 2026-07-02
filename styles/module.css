@@ -27,9 +27,9 @@
   width: calc(100% - 16px);
   margin: 6px 8px 2px;
   padding: 6px 10px;
-  background: #1a1a2e;
-  color: #c9a84c;
-  border: 1px solid rgba(201, 168, 76, 0.35);
+  background: #26272b;
+  color: #7c93a8;
+  border: 1px solid rgba(124, 147, 168, 0.35);
   border-radius: 4px;
   font-family: inherit;
   font-size: 0.85rem;
@@ -40,9 +40,44 @@
 }
 
 .cp-sidebar-btn:hover {
-  background: rgba(201, 168, 76, 0.1);
+  background: rgba(124, 147, 168, 0.1);
 }
 
 .cp-sidebar-btn i {
   margin-right: 6px;
+}
+
+/* Quick bar — buttons anchored above the macro/hotbar */
+#hotbar {
+  position: relative; /* anchor for #untangle-quickbar's absolute positioning */
+}
+
+#untangle-quickbar {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  gap: 6px;
+  padding-bottom: 8px;
+  z-index: 25;
+}
+
+.untangle-quickbar-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #eee;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.untangle-quickbar-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(255, 255, 255, 0.45);
 }

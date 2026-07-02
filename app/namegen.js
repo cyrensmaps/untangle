@@ -23,7 +23,7 @@ function randomName() {
 
 const NAME_STYLES = {
   nordic: {
-    label: '⚔️ Nordic',
+    label: 'Nordic',
     // Parts: [onset syllables, optional middle, closing syllables]
     // Names are built as: onset + (sometimes middle) + closing
     onset:  ['Rag','Bjorn','Sig','Thor','Freya','Ulf','Hild','Gunnar','Leif','Astrid','Eirik','Ragn','Hjalm','Orm','Sven','Aud','Dag','Val','Ing','Rolf','Haakon','Ivar','Brand','Rune','Skald','Vidar'],
@@ -31,37 +31,37 @@ const NAME_STYLES = {
     end:    ['nar','ald','mund','ulfr','hild','borg','varr','dís','björn','frið','leikr','inn','stein','vald','laug','arr'],
   },
   elvish: {
-    label: '🌿 Elvish',
+    label: 'Elvish',
     onset:  ['Aer','Syl','Thal','Elan','Aear','Lúth','Gal','Cal','Tari','Ael','Nín','Aran','Silv','Eäl','Fae','Nim','Eir','Aiel','Lór','Nael'],
     mid:    ['ia','ae','el','or','ith','an','in','al'],
     end:    ['iel','ael','ith','wen','dor','riel','nil','thien','rian','ssë','lor','vel','mir','nar','dil','ssiel'],
   },
   dwarven: {
-    label: '🪨 Dwarven',
+    label: 'Dwarven',
     onset:  ['Dur','Bur','Grun','Tor','Bram','Kaz','Thur','Morg','Druk','Beld','Grum','Thar','Durin','Bofri','Dor','Gimb','Nori','Glor','Thorin','Bal'],
     mid:    ['um','or','ar','un','in','ak','ur'],
     end:    ['din','gar','mar','grim','dum','dok','rik','bek','dal','kar','bur','dim','dur','gar','kin'],
   },
   orcish: {
-    label: '💀 Orcish',
+    label: 'Orcish',
     onset:  ['Gruk','Krag','Urk','Bog','Skrag','Gash','Mog','Thruk','Krul','Vog','Dreg','Gorr','Skul','Bruk','Kruk','Zog','Urg','Trog','Mag','Rak'],
     mid:    ['ak','ug','ag','uk','og'],
     end:    ['ash','uk','nak','gash','rak','tar','gul','bok','dak','gor','zug','mak'],
   },
   human: {
-    label: '🏛️ Human',
+    label: 'Human',
     onset:  ['Mar','Del','Car','Ter','Al','Bel','Cor','Dar','Fen','Gar','Har','Jer','Kel','Lan','Mat','Nat','Per','Ros','Ser','Tav','Var','Wil','Xan','Yor','Zan','Pell','Renn','Sard','Torm'],
     mid:    ['a','e','i','o','an','er','al','en','el'],
     end:    ['an','en','on','ith','ia','us','is','or','ar','in','ic','ix','ius','ine','os','in','ald','and','ell'],
   },
   celtic: {
-    label: '🍀 Celtic',
+    label: 'Celtic',
     onset:  ['Bri','Caer','Mor','Eira','Cae','Rhian','Gwen','Deir','Aoife','Fionn','Ciar','Muir','Sear','Niamh','Caol','Bran','Conn','Cunn','Diarm','Feargh'],
     mid:    ['an','wyn','och','ach','dach','ith','ech'],
     end:    ['wyn','aer','an','ach','dach','dwyn','ith','wyn','on','awn','each','och','wyn','ell','ach'],
   },
   eastern: {
-    label: '🌙 Eastern',
+    label: 'Eastern',
     onset:  ['Zar','Sha','Kas','Mir','Nar','Tal','Yaz','Bal','Dar','Far','Jas','Kha','Las','Mas','Nas','Par','Ras','Sal','Taj','Var'],
     mid:    ['i','a','u','al','an','im','am','ir'],
     end:    ['ira','ana','ari','im','al','ur','in','ul','an','em','eel','amin','ira','azar','in'],
