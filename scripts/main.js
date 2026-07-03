@@ -27,6 +27,7 @@ class CampaignPlannerApp extends Application {
     wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
     const iframe = document.createElement('iframe');
     iframe.src = url;
+    iframe.allow = 'microphone'; // for Field Notes voice dictation (Web Speech API)
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
     wrap.appendChild(iframe);
     return $(wrap);
@@ -67,6 +68,7 @@ class QuickAccessApp extends Application {
     wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
     const iframe = document.createElement('iframe');
     iframe.src = url;
+    iframe.allow = 'microphone'; // for Field Notes voice dictation (Web Speech API)
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
     wrap.appendChild(iframe);
     return $(wrap);
@@ -416,11 +418,21 @@ Hooks.on('renderActorSheet', (app, html) => {
     const actor = app.actor || app.object;
     if (!actor) return;
 
-    const state = _readUntangleState();
-    const campaign = state?.campaigns?.find(c => c.id === state.currentCampaignId);
-    const existing = campaign?.npcs?.find(n => n.foundryActorId === actor.id);
+    const btn = $(`<a class="header-button untangle-actor-btn"><i class="fas fa-scroll"></i> Add to Untangle</a>`);
 
-    const btn = $(`<a class="header-button untangle-actor-btn"><i class="fas fa-scroll"></i> ${existing ? 'Open in Untangle' : 'Add to Untangle'}</a>`);
+    // Re-checks whether this Actor is already linked and updates the
+    // button's label/icon in place — called both on first render and right
+    // after a successful add, so the button flips to "Open in Untangle"
+    // immediately instead of only on the sheet's next re-render.
+    let existing = null;
+    function refreshButtonState() {
+      const state = _readUntangleState();
+      const campaign = state?.campaigns?.find(c => c.id === state.currentCampaignId);
+      existing = campaign?.npcs?.find(n => n.foundryActorId === actor.id) || null;
+      btn.html(`<i class="fas fa-scroll"></i> ${existing ? 'Open in Untangle' : 'Add to Untangle'}`);
+    }
+    refreshButtonState();
+
     btn.on('click', (ev) => {
       ev.preventDefault();
       if (existing) {
@@ -428,12 +440,97 @@ Hooks.on('renderActorSheet', (app, html) => {
         openCampaignPlanner();
       } else {
         addActorToUntangle(actor);
+        refreshButtonState();
       }
     });
 
     const closeBtn = header.find('.close');
     if (closeBtn.length) closeBtn.before(btn); else header.append(btn);
   } catch (err) { console.error('Untangle | Failed to add Actor sheet button', err); }
+});
+
+// ── Hover-a-token tooltip (GM only) ────────────────────────
+// Glancing at a token mid-encounter shows its linked NPC's key details
+// without opening the full planner, straight from the same localStorage
+// data everything else reads. Positioning uses canvas.stage.toGlobal() to
+// convert the token's world coordinates through the current pan/zoom into
+// screen pixels — the standard approach, but exact behavior should be
+// spot-checked live since it can't be tested outside a running canvas.
+
+function _escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _untangleTokenTooltip = null;
+function _removeTokenTooltip() {
+  _untangleTokenTooltip?.remove();
+  _untangleTokenTooltip = null;
+}
+
+Hooks.on('hoverToken', (token, hovered) => {
+  try {
+    if (!game.user.isGM) return;
+    if (!hovered) { _removeTokenTooltip(); return; }
+
+    const actorId = token.actor?.id;
+    if (!actorId) return;
+    const state = _readUntangleState();
+    const campaign = state?.campaigns?.find(c => c.id === state.currentCampaignId);
+    const npc = campaign?.npcs?.find(n => n.foundryActorId === actorId);
+    if (!npc) return;
+
+    const lines = [];
+    if (npc.role) lines.push(`<div class="untangle-tt-role">${_escHtml(npc.role)}</div>`);
+    if (npc.voiceDescription) lines.push(`<div class="untangle-tt-voice">${_escHtml(npc.voiceDescription)}</div>`);
+    const detail = npc.motivation || npc.notes;
+    if (detail) lines.push(`<div class="untangle-tt-detail">${_escHtml(detail.slice(0, 160))}</div>`);
+    if (!lines.length) return;
+
+    _removeTokenTooltip();
+    const el = document.createElement('div');
+    el.id = 'untangle-token-tooltip';
+    el.innerHTML = `<div class="untangle-tt-name">${_escHtml(npc.name)}</div>${lines.join('')}`;
+    document.body.appendChild(el);
+
+    const worldPos = token.center || { x: token.x, y: token.y };
+    const globalPos = canvas.stage.toGlobal(new PIXI.Point(worldPos.x, worldPos.y));
+    const rect = canvas.app.view.getBoundingClientRect();
+    el.style.left = `${rect.left + globalPos.x}px`;
+    el.style.top = `${rect.top + globalPos.y - 16}px`;
+    _untangleTokenTooltip = el;
+  } catch (err) { console.error('Untangle | Token tooltip failed', err); }
+});
+
+Hooks.on('canvasPan', _removeTokenTooltip);
+Hooks.on('canvasReady', _removeTokenTooltip);
+
+// ── Drag an NPC/Location/Thread card to the hotbar for a one-click jump ──
+// The card's dragstart (app/index.html) sets a custom
+// { type: 'untangle-entity', entityType, entityId, name } payload via
+// dataTransfer — Foundry's TextEditor.getDragEventData parses it and passes
+// it straight to this hook as `data`.
+Hooks.on('hotbarDrop', (_bar, data, slot) => {
+  if (!game.user.isGM || data?.type !== 'untangle-entity') return;
+  const { entityType, entityId, name } = data;
+  (async () => {
+    try {
+      let macro = game.macros.find(m => m.getFlag(MODULE_ID, 'entityId') === entityId && m.getFlag(MODULE_ID, 'entityType') === entityType);
+      if (!macro) {
+        const command = `localStorage.setItem('cp_pending_nav', JSON.stringify(${JSON.stringify({ type: entityType, id: entityId })}));\nif (window.openCampaignPlanner) window.openCampaignPlanner();`;
+        macro = await Macro.create({
+          name: `Untangle: ${name || entityType}`,
+          type: 'script',
+          scope: 'global',
+          command,
+          img: entityType === 'npc' ? 'icons/svg/mystery-man.svg' : 'icons/svg/book.svg',
+        });
+        await macro.setFlag(MODULE_ID, 'entityId', entityId);
+        await macro.setFlag(MODULE_ID, 'entityType', entityType);
+      }
+      await game.user.assignHotbarMacro(macro, slot);
+    } catch (err) { console.error('Untangle | Failed to create hotbar macro', err); }
+  })();
+  return false; // tell Foundry not to also run its own default drop handling
 });
 
 // ── Quick bar: persistent buttons anchored above the macro bar (GM only) ──

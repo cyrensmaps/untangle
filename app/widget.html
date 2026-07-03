@@ -18,31 +18,27 @@
     .qa-clock-row .clock-seg { width: 14px; height: 14px; }
     .qa-callback-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
 
-    .qa-campaign { font-size: 0.68rem; color: var(--text-dim); text-align: center; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .qa-campaign { font-size: 0.7rem; color: var(--text-dim); text-align: center; padding: 9px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; letter-spacing: 0.02em; }
     .qa-campaign b { color: var(--accent); font-weight: 600; }
 
-    .qa-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: none; }
-    .qa-panel.active { display: block; }
+    .qa-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: none; flex-direction: column; gap: 10px; }
+    .qa-panel.active { display: flex; }
 
-    textarea, input { padding: 8px 10px; font-size: 0.82rem; }
+    textarea, input, select { padding: 8px 10px; font-size: 0.82rem; }
+    select#qa-note-about { font-size: 0.76rem; color: var(--text-dim); }
 
-    .btn { padding: 6px 12px; font-size: 0.78rem; }
-    .btn-primary { width: 100%; margin-top: 6px; }
+    .btn { padding: 7px 12px; font-size: 0.78rem; }
+    .btn-primary { width: 100%; }
 
-    .qa-note { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 7px; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; position: relative; }
-    .qa-note .qa-note-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.65rem; color: var(--text-dim); }
-    .qa-note .qa-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.7rem; }
-    .qa-note .qa-del:hover { color: var(--red); }
     .qa-empty { color: var(--text-dim); font-size: 0.78rem; text-align: center; padding: 24px 8px; }
-    .qa-note-tag { display: inline-block; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--accent); cursor: pointer; }
 
-    .qa-style-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .qa-style-row { display: flex; flex-wrap: wrap; gap: 4px; }
     .qa-style-btn { padding: 4px 8px; border-radius: 12px; font-size: 0.7rem; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; }
     .qa-style-btn.active { background: var(--accent); color: #12100a; border-color: var(--accent); }
     .qa-names { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .qa-name-btn { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; font-size: 0.8rem; color: var(--text); cursor: pointer; text-align: left; }
     .qa-name-btn:hover { border-color: var(--accent); }
-    .qa-hint { font-size: 0.68rem; color: var(--text-dim); text-align: center; margin-top: 8px; height: 14px; }
+    .qa-hint { font-size: 0.68rem; color: var(--text-dim); text-align: center; height: 14px; }
   </style>
 </head>
 <body>
@@ -56,19 +52,20 @@
 </div>
 
 <div class="qa-panel active" id="qa-panel-notes">
-  <textarea id="qa-note-text" rows="3" placeholder="Capture anything mid-session…"></textarea>
-  <select id="qa-note-about" style="margin-top:6px">
+  <textarea id="qa-note-text" rows="4" placeholder="Capture anything mid-session…"></textarea>
+  <button type="button" class="btn btn-ghost" id="qa-dictate-btn" onclick="toggleDictation('qa-note-text', this)">Dictate</button>
+  <select id="qa-note-about">
     <option value="">— Not tied to anything —</option>
   </select>
   <button class="btn btn-primary" onclick="qaSaveNote()">+ Add Note</button>
-  <div id="qa-notes-list" style="margin-top:12px"></div>
+  <div class="qa-hint" id="qa-note-hint"></div>
 </div>
 
 <div class="qa-panel" id="qa-panel-names">
   <div class="qa-style-row" id="qa-style-row"></div>
   <div class="qa-names" id="qa-names-list"></div>
   <div class="qa-hint" id="qa-name-hint">Pick a style</div>
-  <button class="btn btn-ghost" style="width:100%;margin-top:6px" onclick="qaRegenerateNames()">↺ More</button>
+  <button class="btn btn-ghost" style="width:100%" onclick="qaRegenerateNames()">↺ More</button>
 </div>
 
 <div class="qa-panel" id="qa-panel-clocks">
@@ -94,43 +91,15 @@ function qaSwitch(tab) {
 }
 
 // ── Field notes ──
+// Capture-only here — no room in this small window to usefully show a
+// running list of saved notes (that's what the Field Notes page in the
+// main window is for). Saving just gives a quick confirmation hint.
 function qaRenderNoteAboutOptions() {
   const sel = document.getElementById('qa-note-about');
   if (!sel) return;
   const prev = sel.value;
   sel.innerHTML = `<option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}`;
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
-}
-
-function qaRenderNotes() {
-  const c = camp();
-  if (!c.quickNotes) c.quickNotes = [];
-  const notes = [...c.quickNotes].reverse();
-  const list = document.getElementById('qa-notes-list');
-  list.innerHTML = notes.length === 0
-    ? `<div class="qa-empty">No notes yet.</div>`
-    : notes.map(n => {
-        let aboutChip = '';
-        if (n.aboutType && n.aboutId) {
-          const finder = { npc: c.npcs, location: c.locations, faction: c.factions, thread: c.plotThreads }[n.aboutType];
-          const nameKey = n.aboutType === 'thread' ? 'title' : 'name';
-          const entity = finder?.find(x => x.id === n.aboutId);
-          if (entity) aboutChip = `<span class="qa-note-tag" onclick="openInPlanner('${n.aboutType}','${entity.id}')">${esc(entity[nameKey])}</span>`;
-        }
-        return `
-      <div class="qa-note note-entry" data-note-id="${n.id}">
-        <div class="note-text-view">${esc(n.text)}</div>
-        <textarea class="note-text-edit" rows="3" style="display:none;margin-top:6px">${esc(n.text)}</textarea>
-        ${aboutChip?`<div style="margin-top:6px">${aboutChip}</div>`:''}
-        <div class="qa-note-meta">
-          <span>${esc(n.timestamp)}</span>
-          <div style="display:flex;gap:8px">
-            <button class="qa-del" onclick="toggleNoteEdit(this,'${n.id}')">Edit</button>
-            <button class="qa-del" onclick="qaDeleteNote('${n.id}')">✕ delete</button>
-          </div>
-        </div>
-      </div>`;
-      }).join('');
 }
 
 function qaSaveNote() {
@@ -145,14 +114,8 @@ function qaSaveNote() {
   save();
   ta.value = '';
   document.getElementById('qa-note-about').value = '';
-  qaRenderNotes();
-}
-
-function qaDeleteNote(id) {
-  const c = camp();
-  c.quickNotes = (c.quickNotes || []).filter(n => n.id !== id);
-  save();
-  qaRenderNotes();
+  const hint = document.getElementById('qa-note-hint');
+  if (hint) { hint.textContent = 'Saved!'; setTimeout(() => { hint.textContent = ''; }, 1500); }
 }
 
 // ── Name generator ──
@@ -227,13 +190,13 @@ function qaRenderCallbacks() {
 function onExternalStateChange() {
   document.getElementById('qa-camp-name').textContent = camp().name;
   qaRenderNoteAboutOptions();
-  qaRenderNotes();
   qaRenderClocks();
   qaRenderCallbacks();
 }
 
+if (!speechRecognitionSupported()) document.getElementById('qa-dictate-btn')?.remove();
+
 qaRenderNoteAboutOptions();
-qaRenderNotes();
 qaRenderStyles();
 qaRegenerateNames();
 </script>

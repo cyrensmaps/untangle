@@ -4,6 +4,26 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.5.0]
+
+### Added
+- **Hover-a-token tooltip** — hovering a token linked to an Untangle Character shows their role, voice description, and key notes right on the canvas, no window-switching needed.
+- **Drag-to-hotbar macros** — drag a Character/Location/Plot Thread card onto Foundry's macro bar to create a one-click "jump straight here" macro.
+- **Printable Campaign Bible** — a clean, light-mode printable summary of Factions, active Plot Threads, Characters, Locations, and Clocks, using the browser's own print-to-PDF (Settings → Tools).
+- **Voice dictation for Field Notes** — dictate a note hands-free using the browser's built-in speech recognition (free, no API key), in both the main window and the Quick Access widget.
+- **Simple Calendar integration** — sessions can carry an in-world date, with a one-click "Pull from Calendar" button when Simple Calendar is active.
+- **Auto-generated Roll Tables** — "Sync Roll Tables to Foundry" (Settings → Tools) builds real Foundry Roll Tables from your own Characters and Locations, for on-the-fly random picks in Foundry's own Rollable Tables sidebar.
+
+### Changed
+- "Pin Everyone Here" reworked: a Location pin on a map now automatically lists everyone based there as a clickable roster, instead of creating separate marker pins.
+- Quick Access widget's Field Notes tab is capture-only now (no saved-notes list — there wasn't room to show it usefully); notes are still viewable/editable on the main Field Notes page.
+- Removed the Faction attitude trend feature.
+- Visual cleanup pass on the Quick Access widget (fixed a real styling bug where the note-tagging dropdown wasn't picking up the shared input padding/font-size rule, plus more consistent spacing throughout).
+
+### Fixed
+- "Add to Untangle" on an Actor sheet now flips to "Open in Untangle" immediately after adding, instead of requiring the sheet to be reopened.
+- **Post to Journal / Roll Table sync threw "incorrectly constructed with a Unknown instead of an object"** — the iframe is same-origin but still a separate JS realm, so a plain object built inside it has a different identity than one built in the parent window; Foundry's document-creation validation rejected it. Objects are now round-tripped through the parent window's own JSON before being handed to any Foundry document API. Also applied to the Foundry world-backup mirror, which may have been silently failing the same way without ever surfacing an error.
+
 ## [1.4.1]
 
 ### Fixed

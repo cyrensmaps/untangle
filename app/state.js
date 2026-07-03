@@ -55,6 +55,21 @@ if (!state.currentCampaignId || !state.campaigns.find(c => c.id === state.curren
 // survives a cleared browser cache. Debounced since save() can fire often.
 // Only meaningful when running inside the Foundry iframe — falls back to
 // a no-op if window.parent.game isn't reachable (e.g. opened standalone).
+// An iframe is same-origin but still its own separate JS realm, so a plain
+// object literal built in here has a DIFFERENT Object.prototype identity
+// than the parent window's. Some of Foundry's internals — Document
+// creation's DataModel validation in particular — do a strict "is this
+// really a plain object" check that fails on objects from a foreign realm,
+// throwing something like "JournalEntry was incorrectly constructed with a
+// Unknown instead of an object." Round-tripping through the PARENT's own
+// JSON.parse/stringify rebuilds the object using the parent's realm, which
+// fixes it. Use this on any object literal handed to a window.parent.game
+// API (Document create/update/createEmbeddedDocuments, settings.set, etc).
+function toFoundryPlain(obj) {
+  try { return window.parent.JSON.parse(JSON.stringify(obj)); }
+  catch { return obj; }
+}
+
 let _backupTimer = null;
 function _mirrorBackup() {
   clearTimeout(_backupTimer);
@@ -62,7 +77,7 @@ function _mirrorBackup() {
     try {
       const pgame = window.parent?.game;
       if (pgame?.settings && pgame.user?.isGM) {
-        pgame.settings.set('untangle', 'campaignBackup', { savedAt: Date.now(), state });
+        pgame.settings.set('untangle', 'campaignBackup', toFoundryPlain({ savedAt: Date.now(), state }));
       }
     } catch { /* not embedded in Foundry, or setting not registered yet */ }
   }, 1500);
@@ -230,6 +245,53 @@ function toggleNoteEdit(btn, noteId) {
     ta.style.display = '';
     ta.focus();
     btn.textContent = 'Done';
+  }
+}
+
+// ── Voice dictation for quick note capture (shared) ──
+// Uses the browser's built-in Web Speech API — free, no API key, and works
+// entirely independent of the Claude/Whisper features — rather than adding
+// another paid transcription path just for short field notes. Not
+// supported in every browser (notably Firefox), so callers should check
+// speechRecognitionSupported() before showing a dictate button at all.
+function speechRecognitionSupported() {
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function toggleDictation(textareaId, btn) {
+  if (btn._recognition) { btn._recognition.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  const ta = document.getElementById(textareaId);
+  if (!ta) return;
+
+  const rec = new SR();
+  rec.continuous = true;
+  rec.interimResults = false;
+  try { rec.lang = navigator.language || 'en-US'; } catch { /* ignore */ }
+
+  rec.onresult = (e) => {
+    let chunk = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) chunk += e.results[i][0].transcript;
+    }
+    chunk = chunk.trim();
+    if (chunk) ta.value = ta.value.trim() ? ta.value.trim() + ' ' + chunk : chunk;
+  };
+  rec.onerror = (e) => { console.error('Untangle | Dictation error', e.error); };
+  rec.onend = () => {
+    btn._recognition = null;
+    btn.textContent = 'Dictate';
+    btn.style.color = '';
+  };
+
+  try {
+    rec.start();
+    btn._recognition = rec;
+    btn.textContent = '● Stop';
+    btn.style.color = 'var(--red)';
+  } catch (err) {
+    console.error('Untangle | Could not start dictation', err);
   }
 }
 

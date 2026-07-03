@@ -244,6 +244,24 @@
     /* ── SEARCH ── */
     .search-result-item { padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
     .search-result-item:hover { background: rgba(255,255,255,0.05); }
+
+    /* ── CAMPAIGN BIBLE (print) ── */
+    #campaign-bible-print { position: fixed; inset: 0; z-index: 9998; background: #fff; overflow-y: auto; }
+    #campaign-bible-print .cb-toolbar { position: sticky; top: 0; display: flex; gap: 8px; justify-content: flex-end; padding: 12px 24px; background: #f0f0f0; border-bottom: 1px solid #ccc; }
+    #campaign-bible-print .cb-page { max-width: 720px; margin: 0 auto; padding: 40px 32px 80px; color: #1a1a1a; font-family: Georgia, 'Times New Roman', serif; line-height: 1.6; }
+    #campaign-bible-print h1 { font-size: 1.8rem; margin-bottom: 4px; }
+    #campaign-bible-print .cb-sub { color: #666; font-size: 0.85rem; margin-bottom: 28px; font-family: var(--font); }
+    #campaign-bible-print h2 { font-size: 1.15rem; border-bottom: 2px solid #1a1a1a; padding-bottom: 4px; margin: 32px 0 14px; }
+    #campaign-bible-print .cb-entry { margin-bottom: 16px; }
+    #campaign-bible-print .cb-entry h3 { font-size: 1rem; margin-bottom: 3px; }
+    #campaign-bible-print .cb-entry p { font-size: 0.92rem; margin: 2px 0; }
+    #campaign-bible-print .cb-tag { font-family: var(--font); font-size: 0.7rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
+    #campaign-bible-print .cb-clock { font-size: 0.92rem; margin: 2px 0; }
+    @media print {
+      body > *:not(#campaign-bible-print) { display: none !important; }
+      #campaign-bible-print { position: static; }
+      #campaign-bible-print .cb-toolbar { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -393,6 +411,21 @@ function confirmModal(message, opts) {
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => { overlay.remove(); resolve(false); });
     overlay.querySelector('[data-act="confirm"]').addEventListener('click', () => { overlay.remove(); resolve(true); });
   });
+}
+
+// Drag an NPC/Location/Thread card onto Foundry's macro bar to create a
+// one-click "jump straight here" macro (handled by the hotbarDrop hook in
+// main.js). Looks the name up here rather than embedding it in the inline
+// ondragstart attribute, since embedding arbitrary text risks breaking the
+// attribute if a name ever contains a quote.
+function onEntityDragStart(event, type, id) {
+  event.stopPropagation();
+  const c = camp();
+  const finder = { npc: c.npcs, location: c.locations, thread: c.plotThreads, faction: c.factions }[type];
+  const entity = finder?.find(x => x.id === id);
+  const name = entity ? (entity.name || entity.title || '') : '';
+  event.dataTransfer.effectAllowed = 'copy';
+  event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'untangle-entity', entityType: type, entityId: id, name }));
 }
 
 // ═══════════════════════════════════════════════
@@ -608,6 +641,29 @@ function renderSessions() {
 let inputMode = 'audio'; // 'audio' | 'paste' | 'local'
 window._audioFile = null;
 
+// ── Simple Calendar integration ──
+// Best-effort: Simple Calendar's API shape has changed across versions and
+// can't be verified without a live install, so every call here is
+// defensive and fails quietly (hiding the button) rather than breaking
+// session logging if the API doesn't match what's expected.
+function simpleCalendarActive() {
+  try { return !!window.parent?.game?.modules?.get('foundryvtt-simple-calendar')?.active && !!window.parent?.SimpleCalendar?.api; }
+  catch { return false; }
+}
+
+function pullSimpleCalendarDate(inputId) {
+  try {
+    const api = window.parent.SimpleCalendar.api;
+    const d = typeof api.currentDateTimeDisplay === 'function' ? api.currentDateTimeDisplay() : null;
+    const text = d?.date || null;
+    if (!text) { toast('Could not read the date from Simple Calendar.', 'error'); return; }
+    const input = document.getElementById(inputId);
+    if (input) input.value = text;
+  } catch (err) {
+    toast('Could not read Simple Calendar: ' + (err.message || String(err)), 'error');
+  }
+}
+
 function renderNewSession() {
   return `
     <div class="page-header">
@@ -627,6 +683,13 @@ function renderNewSession() {
         <div class="form-group">
           <label>Date</label>
           <input type="date" id="s-date" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:4px">
+        <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
+        <div class="flex gap-8">
+          <input type="text" id="s-inworld-date" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
+          ${simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('s-inworld-date')">Pull from Calendar</button>`:''}
         </div>
       </div>
 
@@ -1645,6 +1708,7 @@ ${condensed}`;
     number: c.sessions.length + 1,
     title: document.getElementById('s-title')?.value?.trim() || extracted.suggestedTitle || 'Untitled Session',
     date: document.getElementById('s-date')?.value || new Date().toISOString().split('T')[0],
+    inWorldDate: document.getElementById('s-inworld-date')?.value?.trim() || '',
     rawTranscript: transcript,
     summary: extracted.summary || '',
     keyEvents: extracted.keyEvents || [],
@@ -1673,8 +1737,9 @@ function saveManual() {
   const c = camp();
   const title = document.getElementById('s-title')?.value?.trim() || 'Untitled Session';
   const date = document.getElementById('s-date')?.value;
+  const inWorldDate = document.getElementById('s-inworld-date')?.value?.trim() || '';
   const transcript = document.getElementById('s-transcript')?.value?.trim() || '';
-  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, rawTranscript: transcript, summary: '', keyEvents: [] });
+  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, inWorldDate, rawTranscript: transcript, summary: '', keyEvents: [] });
   cleanupSessionPrep(c);
   save();
   toast('Session saved.', 'success');
@@ -1914,7 +1979,7 @@ function openSessionModal(id) {
       <div class="modal-header">
         <div>
           <h3>${esc(s.title)}</h3>
-          <div class="text-xs text-dim mt-4">Session ${s.number} · ${esc(s.date)}</div>
+          <div class="text-xs text-dim mt-4">Session ${s.number} · ${esc(s.date)}${s.inWorldDate?` · ${esc(s.inWorldDate)}`:''}</div>
         </div>
         <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
       </div>
@@ -1944,7 +2009,7 @@ async function postSessionToJournal(id) {
     const journalName = `Untangle — ${c.name}`;
     let journal = c.journalEntryId ? pgame.journal.get(c.journalEntryId) : null;
     if (!journal) journal = pgame.journal.find(j => j.name === journalName);
-    if (!journal) journal = await pgame.journal.documentClass.create({ name: journalName });
+    if (!journal) journal = await pgame.journal.documentClass.create(toFoundryPlain({ name: journalName }));
     c.journalEntryId = journal.id;
 
     const pageName = `Session ${s.number}: ${s.title || 'Untitled Session'}`;
@@ -1956,11 +2021,11 @@ async function postSessionToJournal(id) {
 
     let page = s.journalPageId ? journal.pages.get(s.journalPageId) : null;
     if (page) {
-      await page.update({ name: pageName, text: { content: html, format: 1 } });
+      await page.update(toFoundryPlain({ name: pageName, text: { content: html, format: 1 } }));
     } else {
-      const [created] = await journal.createEmbeddedDocuments('JournalEntryPage', [
+      const [created] = await journal.createEmbeddedDocuments('JournalEntryPage', toFoundryPlain([
         { name: pageName, type: 'text', text: { content: html, format: 1 } },
-      ]);
+      ]));
       s.journalPageId = created.id;
     }
     save();
@@ -1968,6 +2033,56 @@ async function postSessionToJournal(id) {
   } catch (err) {
     toast('Error posting to Journal: ' + (err.message || String(err)), 'error');
   }
+}
+
+// ── Auto-generated Roll Tables ──
+// Builds real Foundry RollTable documents from the campaign's own NPCs and
+// Locations, so "who's at the docks tonight" can be an actual roll in
+// Foundry's Rollable Tables sidebar instead of the GM picking. Find-or-
+// create + replace-results pattern, same as postSessionToJournal above.
+async function syncFoundryRollTables() {
+  const pgame = window.parent?.game;
+  if (!pgame?.tables) { toast('Not running inside Foundry.', 'error'); return; }
+  if (!pgame.user?.isGM) { toast('Only the GM can create Roll Tables.', 'error'); return; }
+  const c = camp();
+  if (!c.npcs.length && !c.locations.length) { toast('Add some characters or locations first.', 'error'); return; }
+
+  try {
+    let count = 0;
+    if (c.npcs.length) {
+      await _syncOneRollTable(pgame, c, 'npcRollTableId', `Untangle — ${c.name} — NPCs`, c.npcs.map(n => n.name));
+      count++;
+    }
+    if (c.locations.length) {
+      await _syncOneRollTable(pgame, c, 'locationRollTableId', `Untangle — ${c.name} — Locations`, c.locations.map(l => l.name));
+      count++;
+    }
+    save();
+    toast(`Synced ${count} Roll Table${count!==1?'s':''} to Foundry — find them in the Rollable Tables sidebar.`, 'success');
+  } catch (err) {
+    toast('Error syncing Roll Tables: ' + (err.message || String(err)), 'error');
+  }
+}
+
+async function _syncOneRollTable(pgame, c, idField, tableName, names) {
+  let table = c[idField] ? pgame.tables.get(c[idField]) : null;
+  if (!table) table = pgame.tables.find(t => t.name === tableName);
+
+  const n = names.length;
+  const resultType = window.parent.CONST?.TABLE_RESULT_TYPES?.TEXT ?? 0;
+  const resultsData = names.map((name, i) => ({ type: resultType, text: name, range: [i + 1, i + 1], weight: 1 }));
+
+  if (!table) {
+    table = await pgame.tables.documentClass.create(toFoundryPlain({ name: tableName, formula: `1d${n}`, replacement: true, displayRoll: true, results: resultsData }));
+  } else {
+    // Replace results wholesale so the table always mirrors the current
+    // campaign list rather than accumulating stale/renamed entries.
+    const existingIds = table.results.map(r => r.id);
+    if (existingIds.length) await table.deleteEmbeddedDocuments('TableResult', existingIds);
+    if (resultsData.length) await table.createEmbeddedDocuments('TableResult', toFoundryPlain(resultsData));
+    await table.update(toFoundryPlain({ formula: `1d${n}` }));
+  }
+  c[idField] = table.id;
 }
 
 function openEditSessionModal(id) {
@@ -1985,6 +2100,13 @@ function openEditSessionModal(id) {
       <div class="form-row">
         <div class="form-group"><label>Title</label><input type="text" id="es-title" value="${esc(s.title||'')}"></div>
         <div class="form-group" style="max-width:160px"><label>Date</label><input type="date" id="es-date" value="${esc(s.date||'')}"></div>
+      </div>
+      <div class="form-group">
+        <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
+        <div class="flex gap-8">
+          <input type="text" id="es-inworld-date" value="${esc(s.inWorldDate||'')}" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
+          ${simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('es-inworld-date')">Pull from Calendar</button>`:''}
+        </div>
       </div>
       <div class="form-group"><label>Summary</label><textarea id="es-summary" rows="3" placeholder="What happened this session…">${esc(s.summary||'')}</textarea></div>
       <div class="form-group"><label>Key Events <span class="text-dim text-xs">(one per line)</span></label><textarea id="es-events" rows="5" placeholder="One event per line…">${esc((s.keyEvents||[]).join('\n'))}</textarea></div>
@@ -2004,6 +2126,7 @@ function saveSessionEdits(id) {
   if (!title) { toast('Title is required.', 'error'); return; }
   s.title = title;
   s.date = document.getElementById('es-date').value || s.date;
+  s.inWorldDate = document.getElementById('es-inworld-date')?.value.trim() || '';
   s.summary = document.getElementById('es-summary').value;
   s.keyEvents = document.getElementById('es-events').value.split('\n').map(e => e.trim()).filter(Boolean);
   s.rawTranscript = document.getElementById('es-transcript').value;
@@ -2106,7 +2229,7 @@ function renderNPCs() {
     const typeLabel = charTypeLabel(t);
     const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
     return `
-    <div class="card npc-card" onclick="openNPCModal('${n.id}')" style="${n.status==='dead'?'opacity:0.6':''}">
+    <div class="card npc-card" onclick="openNPCModal('${n.id}')" draggable="true" ondragstart="onEntityDragStart(event,'npc','${n.id}')" title="Drag to the macro bar for a one-click jump" style="${n.status==='dead'?'opacity:0.6':''}">
       <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
       <div style="font-weight:600;display:flex;align-items:center;gap:6px">
         ${showStatus?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}
@@ -3244,7 +3367,7 @@ function renderLocations() {
           const npcsHere = c.npcs.filter(n=>n.locationId===l.id);
           const sessionPills = (l.sessionIds||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" onclick="event.stopPropagation();openSessionModal('${s.id}')">S${s.number}</span>`:''}).join('');
           return `
-          <div class="card npc-card" onclick="openLocationModal('${l.id}')">
+          <div class="card npc-card" onclick="openLocationModal('${l.id}')" draggable="true" ondragstart="onEntityDragStart(event,'location','${l.id}')" title="Drag to the macro bar for a one-click jump">
             <div style="font-weight:600">${esc(l.name)}</div>
             ${l.description?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.5">${esc(l.description.slice(0,90))}${l.description.length>90?'…':''}</div>`:''}
             ${npcsHere.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${npcsHere.map(n=>`<span class="npc-chip" onclick="event.stopPropagation();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div>`:''}
@@ -3367,7 +3490,7 @@ function renderTimeline() {
             <div class="timeline-session-hd">
               <div>
                 <div style="font-weight:600">${esc(s.title)}</div>
-                <div class="text-xs text-dim mt-4">${esc(s.date)} · Session ${s.number}</div>
+                <div class="text-xs text-dim mt-4">${esc(s.date)} · Session ${s.number}${s.inWorldDate?` · ${esc(s.inWorldDate)}`:''}</div>
               </div>
               <div class="flex gap-8" style="align-items:center">
                 <span class="text-xs text-dim">${npcsInSession.length} NPC${npcsInSession.length!==1?'s':''} · ${locsInSession.length} location${locsInSession.length!==1?'s':''}</span>
@@ -3655,45 +3778,23 @@ function openPinModal(mapId, pinId) {
   const openLink = entity
     ? `<button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove();${pin.linkedType==='npc'?`openNPCModal('${pin.linkedId}')`:`openLocationModal('${pin.linkedId}')`}">Open ${pin.linkedType==='npc'?'NPC':'Location'} →</button>`
     : '';
-  const pinEveryoneBtn = pin.linkedType==='location'
-    ? `<button class="btn btn-ghost" onclick="pinNPCsAtLocation('${mapId}','${pin.linkedId}',${pin.x},${pin.y})">+ Pin Everyone Here</button>`
-    : '';
+  // Location pins automatically list whoever's based there — no separate
+  // markers, just a clickable roster right in this popup.
+  const npcsHere = pin.linkedType==='location' ? c.npcs.filter(n => n.locationId === pin.linkedId) : [];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal" style="max-width:380px">
       <div class="modal-header"><h3>${esc(label)}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${entity&&(entity.description||entity.role||entity.notes)?`<p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">${esc((entity.description||entity.role||entity.notes||'').slice(0,200))}</p>`:''}
+      ${npcsHere.length?`<div class="form-group"><label>Based here</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${npcsHere.map(n=>`<span class="npc-chip" onclick="this.closest('.modal-overlay').remove();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div></div>`:''}
       <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-danger btn-sm" onclick="deletePin('${mapId}','${pinId}')">Delete Pin</button>
-        ${pinEveryoneBtn}
         ${openLink}
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
-}
-
-function pinNPCsAtLocation(mapId, locationId, originX, originY) {
-  const c = camp();
-  const m = c.maps.find(mp => mp.id === mapId);
-  if (!m) return;
-  if (!m.pins) m.pins = [];
-  const alreadyPinnedNpcIds = new Set(m.pins.filter(p => p.linkedType === 'npc').map(p => p.linkedId));
-  const npcsHere = c.npcs.filter(n => n.locationId === locationId && !alreadyPinnedNpcIds.has(n.id));
-  if (!npcsHere.length) { toast('No un-pinned characters are based here.', 'error'); return; }
-  const count = npcsHere.length;
-  const radius = 6; // small scatter, in the same percentage units as pin x/y
-  npcsHere.forEach((npc, i) => {
-    const angle = (2 * Math.PI * i / count) - Math.PI / 2;
-    const x = Math.min(98, Math.max(2, originX + radius * Math.cos(angle)));
-    const y = Math.min(98, Math.max(2, originY + radius * Math.sin(angle)));
-    m.pins.push({ id: uid(), x: parseFloat(x.toFixed(2)), y: parseFloat(y.toFixed(2)), linkedType: 'npc', linkedId: npc.id, label: '' });
-  });
-  save();
-  document.querySelector('.modal-overlay')?.remove();
-  toast(`Pinned ${count} character${count!==1?'s':''}.`, 'success');
-  render();
 }
 
 function deletePin(mapId, pinId) {
@@ -3777,6 +3878,7 @@ function openQuickNoteModal() {
       <div class="modal-header"><h3>Field Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group">
         <textarea id="qn-text" rows="5" placeholder="NPC name, location idea, player action, plot twist… anything that needs capturing right now." style="font-size:0.95rem"></textarea>
+        ${speechRecognitionSupported()?`<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('qn-text', this)">Dictate</button>`:''}
       </div>
       <div class="form-group"><label>About <span class="text-dim text-xs">(optional)</span></label>
         <select id="qn-about"><option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}</select>
@@ -3935,6 +4037,77 @@ function copyRecapText() {
 }
 
 // ═══════════════════════════════════════════════
+// PRINTABLE CAMPAIGN BIBLE
+// ═══════════════════════════════════════════════
+// A light-mode, print-friendly summary of the campaign's current state —
+// distinct from the raw JSON export in Manage Data, this is meant to be
+// read (or printed to paper/PDF via the browser's own print dialog, no
+// extra library needed). Deliberately light-on-white regardless of the
+// active theme, since a dark theme printed as-is would waste ink.
+
+function openCampaignBibleModal() {
+  const c = camp();
+  const activeFactions = c.factions.filter(f => (f.status||'active') !== 'defeated');
+  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned');
+  const keyNpcs = c.npcs.filter(n => (n.type||'npc') !== 'pc' && n.status !== 'dead');
+
+  const html = `
+    <div id="campaign-bible-print">
+      <div class="cb-toolbar">
+        <button class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('campaign-bible-print').remove()">Close</button>
+      </div>
+      <div class="cb-page">
+        <h1>${esc(c.name)}</h1>
+        <p class="cb-sub">Campaign bible — generated ${new Date().toLocaleDateString()}</p>
+
+        ${activeFactions.length?`
+        <h2>Factions</h2>
+        ${activeFactions.map(f => `
+          <div class="cb-entry">
+            <h3>${esc(f.name)} <span class="cb-tag">${esc((FACTION_ATTITUDES.find(a=>a.value===f.attitude)||{}).label||'')}</span></h3>
+            ${f.description?`<p>${esc(f.description)}</p>`:''}
+            ${f.goals?`<p><strong>Goals:</strong> ${esc(f.goals)}</p>`:''}
+          </div>`).join('')}` : ''}
+
+        ${activeThreads.length?`
+        <h2>Active Plot Threads</h2>
+        ${activeThreads.map(t => `
+          <div class="cb-entry">
+            <h3>${esc(t.title)} <span class="cb-tag">${esc((THREAD_STATUSES.find(s=>s.value===t.status)||{}).label||'')}</span></h3>
+            ${t.description?`<p>${esc(t.description)}</p>`:''}
+            ${t.truth?`<p><strong>GM Truth:</strong> ${esc(t.truth)}</p>`:''}
+          </div>`).join('')}` : ''}
+
+        ${keyNpcs.length?`
+        <h2>Characters</h2>
+        ${keyNpcs.map(n => `
+          <div class="cb-entry">
+            <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''}</h3>
+            ${n.motivation?`<p><strong>Wants:</strong> ${esc(n.motivation)}</p>`:''}
+            ${n.notes?`<p>${esc(n.notes)}</p>`:''}
+          </div>`).join('')}` : ''}
+
+        ${c.locations.length?`
+        <h2>Locations</h2>
+        ${c.locations.map(l => `
+          <div class="cb-entry">
+            <h3>${esc(l.name)}</h3>
+            ${l.description?`<p>${esc(l.description)}</p>`:''}
+          </div>`).join('')}` : ''}
+
+        ${(c.clocks||[]).length?`
+        <h2>Clocks</h2>
+        ${c.clocks.map(ck => `<p class="cb-clock">${esc(ck.label)} — ${ck.filled}/${ck.segments}</p>`).join('')}` : ''}
+      </div>
+    </div>`;
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstElementChild);
+}
+
+// ═══════════════════════════════════════════════
 // GLOBAL SEARCH
 // ═══════════════════════════════════════════════
 
@@ -4044,6 +4217,15 @@ function renderSettings() {
           <button class="btn btn-ghost btn-sm" onclick="renameCampaignModal('${c.id}')">Rename</button>
           ${state.campaigns.length>1?`<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">Delete</button>`:''}
         </div>`).join('')}
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <h3 style="margin-bottom:6px">Tools</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>
+        <button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>
+      </div>
     </div>
 
     <div class="card" style="max-width:560px">
@@ -4775,7 +4957,7 @@ function renderPlotThreads() {
       `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;${n.image?'':`background:rgba(var(--accent-rgb),0.1);`}flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(n.name[0]||'?').toUpperCase()}</div>`
     ).join('');
     return `
-      <div class="card" onclick="openEditThreadModal('${t.id}')" style="cursor:pointer;border-left:3px solid ${si.color}">
+      <div class="card" onclick="openEditThreadModal('${t.id}')" draggable="true" ondragstart="onEntityDragStart(event,'thread','${t.id}')" title="Drag to the macro bar for a one-click jump" style="cursor:pointer;border-left:3px solid ${si.color}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px">${esc(t.title)}</div>
@@ -5064,16 +5246,6 @@ function openFactionModal(id) {
         <div class="form-group"><label>Attitude toward party</label><select id="fc-attitude">${attOpts}</select></div>
         <div class="form-group"><label>Status</label><select id="fc-status">${statusOpts}</select></div>
       </div>
-      ${isEdit && (f.attitudeHistory||[]).length>1?`
-      <div class="form-group">
-        <label class="text-dim text-xs">Attitude history</label>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:4px">
-          ${f.attitudeHistory.map((h,i) => {
-            const att = FACTION_ATTITUDES.find(a=>a.value===h.attitude)||FACTION_ATTITUDES[1];
-            return `${i>0?'<span class="text-dim" style="font-size:0.7rem">→</span>':''}<span style="font-size:0.68rem;padding:2px 7px;border-radius:4px;background:${att.color}22;color:${att.color};border:1px solid ${att.color}44">${att.label}</span>`;
-          }).join('')}
-        </div>
-      </div>`:''}
       <div class="form-group"><label>Description</label><textarea id="fc-desc" rows="2" placeholder="Who are they? Who leads them?">${esc(f?.description||'')}</textarea></div>
       <div class="form-group"><label>Goals <span class="text-dim text-xs">(what do they want?)</span></label><textarea id="fc-goals" rows="2" placeholder="Control the docks, restore the old religion…">${esc(f?.goals||'')}</textarea></div>
       <div class="form-group"><label>GM Secrets <span class="text-dim text-xs">(hidden from players)</span></label><textarea id="fc-secrets" rows="2" placeholder="Hidden agenda, internal conflicts…">${esc(f?.secrets||'')}</textarea></div>
@@ -5119,21 +5291,9 @@ function saveFaction(id) {
   };
   if (id) {
     const f = c.factions.find(x => x.id === id);
-    if (f) {
-      if (data.attitude !== f.attitude) {
-        // Factions created before this feature shipped have no history at
-        // all — seed the attitude it's changing FROM first, so the trend
-        // is visible after this one change instead of needing a second
-        // change before there are >1 entries to show.
-        if (!f.attitudeHistory || !f.attitudeHistory.length) {
-          f.attitudeHistory = [{ attitude: f.attitude || 'neutral', sessionNumber: c.sessions.length, at: new Date().toISOString() }];
-        }
-        f.attitudeHistory.push({ attitude: data.attitude, sessionNumber: c.sessions.length, at: new Date().toISOString() });
-      }
-      Object.assign(f, data);
-    }
+    if (f) Object.assign(f, data);
   } else {
-    c.factions.push({ id: uid(), attitudeHistory: [{ attitude: data.attitude, sessionNumber: c.sessions.length, at: new Date().toISOString() }], ...data });
+    c.factions.push({ id: uid(), ...data });
   }
   save();
   document.querySelector('.modal-overlay')?.remove();

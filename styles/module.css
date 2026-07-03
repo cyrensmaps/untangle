@@ -81,3 +81,44 @@
   background: rgba(0, 0, 0, 0.85);
   border-color: rgba(255, 255, 255, 0.45);
 }
+
+/* Hover-a-token tooltip */
+#untangle-token-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 100;
+  max-width: 240px;
+  background: rgba(10, 9, 17, 0.95);
+  border: 1px solid rgba(238, 155, 58, 0.4);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #e1cbac;
+  font-family: inherit;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+#untangle-token-tooltip .untangle-tt-name {
+  font-weight: 700;
+  color: #ee9b3a;
+  margin-bottom: 3px;
+}
+
+#untangle-token-tooltip .untangle-tt-role {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  margin-bottom: 3px;
+}
+
+#untangle-token-tooltip .untangle-tt-voice {
+  font-style: italic;
+  color: #ee9b3a;
+  opacity: 0.9;
+  margin-bottom: 3px;
+}
+
+#untangle-token-tooltip .untangle-tt-detail {
+  opacity: 0.85;
+}
