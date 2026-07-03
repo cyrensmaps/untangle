@@ -1660,12 +1660,22 @@ ${condensed}`;
   showReviewModal(session, extracted);
 }
 
+// Called whenever a session actually gets logged — clears out Planned
+// Scenes/Open Questions already marked done (presumably resolved by the
+// session just logged), leaving unfinished ones to carry into next prep.
+function cleanupSessionPrep(c) {
+  if (!c.sessionPrep) return;
+  if (c.sessionPrep.scenes) c.sessionPrep.scenes = c.sessionPrep.scenes.filter(s => !s.done);
+  if (c.sessionPrep.questions) c.sessionPrep.questions = c.sessionPrep.questions.filter(q => !q.done);
+}
+
 function saveManual() {
   const c = camp();
   const title = document.getElementById('s-title')?.value?.trim() || 'Untitled Session';
   const date = document.getElementById('s-date')?.value;
   const transcript = document.getElementById('s-transcript')?.value?.trim() || '';
   c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, rawTranscript: transcript, summary: '', keyEvents: [] });
+  cleanupSessionPrep(c);
   save();
   toast('Session saved.', 'success');
   navigate('sessions');
@@ -1879,6 +1889,7 @@ function confirmSave() {
   } else {
     c.sessions.push(session);
   }
+  cleanupSessionPrep(c);
   save();
 
   const nChk = npcs.filter((_,i) => document.getElementById(`nc-${i}`)?.checked).length;
@@ -2902,6 +2913,9 @@ function openNPCModal(id) {
           </div>
         </div>`;
       })() : ''}
+      <div class="form-group" style="display:flex;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove();openSparkModal('npc','${n.id}')">Spark a Connection…</button>
+      </div>
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <label style="margin:0">Voice Description</label>
@@ -2936,6 +2950,7 @@ function openNPCModal(id) {
         </div>
         ${!(n.events||[]).length?`<p class="text-xs text-dim">No events yet. Events are added automatically when you process a session, or manually with + Add.</p>`:''}
       </div>
+      ${renderTaggedNotesSection('npc', n.id)}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-danger btn-sm" onclick="deleteNPC('${n.id}')">Delete</button>
         <button class="btn btn-primary" onclick="saveNPC('${n.id}')">Save</button>
@@ -3246,6 +3261,11 @@ function openLocationModal(id) {
   const firstSid = (l.sessionIds||[])[0];
   const firstSession = firstSid ? c.sessions.find(x=>x.id===firstSid) : null;
   const sessionHistory = (l.sessionIds||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" style="font-size:0.75rem;padding:3px 10px" onclick="this.closest('.modal-overlay').remove();openSessionModal('${s.id}')">S${s.number}: ${esc(s.title)}</span>`:''}).filter(Boolean).join('');
+
+  const pgame = window.parent?.game;
+  const scenes = pgame?.scenes?.contents ? [...pgame.scenes.contents].sort((a,b)=>a.name.localeCompare(b.name)) : [];
+  const sceneOpts = scenes.map(s => `<option value="${s.id}" ${l.sceneId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -3254,8 +3274,18 @@ function openLocationModal(id) {
       <div class="form-group"><label>Name</label><input type="text" id="el-name" value="${esc(l.name)}"></div>
       <div class="form-group"><label>Description</label><textarea id="el-desc" rows="4">${esc(l.description||'')}</textarea></div>
       <div class="form-group"><label>Notes / Secrets</label><textarea id="el-notes" rows="3">${esc(l.notes||'')}</textarea></div>
+      ${scenes.length?`<div class="form-group"><label>Linked Foundry Scene <span class="text-dim text-xs">(optional)</span></label>
+        <div class="flex gap-8" style="align-items:center">
+          <select id="el-scene" style="flex:1">
+            <option value="">— None —</option>
+            ${sceneOpts}
+          </select>
+          ${l.sceneId?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="jumpToScene('${l.sceneId}')">Jump to Scene</button>`:''}
+        </div>
+      </div>`:''}
       ${npcsHere.length?`<div class="form-group"><label>NPCs Here</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${npcsHere.map(n=>`<span class="npc-chip" onclick="this.closest('.modal-overlay').remove();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div></div>`:''}
       ${sessionHistory?`<div class="form-group"><label>Session History${firstSession?` · First seen: Session ${firstSession.number}`:''}</label><div class="session-pills" style="margin-top:6px">${sessionHistory}</div></div>`:''}
+      ${renderTaggedNotesSection('location', l.id)}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-danger btn-sm" onclick="deleteLocation('${l.id}')">Delete</button>
         <button class="btn btn-primary" onclick="saveLocation('${l.id}')">Save</button>
@@ -3287,6 +3317,8 @@ function saveLocation(id) {
   l.name = document.getElementById('el-name').value || l.name;
   l.description = document.getElementById('el-desc').value;
   l.notes = document.getElementById('el-notes').value;
+  const sceneSel = document.getElementById('el-scene');
+  if (sceneSel) l.sceneId = sceneSel.value || null;
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Location saved.', 'success');
@@ -3359,20 +3391,32 @@ function renderTimeline() {
 // MAPS
 // ═══════════════════════════════════════════════
 
+// Resolves a Foundry-relative asset path (Scene background/thumb, Actor
+// portrait) into something an <img> inside this iframe can load.
+function resolveFoundryImgSrc(raw) {
+  if (!raw) return '';
+  return window.parent.foundry?.utils?.getRoute
+    ? window.parent.foundry.utils.getRoute(raw)
+    : (raw.startsWith('http') ? raw : '/' + raw.replace(/^\/+/, ''));
+}
+
 function renderMaps() {
   const c = camp();
   if (!c.maps) c.maps = [];
   return `
     <div class="page-header">
       <div><h2>Maps</h2><p class="subtitle">${c.maps.length} map${c.maps.length!==1?'s':''} · click anywhere on a map to drop a pin</p></div>
-      <label class="btn btn-primary" style="cursor:pointer">+ Add Map<input type="file" accept="image/*" style="display:none" onchange="addMap(this)"></label>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="openLinkSceneModal()">+ Link Foundry Scene</button>
+        <label class="btn btn-primary" style="cursor:pointer">+ Add Map<input type="file" accept="image/*" style="display:none" onchange="addMap(this)"></label>
+      </div>
     </div>
     ${c.maps.length===0
-      ?`<div class="empty-state"><h3>No maps yet</h3><p>Upload a world map, city map, or dungeon layout.<br>Pins link directly to NPCs and locations.</p></div>`
+      ?`<div class="empty-state"><h3>No maps yet</h3><p>Upload a world map, city map, or dungeon layout, or link an existing Foundry Scene.<br>Pins link directly to NPCs and locations.</p></div>`
       :c.maps.map(m=>`
         <div class="map-list-item" onclick="openMapView('${m.id}')">
           <div>
-            <div style="font-weight:600">${esc(m.name)}</div>
+            <div style="font-weight:600">${esc(m.name)}${m.sceneId?' <span class="text-xs text-dim">(Foundry Scene)</span>':''}</div>
             <div class="text-xs text-dim mt-4">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}</div>
           </div>
           <div class="flex gap-8" style="align-items:center">
@@ -3382,11 +3426,76 @@ function renderMaps() {
         </div>`).join('')}`;
 }
 
+function openLinkSceneModal() {
+  const pgame = window.parent?.game;
+  if (!pgame?.scenes) { toast('Not running inside Foundry.', 'error'); return; }
+
+  const c = camp();
+  const linkedSceneIds = new Set((c.maps||[]).map(m => m.sceneId).filter(Boolean));
+  const scenes = pgame.scenes.contents
+    .filter(s => !linkedSceneIds.has(s.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'link-scene-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header"><h3>Link Foundry Scene</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      ${scenes.length === 0
+        ? `<p class="text-sm text-dim">${pgame.scenes.contents.length===0?'No Scenes found in this world yet.':'Every Scene is already linked as a map.'}</p>`
+        : `<p class="text-xs text-dim" style="margin-bottom:12px">Pick a Scene to use as a map. Its background stays live — update it in Foundry and it updates here too.</p>
+           <div style="max-height:45vh;overflow-y:auto">
+             ${scenes.map(s => `
+               <div style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer" onclick="linkScene('${s.id}')">
+                 <span style="width:36px;height:24px;border-radius:4px;overflow:hidden;flex-shrink:0;background:var(--bg-elevated)">${s.thumb?`<img src="${esc(resolveFoundryImgSrc(s.thumb))}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`:''}</span>
+                 <span style="font-size:0.875rem">${esc(s.name)}</span>
+               </div>`).join('')}
+           </div>`}
+      <div class="flex gap-8" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function linkScene(sceneId) {
+  const scene = window.parent?.game?.scenes?.get(sceneId);
+  if (!scene) return;
+  const c = camp();
+  if (!c.maps) c.maps = [];
+  c.maps.push({ id: uid(), name: scene.name, sceneId: scene.id, pins: [] });
+  save();
+  document.getElementById('link-scene-overlay')?.remove();
+  toast('Scene linked.', 'success');
+  render();
+}
+
+function jumpToScene(sceneId) {
+  try {
+    const scene = window.parent?.game?.scenes?.get(sceneId);
+    if (!scene) { toast('That Scene no longer exists.', 'error'); return; }
+    scene.view();
+    toast('Jumped to scene in Foundry.', 'success');
+  } catch (err) {
+    toast('Could not open scene: ' + (err.message || String(err)), 'error');
+  }
+}
+
 function renderMapView() {
   const c = camp();
   if (!c.maps) c.maps = [];
   const m = c.maps.find(x=>x.id===window._currentMapId);
   if (!m) { navigate('maps'); return ''; }
+
+  let imgSrc = m.imageDataUrl || '';
+  let sceneMissing = false;
+  if (m.sceneId) {
+    const scene = window.parent?.game?.scenes?.get(m.sceneId);
+    if (scene) imgSrc = resolveFoundryImgSrc(scene.background?.src || scene.img || '');
+    else sceneMissing = true;
+  }
+
   const pins = (m.pins||[]).map(pin=>{
     let label = pin.label || '';
     let entity = null;
@@ -3399,15 +3508,21 @@ function renderMapView() {
       ${label?`<div class="map-pin-label">${esc(label)}</div>`:''}
     </div>`;
   }).join('');
+
   return `
     <div class="page-header">
       <div><h2>${esc(m.name)}</h2><p class="subtitle">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}${(m.pins||[]).length===0?' — click the map to add your first pin':' — click map to add more, click a pin to edit'}</p></div>
-      <button class="btn btn-ghost" onclick="navigate('maps')">← Maps</button>
+      <div style="display:flex;gap:8px">
+        ${m.sceneId&&!sceneMissing?`<button class="btn btn-ghost" onclick="jumpToScene('${m.sceneId}')">Jump to Scene</button>`:''}
+        <button class="btn btn-ghost" onclick="navigate('maps')">← Maps</button>
+      </div>
     </div>
-    <div class="map-wrap" onclick="handleMapClick(event,'${m.id}')">
-      <img src="${m.imageDataUrl}" alt="${esc(m.name)}" draggable="false">
-      ${pins}
-    </div>`;
+    ${sceneMissing
+      ? `<div class="empty-state"><h3>Scene not found</h3><p>This map was linked to a Foundry Scene that no longer exists in this world.</p></div>`
+      : `<div class="map-wrap" onclick="handleMapClick(event,'${m.id}')">
+          <img src="${imgSrc}" alt="${esc(m.name)}" draggable="false">
+          ${pins}
+        </div>`}`;
 }
 
 function openMapView(mapId) {
@@ -3512,19 +3627,45 @@ function openPinModal(mapId, pinId) {
   const openLink = entity
     ? `<button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove();${pin.linkedType==='npc'?`openNPCModal('${pin.linkedId}')`:`openLocationModal('${pin.linkedId}')`}">Open ${pin.linkedType==='npc'?'NPC':'Location'} →</button>`
     : '';
+  const pinEveryoneBtn = pin.linkedType==='location'
+    ? `<button class="btn btn-ghost" onclick="pinNPCsAtLocation('${mapId}','${pin.linkedId}',${pin.x},${pin.y})">+ Pin Everyone Here</button>`
+    : '';
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal" style="max-width:380px">
       <div class="modal-header"><h3>${esc(label)}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${entity&&(entity.description||entity.role||entity.notes)?`<p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">${esc((entity.description||entity.role||entity.notes||'').slice(0,200))}</p>`:''}
-      <div class="flex gap-8" style="justify-content:flex-end">
+      <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-danger btn-sm" onclick="deletePin('${mapId}','${pinId}')">Delete Pin</button>
+        ${pinEveryoneBtn}
         ${openLink}
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+function pinNPCsAtLocation(mapId, locationId, originX, originY) {
+  const c = camp();
+  const m = c.maps.find(mp => mp.id === mapId);
+  if (!m) return;
+  if (!m.pins) m.pins = [];
+  const alreadyPinnedNpcIds = new Set(m.pins.filter(p => p.linkedType === 'npc').map(p => p.linkedId));
+  const npcsHere = c.npcs.filter(n => n.locationId === locationId && !alreadyPinnedNpcIds.has(n.id));
+  if (!npcsHere.length) { toast('No un-pinned characters are based here.', 'error'); return; }
+  const count = npcsHere.length;
+  const radius = 6; // small scatter, in the same percentage units as pin x/y
+  npcsHere.forEach((npc, i) => {
+    const angle = (2 * Math.PI * i / count) - Math.PI / 2;
+    const x = Math.min(98, Math.max(2, originX + radius * Math.cos(angle)));
+    const y = Math.min(98, Math.max(2, originY + radius * Math.sin(angle)));
+    m.pins.push({ id: uid(), x: parseFloat(x.toFixed(2)), y: parseFloat(y.toFixed(2)), linkedType: 'npc', linkedId: npc.id, label: '' });
+  });
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast(`Pinned ${count} character${count!==1?'s':''}.`, 'success');
+  render();
 }
 
 function deletePin(mapId, pinId) {
@@ -3560,14 +3701,53 @@ function renderFieldNotes() {
     </div>
     ${notes.length===0
       ?`<div class="empty-state"><h3>No field notes yet</h3><p>Use + Add Note above, or the quick-access button over the macro bar, to capture names, ideas, or anything that can't wait mid-session.<br>Notes are timestamped and stored per campaign.</p></div>`
-      :notes.map(n=>`
+      :notes.map(n=>{
+        let aboutChip = '';
+        if (n.aboutType && n.aboutId) {
+          const finder = { npc: c.npcs, location: c.locations, faction: c.factions, thread: c.plotThreads }[n.aboutType];
+          const nameKey = n.aboutType === 'thread' ? 'title' : 'name';
+          const entity = finder?.find(x => x.id === n.aboutId);
+          const openFn = { npc:'openNPCModal', location:'openLocationModal', faction:'openFactionModal', thread:'openEditThreadModal' }[n.aboutType];
+          if (entity) aboutChip = `<span class="npc-chip" style="font-size:0.72rem" onclick="${openFn}('${entity.id}')">${esc(entity[nameKey])}</span>`;
+        }
+        return `
         <div class="note-item">
           <div class="note-text">${esc(n.text)}</div>
+          ${aboutChip?`<div style="margin-top:6px">${aboutChip}</div>`:''}
           <div class="note-meta">
             <span>${esc(n.timestamp)}</span>
             <button class="btn btn-danger btn-sm" onclick="deleteQuickNote('${n.id}')">Delete</button>
           </div>
-        </div>`).join('')}`;
+        </div>`;
+      }).join('')}`;
+}
+
+// Shared across Field Notes, and NPC/Location/Faction/Thread modals —
+// covers all four taggable types, unlike _relEntityOpts which is
+// deliberately scoped to just Characters/Factions for the relationship web.
+function _noteEntityOpts(selectedType, selectedId) {
+  const c = camp();
+  const groups = [
+    { label: 'Characters',   items: c.npcs,        type: 'npc',      nameKey: 'name'  },
+    { label: 'Locations',    items: c.locations,   type: 'location', nameKey: 'name'  },
+    { label: 'Factions',     items: c.factions,    type: 'faction',  nameKey: 'name'  },
+    { label: 'Plot Threads', items: c.plotThreads, type: 'thread',   nameKey: 'title' },
+  ];
+  return groups.filter(g => g.items.length).map(g => `<optgroup label="${g.label}">${g.items.map(it =>
+    `<option value="${g.type}:${it.id}" ${selectedType===g.type&&selectedId===it.id?'selected':''}>${esc(it[g.nameKey])}</option>`
+  ).join('')}</optgroup>`).join('');
+}
+
+// Renders a "Field Notes" block for whatever's tagged to this entity, or ''
+// if nothing is. Shared by the NPC/Location/Faction/Thread modals.
+function renderTaggedNotesSection(type, id) {
+  const c = camp();
+  const notes = (c.quickNotes||[]).filter(n => n.aboutType === type && n.aboutId === id);
+  if (!notes.length) return '';
+  return `<div class="form-group">
+    <label>Field Notes <span class="text-dim text-xs">(tagged to this)</span></label>
+    ${notes.slice().reverse().map(n => `<div class="text-sm text-dim" style="padding:4px 0;border-bottom:1px solid var(--border)">${esc(n.text)} <span class="text-xs" style="opacity:0.7">— ${esc(n.timestamp)}</span></div>`).join('')}
+  </div>`;
 }
 
 function openQuickNoteModal() {
@@ -3578,6 +3758,9 @@ function openQuickNoteModal() {
       <div class="modal-header"><h3>Field Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group">
         <textarea id="qn-text" rows="5" placeholder="NPC name, location idea, player action, plot twist… anything that needs capturing right now." style="font-size:0.95rem"></textarea>
+      </div>
+      <div class="form-group"><label>About <span class="text-dim text-xs">(optional)</span></label>
+        <select id="qn-about"><option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}</select>
       </div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
@@ -3596,10 +3779,13 @@ function saveQuickNote() {
   const now = new Date();
   const timestamp = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
     + ' ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  c.quickNotes.push({ id: uid(), text, timestamp });
+  const aboutVal = document.getElementById('qn-about')?.value || '';
+  const [aboutType, aboutId] = aboutVal ? aboutVal.split(':') : [null, null];
+  c.quickNotes.push({ id: uid(), text, timestamp, aboutType: aboutType||null, aboutId: aboutId||null });
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Note saved.', 'success');
+  render();
 }
 
 function deleteQuickNote(id) {
@@ -3697,6 +3883,16 @@ function openRecapModal() {
   if (openThreads.length) {
     lines.push('', 'Open threads:');
     openThreads.forEach(t => lines.push(`• ${t.title}${t.description ? ' — ' + t.description : ''}`));
+  }
+  const clocksNearFull = (c.clocks||[]).filter(ck => ck.filled > 0 && ck.filled >= ck.segments - 1);
+  if (clocksNearFull.length) {
+    lines.push('', 'About to come to a head:');
+    clocksNearFull.forEach(ck => lines.push(`• ${ck.label} (${ck.filled}/${ck.segments})`));
+  }
+  const staleEntities = computeStaleEntities();
+  if (staleEntities.length) {
+    lines.push('', "Hasn't come up in a while:");
+    staleEntities.slice(0, 5).forEach(e => lines.push(`• ${e.name} (${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago)`));
   }
   window._recapText = lines.join('\n');
 
@@ -4022,6 +4218,7 @@ function renderRelationshipWeb() {
       <div><h2>Relationship Web</h2><p class="subtitle">${c.npcs.length} characters · ${c.relationships.length} relationship${c.relationships.length!==1?'s':''}${hasFactions?' · '+c.factions.length+' faction'+(c.factions.length!==1?'s':''):''}</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" onclick="autoLayoutWeb()">↺ Auto-arrange</button>
+        <button class="btn btn-ghost" onclick="openSparkModal()">Spark</button>
         <button class="btn btn-primary" onclick="openAddRelModal()">+ Add Relationship</button>
       </div>
     </div>
@@ -4078,12 +4275,62 @@ function relZoom(factor) {
   _applyWebTransform();
 }
 
+// Hover-to-focus: dim everything not connected to the hovered node. Chosen
+// over click (the original ask) because nodes already use click to open the
+// edit modal and drag to reposition — hover doesn't conflict with either.
+function _connectedIds(type, id) {
+  const c = camp();
+  const npcIds = new Set(), facIds = new Set();
+  if (type === 'faction') facIds.add(id); else npcIds.add(id);
+  c.relationships.forEach(rel => {
+    const ft = rel.fromType || 'npc', tt = rel.toType || 'npc';
+    if (ft === type && rel.fromId === id) (tt === 'faction' ? facIds : npcIds).add(rel.toId);
+    if (tt === type && rel.toId === id) (ft === 'faction' ? facIds : npcIds).add(rel.fromId);
+  });
+  if (type === 'faction') {
+    const f = c.factions.find(x => x.id === id);
+    (f?.memberIds || []).forEach(nid => npcIds.add(nid));
+  } else {
+    c.factions.forEach(f => { if ((f.memberIds || []).includes(id)) facIds.add(f.id); });
+  }
+  return { npcIds, facIds };
+}
+
+function _applyWebFocus(type, id) {
+  const svg = document.getElementById('rel-web-svg');
+  if (!svg) return;
+  if (!type) {
+    svg.querySelectorAll('.rel-node, .rel-faction-node, .rel-edge, .rel-member-edge').forEach(el => { el.style.opacity = ''; });
+    return;
+  }
+  const { npcIds, facIds } = _connectedIds(type, id);
+  const c = camp();
+  svg.querySelectorAll('.rel-node').forEach(el => {
+    el.style.opacity = npcIds.has(el.dataset.npcId) ? '1' : '0.15';
+  });
+  svg.querySelectorAll('.rel-faction-node').forEach(el => {
+    el.style.opacity = facIds.has(el.dataset.factionId) ? '1' : '0.15';
+  });
+  svg.querySelectorAll('.rel-edge').forEach(el => {
+    const rel = c.relationships.find(r => r.id === el.dataset.relId);
+    if (!rel) { el.style.opacity = '0.1'; return; }
+    const ft = rel.fromType || 'npc', tt = rel.toType || 'npc';
+    const involved = (ft === type && rel.fromId === id) || (tt === type && rel.toId === id);
+    el.style.opacity = involved ? '1' : '0.1';
+  });
+  svg.querySelectorAll('.rel-member-edge').forEach(el => {
+    const [fid, nid] = el.id.slice('rel-fm-'.length).split('-');
+    const involved = (type === 'faction' && fid === id) || (type === 'npc' && nid === id);
+    el.style.opacity = involved ? '0.8' : '0.08';
+  });
+}
+
 function setupRelationshipWebEvents() {
   const svg = document.getElementById('rel-web-svg');
   if (!svg) return;
   _webTransform = { tx: 0, ty: 0, scale: 1 };
 
-  // Faction node drag
+  // Faction node drag + hover-to-focus
   svg.querySelectorAll('.rel-faction-node').forEach(node => {
     node.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
@@ -4095,9 +4342,11 @@ function setupRelationshipWebEvents() {
       const pos = c.factionPositions[id] || { x: 450, y: 280 };
       _relDrag = { type: 'faction', id, startX: vp.x, startY: vp.y, origX: pos.x, origY: pos.y, moved: false };
     });
+    node.addEventListener('mouseenter', () => _applyWebFocus('faction', node.dataset.factionId));
+    node.addEventListener('mouseleave', () => _applyWebFocus(null));
   });
 
-  // NPC node drag
+  // NPC node drag + hover-to-focus
   svg.querySelectorAll('.rel-node').forEach(node => {
     node.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
@@ -4109,6 +4358,8 @@ function setupRelationshipWebEvents() {
       const pos = c.npcPositions[id] || { x: 200, y: 200 };
       _relDrag = { type: 'npc', id, startX: vp.x, startY: vp.y, origX: pos.x, origY: pos.y, moved: false };
     });
+    node.addEventListener('mouseenter', () => _applyWebFocus('npc', node.dataset.npcId));
+    node.addEventListener('mouseleave', () => _applyWebFocus(null));
   });
 
   // Pan — mousedown on SVG background
@@ -4253,6 +4504,7 @@ function openAddRelModal() {
       </div>
       <div class="form-group"><label>Relationship type</label><select id="rel-type">${typeOpts}</select></div>
       <div class="form-group"><label>Label (optional)</label><input type="text" id="rel-label" placeholder="e.g. Childhood friends, Master & apprentice…"></div>
+      <div class="form-group"><label>Notes <span class="text-dim text-xs">(optional)</span></label><textarea id="rel-notes-new" rows="3" placeholder="What's the story here?"></textarea></div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="saveNewRel()">Add</button>
@@ -4272,7 +4524,8 @@ function saveNewRel() {
   if (fromId === toId && fromType === toType) { toast('Choose two different entities.', 'error'); return; }
   const type  = document.getElementById('rel-type').value;
   const label = document.getElementById('rel-label').value.trim();
-  camp().relationships.push({ id: uid(), fromId, fromType, toId, toType, type, label });
+  const notes = document.getElementById('rel-notes-new')?.value.trim() || '';
+  camp().relationships.push({ id: uid(), fromId, fromType, toId, toType, type, label, notes });
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
@@ -4295,6 +4548,18 @@ function openEditRelModal(relId) {
       </div>
       <div class="form-group"><label>Relationship type</label><select id="rel-type">${typeOpts}</select></div>
       <div class="form-group"><label>Label (optional)</label><input type="text" id="rel-label" value="${esc(rel.label||'')}"></div>
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label style="margin:0">Notes</label>
+        </div>
+        <div class="event-entry" style="border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+            <button class="btn btn-ghost btn-sm" style="padding:2px 9px;font-size:0.7rem" onclick="toggleEventEdit(this)">Edit</button>
+          </div>
+          <div class="event-text-view" style="font-size:0.875rem;line-height:1.6;white-space:pre-wrap;cursor:default">${rel.notes?esc(rel.notes):'<span class="text-dim">No notes yet — click Edit to add some.</span>'}</div>
+          <textarea class="event-text" id="rel-notes" rows="3" style="display:none;margin-top:4px" placeholder="What's the story here?">${esc(rel.notes||'')}</textarea>
+        </div>
+      </div>
       <div class="flex gap-8" style="justify-content:space-between">
         <button class="btn btn-danger" onclick="deleteRel('${relId}')">Delete</button>
         <div class="flex gap-8">
@@ -4317,6 +4582,7 @@ function saveEditRel(relId) {
   rel.toId     = toId;     rel.toType   = toType;
   rel.type     = document.getElementById('rel-type').value;
   rel.label    = document.getElementById('rel-label').value.trim();
+  rel.notes    = document.getElementById('rel-notes')?.value.trim() || '';
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
@@ -4328,6 +4594,133 @@ function deleteRel(relId) {
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
+}
+
+// ── Spark: pick two entities, let Claude suggest a connection, approve to
+// add it as a real relationship on the web. Scoped to Characters/Factions
+// only — the only two node types the web actually renders, so an approved
+// connection can always be drawn immediately. ──
+
+function openSparkModal(presetType, presetId) {
+  const c = camp();
+  if (c.npcs.length + c.factions.length < 2) { toast('Need at least 2 characters or factions to spark a connection.', 'error'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'spark-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header"><h3>Spark a Connection</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <p class="text-sm text-dim" style="margin-bottom:14px">Pick two things you've already logged — Claude suggests a plausible connection between them for you to approve or discard.</p>
+      <div class="form-row">
+        <div class="form-group"><label>From</label><select id="spark-from" ${presetType?'disabled':''}>${_relEntityOpts(presetId||'', presetType||'')}</select></div>
+        <div class="form-group"><label>To</label><select id="spark-to">${_relEntityOpts('','')}</select></div>
+      </div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="generateSparkConnection()">Generate</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const toSel = document.getElementById('spark-to');
+  if (toSel && toSel.options.length > 1) toSel.selectedIndex = 1;
+}
+
+function _sparkEntity(id, type) {
+  const c = camp();
+  return type === 'faction' ? c.factions.find(f => f.id === id) : c.npcs.find(n => n.id === id);
+}
+function _sparkDetail(entity, type) {
+  return type === 'faction' ? (entity.description || '') : [entity.role, entity.notes].filter(Boolean).join(' — ');
+}
+
+async function generateSparkConnection() {
+  const fromVal = document.getElementById('spark-from').value;
+  const toVal   = document.getElementById('spark-to').value;
+  if (!fromVal || !toVal) { toast('Select two entities.', 'error'); return; }
+  const [fromType, fromId] = fromVal.split(':');
+  const [toType,   toId]   = toVal.split(':');
+  if (fromId === toId && fromType === toType) { toast('Choose two different entities.', 'error'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  if (!(await confirmPaidAction(['claude'], 'Generating a connection with AI'))) return;
+
+  const a = _sparkEntity(fromId, fromType), b = _sparkEntity(toId, toType);
+  if (!a || !b) { toast('Could not find the selected entities.', 'error'); return; }
+
+  document.getElementById('spark-overlay')?.remove();
+  const loadingEl = document.createElement('div');
+  loadingEl.id = 'spark-loading';
+  loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:20px';
+  loadingEl.innerHTML = `
+    <div style="width:48px;height:48px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--accent);border-radius:50%;animation:spin 0.9s linear infinite"></div>
+    <div style="color:#fff;font-size:1rem;font-weight:600">Thinking of a connection…</div>`;
+  document.body.appendChild(loadingEl);
+
+  try {
+    const typeList = REL_TYPES.map(r => r.value).join(', ');
+    const aDetail = _sparkDetail(a, fromType), bDetail = _sparkDetail(b, toType);
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': getClaudeKey(), 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: `You are helping a TTRPG GM improvise a relationship between two things in their campaign. Suggest one surprising but plausible connection.
+
+1. ${a.name} (${fromType})${aDetail?': '+aDetail:''}
+2. ${b.name} (${toType})${bDetail?': '+bDetail:''}
+
+Return ONLY valid JSON, no markdown, no explanation:
+{ "type": "one of: ${typeList}", "label": "short 2-4 word label for the relationship", "description": "1-2 sentences explaining the connection" }` }]
+      })
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Could not parse response');
+    const result = JSON.parse(match[0]);
+    document.getElementById('spark-loading')?.remove();
+    showSparkReviewModal(fromType, fromId, toType, toId, result);
+  } catch (err) {
+    document.getElementById('spark-loading')?.remove();
+    toast('Error: ' + (err.message || String(err)), 'error');
+  }
+}
+
+function showSparkReviewModal(fromType, fromId, toType, toId, result) {
+  const a = _sparkEntity(fromId, fromType), b = _sparkEntity(toId, toType);
+  const typeOpts = REL_TYPES.map(r => `<option value="${r.value}" ${r.value===result.type?'selected':''}>${r.label}</option>`).join('');
+  window._sparkPending = { fromType, fromId, toType, toId };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'spark-review-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header"><h3>Suggested Connection</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <p class="text-sm text-dim" style="margin-bottom:14px">${esc(a?.name||'?')} ↔ ${esc(b?.name||'?')}</p>
+      <div class="form-group"><label>Relationship type</label><select id="spark-type">${typeOpts}</select></div>
+      <div class="form-group"><label>Label</label><input type="text" id="spark-label" value="${esc(result.label||'')}"></div>
+      <div class="form-group"><label>Description</label><textarea id="spark-desc" rows="3">${esc(result.description||'')}</textarea></div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Discard</button>
+        <button class="btn btn-primary" onclick="approveSparkConnection()">Approve — Add to Web</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function approveSparkConnection() {
+  const p = window._sparkPending;
+  if (!p) return;
+  const type  = document.getElementById('spark-type').value;
+  const label = document.getElementById('spark-label').value.trim();
+  const notes = document.getElementById('spark-desc').value.trim();
+  camp().relationships.push({ id: uid(), fromId: p.fromId, fromType: p.fromType, toId: p.toId, toType: p.toType, type, label, notes });
+  window._sparkPending = null;
+  save();
+  document.getElementById('spark-review-overlay')?.remove();
+  toast('Connection added to the Relationship Web.', 'success');
+  navigate('web');
 }
 
 // ═══════════════════════════════════════════════
@@ -4458,6 +4851,7 @@ function openThreadModal(t) {
             </div>`).join('')}
         </div>
       </div>
+      ${isEdit?renderTaggedNotesSection('thread', t.id):''}
       <div class="flex gap-8" style="justify-content:space-between">
         ${isEdit?`<button class="btn btn-danger" onclick="deleteThread('${t.id}')">Delete</button>`:'<span></span>'}
         <div class="flex gap-8">
@@ -4651,6 +5045,16 @@ function openFactionModal(id) {
         <div class="form-group"><label>Attitude toward party</label><select id="fc-attitude">${attOpts}</select></div>
         <div class="form-group"><label>Status</label><select id="fc-status">${statusOpts}</select></div>
       </div>
+      ${isEdit && (f.attitudeHistory||[]).length>1?`
+      <div class="form-group">
+        <label class="text-dim text-xs">Attitude history</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:4px">
+          ${f.attitudeHistory.map((h,i) => {
+            const att = FACTION_ATTITUDES.find(a=>a.value===h.attitude)||FACTION_ATTITUDES[1];
+            return `${i>0?'<span class="text-dim" style="font-size:0.7rem">→</span>':''}<span style="font-size:0.68rem;padding:2px 7px;border-radius:4px;background:${att.color}22;color:${att.color};border:1px solid ${att.color}44">${att.label}</span>`;
+          }).join('')}
+        </div>
+      </div>`:''}
       <div class="form-group"><label>Description</label><textarea id="fc-desc" rows="2" placeholder="Who are they? Who leads them?">${esc(f?.description||'')}</textarea></div>
       <div class="form-group"><label>Goals <span class="text-dim text-xs">(what do they want?)</span></label><textarea id="fc-goals" rows="2" placeholder="Control the docks, restore the old religion…">${esc(f?.goals||'')}</textarea></div>
       <div class="form-group"><label>GM Secrets <span class="text-dim text-xs">(hidden from players)</span></label><textarea id="fc-secrets" rows="2" placeholder="Hidden agenda, internal conflicts…">${esc(f?.secrets||'')}</textarea></div>
@@ -4665,6 +5069,7 @@ function openFactionModal(id) {
       </div>`:''}
       ${c.npcs.length?`<div class="form-group"><label>Members</label><div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${npcCBs}</div></div>`:''}
       ${c.plotThreads.length?`<div class="form-group"><label>Linked Plot Threads</label><div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${threadCBs}</div></div>`:''}
+      ${isEdit?renderTaggedNotesSection('faction', f.id):''}
       <div class="flex gap-8" style="justify-content:space-between">
         ${isEdit?`<button class="btn btn-danger" onclick="deleteFaction('${f.id}')">Delete</button>`:'<span></span>'}
         <div class="flex gap-8">
@@ -4695,9 +5100,15 @@ function saveFaction(id) {
   };
   if (id) {
     const f = c.factions.find(x => x.id === id);
-    if (f) Object.assign(f, data);
+    if (f) {
+      if (data.attitude !== f.attitude) {
+        if (!f.attitudeHistory) f.attitudeHistory = [];
+        f.attitudeHistory.push({ attitude: data.attitude, sessionNumber: c.sessions.length, at: new Date().toISOString() });
+      }
+      Object.assign(f, data);
+    }
   } else {
-    c.factions.push({ id: uid(), ...data });
+    c.factions.push({ id: uid(), attitudeHistory: [{ attitude: data.attitude, sessionNumber: c.sessions.length, at: new Date().toISOString() }], ...data });
   }
   save();
   document.querySelector('.modal-overlay')?.remove();

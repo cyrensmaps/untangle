@@ -360,6 +360,82 @@ Hooks.on('renderJournalDirectory', (_app, html) => {
   if (header) header.insertAdjacentElement('afterend', btn);
 });
 
+// ── One-click "Add to Untangle" on Actor sheets (GM only) ──
+//
+// renderActorSheet (not getActorSheetHeaderButtons) deliberately: the
+// header-buttons hook name is derived from the sheet's *exact* runtime
+// class (e.g. dnd5e's ActorSheet5eCharacter fires
+// getActorSheet5eCharacterHeaderButtons, not the generic name), so it'd
+// silently never fire on most system-specific sheets. renderActorSheet
+// fires for the base class and works regardless of which system is active.
+//
+// Reads/writes localStorage directly, same approach UntangleDataConfig
+// already uses for export/import/clear — no need for the planner iframe
+// to be open.
+
+function _stripHtmlMain(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html || '';
+  return (div.textContent || div.innerText || '').trim();
+}
+
+function _readUntangleState() {
+  try { return JSON.parse(localStorage.getItem('cp_v1') || 'null'); } catch { return null; }
+}
+
+function addActorToUntangle(actor) {
+  const state = _readUntangleState();
+  if (!state?.campaigns?.length) {
+    ui.notifications.warn('Open Untangle at least once first, so there is a campaign to add this character to.');
+    return;
+  }
+  const campaign = state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0];
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const bio = actor.system?.details?.biography?.value || actor.system?.details?.biography || '';
+  const img = actor.img
+    ? (foundry.utils?.getRoute ? foundry.utils.getRoute(actor.img) : (actor.img.startsWith('http') ? actor.img : '/' + actor.img.replace(/^\/+/, '')))
+    : null;
+  if (!campaign.npcs) campaign.npcs = [];
+  campaign.npcs.push({
+    id: uid(), name: actor.name, role: '', motivation: '', notes: _stripHtmlMain(bio), secrets: '',
+    locationId: null, status: 'alive', type: actor.type === 'character' ? 'pc' : 'npc', voiceDescription: '',
+    sessions: [], events: [], image: img, imageOffsetX: 50, imageOffsetY: 50, foundryActorId: actor.id,
+  });
+  localStorage.setItem('cp_v1', JSON.stringify(state));
+  ui.notifications.info(`Added "${actor.name}" to Untangle.`);
+}
+
+Hooks.on('renderActorSheet', (app, html) => {
+  try {
+    if (!game.user.isGM) return;
+    const el = app.element;
+    if (!el || !el.length) return;
+    const header = el.find('.window-header');
+    if (!header.length || header.find('.untangle-actor-btn').length) return;
+
+    const actor = app.actor || app.object;
+    if (!actor) return;
+
+    const state = _readUntangleState();
+    const campaign = state?.campaigns?.find(c => c.id === state.currentCampaignId);
+    const existing = campaign?.npcs?.find(n => n.foundryActorId === actor.id);
+
+    const btn = $(`<a class="header-button untangle-actor-btn"><i class="fas fa-scroll"></i> ${existing ? 'Open in Untangle' : 'Add to Untangle'}</a>`);
+    btn.on('click', (ev) => {
+      ev.preventDefault();
+      if (existing) {
+        localStorage.setItem('cp_pending_nav', JSON.stringify({ type: 'npc', id: existing.id }));
+        openCampaignPlanner();
+      } else {
+        addActorToUntangle(actor);
+      }
+    });
+
+    const closeBtn = header.find('.close');
+    if (closeBtn.length) closeBtn.before(btn); else header.append(btn);
+  } catch (err) { console.error('Untangle | Failed to add Actor sheet button', err); }
+});
+
 // ── Quick bar: persistent buttons anchored above the macro bar (GM only) ──
 //
 // To add another quick-launch button later, just push another entry here —

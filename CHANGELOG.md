@@ -4,6 +4,25 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.4.0]
+
+### Added
+- **Linked Foundry Scenes** — Maps can now link a real Foundry Scene instead of uploading an image; the background stays live, and a "Jump to Scene" button appears wherever a Map or Location is scene-linked. Locations gained their own optional Scene link independent of Maps.
+- **One-click Actor → Character import** — every Actor sheet (as GM) now has an "Add to Untangle" button in its header, switching to "Open in Untangle" once that Actor's already linked.
+- **Spark, moved and improved** — no longer a random-pair widget tab; it's now a button on the Relationship Web where you pick the two entities yourself, and an approved suggestion is written straight onto the web as a real relationship. Relationships also gained a Notes area (static text with an Edit button, same pattern as NPC Session Events).
+- Spark shortcut directly from an NPC's own modal, pre-filled with that character.
+- Field Notes can now be tagged to a Character/Location/Faction/Thread, and show up inside that entity's own modal.
+- Faction attitude changes are now tracked as a trend (e.g. Hostile → Wary → Neutral) instead of just the current value.
+- "Previously On…" now flags clocks about to fill and stale callbacks, alongside the existing summary and open threads.
+- Maps: a Location pin can now "+ Pin Everyone Here," auto-placing pins for every Character based there.
+- Relationship Web: hovering a node dims everything not connected to it.
+
+### Changed
+- Session Prep now clears out Planned Scenes/Open Questions already marked done when a session is logged, instead of letting them accumulate indefinitely.
+
+### Fixed
+- Saving a Field Note now refreshes the page immediately instead of requiring a navigation to show up.
+
 ## [1.3.0]
 
 ### Added
