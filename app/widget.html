@@ -34,6 +34,7 @@
     .qa-note .qa-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.7rem; }
     .qa-note .qa-del:hover { color: var(--red); }
     .qa-empty { color: var(--text-dim); font-size: 0.78rem; text-align: center; padding: 24px 8px; }
+    .qa-note-tag { display: inline-block; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--accent); cursor: pointer; }
 
     .qa-style-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
     .qa-style-btn { padding: 4px 8px; border-radius: 12px; font-size: 0.7rem; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; }
@@ -56,6 +57,9 @@
 
 <div class="qa-panel active" id="qa-panel-notes">
   <textarea id="qa-note-text" rows="3" placeholder="Capture anything mid-session…"></textarea>
+  <select id="qa-note-about" style="margin-top:6px">
+    <option value="">— Not tied to anything —</option>
+  </select>
   <button class="btn btn-primary" onclick="qaSaveNote()">+ Add Note</button>
   <div id="qa-notes-list" style="margin-top:12px"></div>
 </div>
@@ -90,6 +94,14 @@ function qaSwitch(tab) {
 }
 
 // ── Field notes ──
+function qaRenderNoteAboutOptions() {
+  const sel = document.getElementById('qa-note-about');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}`;
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
 function qaRenderNotes() {
   const c = camp();
   if (!c.quickNotes) c.quickNotes = [];
@@ -97,11 +109,28 @@ function qaRenderNotes() {
   const list = document.getElementById('qa-notes-list');
   list.innerHTML = notes.length === 0
     ? `<div class="qa-empty">No notes yet.</div>`
-    : notes.map(n => `
-      <div class="qa-note">
-        ${esc(n.text)}
-        <div class="qa-note-meta"><span>${esc(n.timestamp)}</span><button class="qa-del" onclick="qaDeleteNote('${n.id}')">✕ delete</button></div>
-      </div>`).join('');
+    : notes.map(n => {
+        let aboutChip = '';
+        if (n.aboutType && n.aboutId) {
+          const finder = { npc: c.npcs, location: c.locations, faction: c.factions, thread: c.plotThreads }[n.aboutType];
+          const nameKey = n.aboutType === 'thread' ? 'title' : 'name';
+          const entity = finder?.find(x => x.id === n.aboutId);
+          if (entity) aboutChip = `<span class="qa-note-tag" onclick="openInPlanner('${n.aboutType}','${entity.id}')">${esc(entity[nameKey])}</span>`;
+        }
+        return `
+      <div class="qa-note note-entry" data-note-id="${n.id}">
+        <div class="note-text-view">${esc(n.text)}</div>
+        <textarea class="note-text-edit" rows="3" style="display:none;margin-top:6px">${esc(n.text)}</textarea>
+        ${aboutChip?`<div style="margin-top:6px">${aboutChip}</div>`:''}
+        <div class="qa-note-meta">
+          <span>${esc(n.timestamp)}</span>
+          <div style="display:flex;gap:8px">
+            <button class="qa-del" onclick="toggleNoteEdit(this,'${n.id}')">Edit</button>
+            <button class="qa-del" onclick="qaDeleteNote('${n.id}')">✕ delete</button>
+          </div>
+        </div>
+      </div>`;
+      }).join('');
 }
 
 function qaSaveNote() {
@@ -110,9 +139,12 @@ function qaSaveNote() {
   if (!text) return;
   const c = camp();
   if (!c.quickNotes) c.quickNotes = [];
-  c.quickNotes.push({ id: uid(), text, timestamp: new Date().toLocaleString() });
+  const aboutVal = document.getElementById('qa-note-about')?.value || '';
+  const [aboutType, aboutId] = aboutVal ? aboutVal.split(':') : [null, null];
+  c.quickNotes.push({ id: uid(), text, timestamp: new Date().toLocaleString(), aboutType: aboutType||null, aboutId: aboutId||null });
   save();
   ta.value = '';
+  document.getElementById('qa-note-about').value = '';
   qaRenderNotes();
 }
 
@@ -190,6 +222,17 @@ function qaRenderCallbacks() {
       </div>`).join('');
 }
 
+// Called by state.js's storage-event listener whenever another window (the
+// main planner, or main.js's "Add to Untangle" button) writes new data.
+function onExternalStateChange() {
+  document.getElementById('qa-camp-name').textContent = camp().name;
+  qaRenderNoteAboutOptions();
+  qaRenderNotes();
+  qaRenderClocks();
+  qaRenderCallbacks();
+}
+
+qaRenderNoteAboutOptions();
 qaRenderNotes();
 qaRenderStyles();
 qaRegenerateNames();

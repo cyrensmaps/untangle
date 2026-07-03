@@ -71,6 +71,22 @@ function _mirrorBackup() {
 function save() { localStorage.setItem('cp_v1', JSON.stringify(state)); _mirrorBackup(); }
 function camp() { return state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0]; }
 
+// The main planner, the Quick Access widget, and main.js's "Add to Untangle"
+// Actor-sheet button are all separate browsing contexts writing the same
+// localStorage key. Without this, an already-open window holds a stale
+// in-memory `state` — the next time IT calls save() (even for something
+// unrelated), it overwrites whatever another context just wrote, silently
+// erasing it. The browser's `storage` event fires in every other context
+// sharing this origin whenever one of them writes to localStorage, so we
+// use it to pull in that change instead of clobbering it later.
+window.addEventListener('storage', (e) => {
+  if (e.key !== 'cp_v1' || !e.newValue) return;
+  try {
+    state = JSON.parse(e.newValue);
+    if (typeof onExternalStateChange === 'function') onExternalStateChange();
+  } catch { /* ignore a corrupt/partial write */ }
+});
+
 function setTheme(theme) {
   state.settings.theme = theme === 'grey' ? 'grey' : 'foundry-basic';
   document.documentElement.setAttribute('data-theme', state.settings.theme);
@@ -173,6 +189,48 @@ function consumePendingNav() {
 function openInPlanner(type, id) {
   setPendingNav({ type, id });
   try { window.parent.openCampaignPlanner(); } catch { /* not embedded in Foundry */ }
+}
+
+// ── Field note tagging + editing (shared between index.html and widget.html) ──
+// Builds the "About" dropdown options for tagging a note to an entity.
+// Broader than the relationship web's NPC/Faction-only scope since notes
+// aren't constrained to what the web can draw.
+function _noteEntityOpts(selectedType, selectedId) {
+  const c = camp();
+  const groups = [
+    { label: 'Characters',   items: c.npcs,        type: 'npc',      nameKey: 'name'  },
+    { label: 'Locations',    items: c.locations,   type: 'location', nameKey: 'name'  },
+    { label: 'Factions',     items: c.factions,    type: 'faction',  nameKey: 'name'  },
+    { label: 'Plot Threads', items: c.plotThreads, type: 'thread',   nameKey: 'title' },
+  ];
+  return groups.filter(g => g.items.length).map(g => `<optgroup label="${g.label}">${g.items.map(it =>
+    `<option value="${g.type}:${it.id}" ${selectedType===g.type&&selectedId===it.id?'selected':''}>${esc(it[g.nameKey])}</option>`
+  ).join('')}</optgroup>`).join('');
+}
+
+// Toggles a single quick note between its static view and an editable
+// textarea, persisting to camp().quickNotes immediately on "Done" (unlike
+// toggleEventEdit's NPC-events pattern, a note has no enclosing modal Save
+// button to collect it later, so it has to save itself).
+function toggleNoteEdit(btn, noteId) {
+  const entry = btn.closest('.note-entry');
+  const view = entry.querySelector('.note-text-view');
+  const ta = entry.querySelector('.note-text-edit');
+  const editing = ta.style.display !== 'none';
+  if (editing) {
+    const text = ta.value.trim();
+    const note = (camp().quickNotes||[]).find(n => n.id === noteId);
+    if (note && text) { note.text = text; save(); }
+    view.textContent = note ? note.text : ta.value;
+    view.style.display = '';
+    ta.style.display = 'none';
+    btn.textContent = 'Edit';
+  } else {
+    view.style.display = 'none';
+    ta.style.display = '';
+    ta.focus();
+    btn.textContent = 'Done';
+  }
 }
 
 // API keys live in Foundry's world settings (Configure Settings → Untangle),

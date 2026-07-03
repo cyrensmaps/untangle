@@ -2,7 +2,7 @@
   "id": "untangle",
   "title": "Untangle — A Campaign Planner",
   "description": "You run your best sessions by feel — throwaway NPCs become legends, towns get centuries of history you made up on the spot. Somewhere between sessions, though, you lose the threads. Untangle is a campaign tracker for GMs who discover their story at the table, not before it.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "compatibility": {
     "minimum": "11",
     "verified": "12"

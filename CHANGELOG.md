@@ -4,6 +4,14 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.4.1]
+
+### Fixed
+- **Cross-window data loss** — the Quick Access widget, main planner, and the "Add to Untangle" Actor-sheet button are separate windows writing the same data; if the main planner was left open, it could silently overwrite what another window had just saved (most visibly: "Add to Untangle" reporting success but the character never actually appearing). Every window now picks up changes made by the others instead of clobbering them.
+- Field Note tagging now also works from the Quick Access widget, not just the main window, and notes can be edited after saving (both places).
+- Faction attitude trend wasn't showing after a single attitude change — it only displayed once there were 2+ recorded changes. The change a faction is moving *from* is now seeded alongside the new one, so the trend appears immediately.
+- Hardened Scene-linked map image loading: passes through `data:`/`http` URLs unchanged, automatically retries with an alternate path-resolution strategy if the first attempt fails to load, and shows a clear on-page message (plus a console-logged URL for debugging) instead of a silently broken image if both attempts fail.
+
 ## [1.4.0]
 
 ### Added

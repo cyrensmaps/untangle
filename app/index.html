@@ -3395,9 +3395,34 @@ function renderTimeline() {
 // portrait) into something an <img> inside this iframe can load.
 function resolveFoundryImgSrc(raw) {
   if (!raw) return '';
-  return window.parent.foundry?.utils?.getRoute
-    ? window.parent.foundry.utils.getRoute(raw)
-    : (raw.startsWith('http') ? raw : '/' + raw.replace(/^\/+/, ''));
+  if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
+  if (window.parent.foundry?.utils?.getRoute) {
+    try { return window.parent.foundry.utils.getRoute(raw); } catch { /* fall through to plain path below */ }
+  }
+  return '/' + raw.replace(/^\/+/, '');
+}
+
+// Used as a fallback if the primary resolution above fails to load — some
+// setups (custom Foundry route prefixes, reverse proxies) behave
+// differently than expected, so this tries the other strategy instead of
+// leaving a permanently broken image.
+function resolveFoundryImgSrcFallback(raw) {
+  if (!raw || raw.startsWith('http') || raw.startsWith('data:')) return '';
+  return window.parent.foundry?.utils?.getRoute ? '/' + raw.replace(/^\/+/, '') : '';
+}
+
+function handleMapImageError(imgEl) {
+  const raw = window._currentMapRawImgPath || '';
+  if (imgEl.dataset.fallbackTried || !raw) {
+    console.warn('Untangle: could not load map image. Raw Foundry path:', raw, '— last attempted src:', imgEl.src);
+    const wrap = imgEl.closest('.map-wrap');
+    if (wrap) wrap.innerHTML = `<div class="empty-state"><h3>Could not load this image</h3><p>Tried: <code style="word-break:break-all">${esc(raw||imgEl.src)}</code><br>Check the browser console (F12) for the exact URL that failed — this can happen if the image format isn't served correctly by your setup, or the file has moved.</p></div>`;
+    return;
+  }
+  imgEl.dataset.fallbackTried = '1';
+  const fallback = resolveFoundryImgSrcFallback(raw);
+  if (fallback) { console.warn('Untangle: primary map image path failed, retrying with a plain root-relative path for:', raw); imgEl.src = fallback; }
+  else { imgEl.dispatchEvent(new Event('error')); }
 }
 
 function renderMaps() {
@@ -3490,10 +3515,13 @@ function renderMapView() {
 
   let imgSrc = m.imageDataUrl || '';
   let sceneMissing = false;
+  window._currentMapRawImgPath = '';
   if (m.sceneId) {
     const scene = window.parent?.game?.scenes?.get(m.sceneId);
-    if (scene) imgSrc = resolveFoundryImgSrc(scene.background?.src || scene.img || '');
-    else sceneMissing = true;
+    if (scene) {
+      window._currentMapRawImgPath = scene.background?.src || scene.img || '';
+      imgSrc = resolveFoundryImgSrc(window._currentMapRawImgPath);
+    } else sceneMissing = true;
   }
 
   const pins = (m.pins||[]).map(pin=>{
@@ -3520,7 +3548,7 @@ function renderMapView() {
     ${sceneMissing
       ? `<div class="empty-state"><h3>Scene not found</h3><p>This map was linked to a Foundry Scene that no longer exists in this world.</p></div>`
       : `<div class="map-wrap" onclick="handleMapClick(event,'${m.id}')">
-          <img src="${imgSrc}" alt="${esc(m.name)}" draggable="false">
+          <img src="${imgSrc}" alt="${esc(m.name)}" draggable="false" onerror="handleMapImageError(this)">
           ${pins}
         </div>`}`;
 }
@@ -3711,12 +3739,16 @@ function renderFieldNotes() {
           if (entity) aboutChip = `<span class="npc-chip" style="font-size:0.72rem" onclick="${openFn}('${entity.id}')">${esc(entity[nameKey])}</span>`;
         }
         return `
-        <div class="note-item">
-          <div class="note-text">${esc(n.text)}</div>
+        <div class="note-item note-entry" data-note-id="${n.id}">
+          <div class="note-text note-text-view">${esc(n.text)}</div>
+          <textarea class="note-text-edit" rows="3" style="display:none;margin-top:6px">${esc(n.text)}</textarea>
           ${aboutChip?`<div style="margin-top:6px">${aboutChip}</div>`:''}
           <div class="note-meta">
             <span>${esc(n.timestamp)}</span>
-            <button class="btn btn-danger btn-sm" onclick="deleteQuickNote('${n.id}')">Delete</button>
+            <div class="flex gap-8">
+              <button class="btn btn-ghost btn-sm" onclick="toggleNoteEdit(this,'${n.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteQuickNote('${n.id}')">Delete</button>
+            </div>
           </div>
         </div>`;
       }).join('')}`;
@@ -3725,19 +3757,6 @@ function renderFieldNotes() {
 // Shared across Field Notes, and NPC/Location/Faction/Thread modals —
 // covers all four taggable types, unlike _relEntityOpts which is
 // deliberately scoped to just Characters/Factions for the relationship web.
-function _noteEntityOpts(selectedType, selectedId) {
-  const c = camp();
-  const groups = [
-    { label: 'Characters',   items: c.npcs,        type: 'npc',      nameKey: 'name'  },
-    { label: 'Locations',    items: c.locations,   type: 'location', nameKey: 'name'  },
-    { label: 'Factions',     items: c.factions,    type: 'faction',  nameKey: 'name'  },
-    { label: 'Plot Threads', items: c.plotThreads, type: 'thread',   nameKey: 'title' },
-  ];
-  return groups.filter(g => g.items.length).map(g => `<optgroup label="${g.label}">${g.items.map(it =>
-    `<option value="${g.type}:${it.id}" ${selectedType===g.type&&selectedId===it.id?'selected':''}>${esc(it[g.nameKey])}</option>`
-  ).join('')}</optgroup>`).join('');
-}
-
 // Renders a "Field Notes" block for whatever's tagged to this entity, or ''
 // if nothing is. Shared by the NPC/Location/Faction/Thread modals.
 function renderTaggedNotesSection(type, id) {
@@ -5102,7 +5121,13 @@ function saveFaction(id) {
     const f = c.factions.find(x => x.id === id);
     if (f) {
       if (data.attitude !== f.attitude) {
-        if (!f.attitudeHistory) f.attitudeHistory = [];
+        // Factions created before this feature shipped have no history at
+        // all — seed the attitude it's changing FROM first, so the trend
+        // is visible after this one change instead of needing a second
+        // change before there are >1 entries to show.
+        if (!f.attitudeHistory || !f.attitudeHistory.length) {
+          f.attitudeHistory = [{ attitude: f.attitude || 'neutral', sessionNumber: c.sessions.length, at: new Date().toISOString() }];
+        }
         f.attitudeHistory.push({ attitude: data.attitude, sessionNumber: c.sessions.length, at: new Date().toISOString() });
       }
       Object.assign(f, data);
@@ -5496,6 +5521,11 @@ function maybeShowOnboarding() {
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
+
+// Called by state.js's storage-event listener whenever another window
+// (the widget, or main.js's "Add to Untangle" button) writes new data while
+// this window is open, so it doesn't keep showing/overwriting stale state.
+function onExternalStateChange() { render(); }
 
 navigate('dashboard');
 maybeShowOnboarding();
