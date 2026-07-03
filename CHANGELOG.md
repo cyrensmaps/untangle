@@ -4,6 +4,19 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.3.0]
+
+### Added
+- **Find Contradictions** — AI session processing now flags when a new transcript conflicts with something already logged (a restated name, role, or detail), shown as informational callouts in the review modal with a direct link to fix the entry.
+- **Loose Ends** — AI session processing also surfaces unresolved questions raised in the transcript; approved ones land straight in Session Prep's Open Questions.
+- **Spark** — a new Quick Access widget tab that picks two things you've already logged and asks Claude for a surprising connection between them, with its own cost-confirmation modal, Regenerate, and Save as Field Note.
+- Quick Access widget: clicking a clock's or stale callback's name now opens the main Untangle window straight to that item.
+
+### Changed
+- Delete/destructive confirmations (sessions, characters, locations, maps, campaigns, threads, factions, clocks, restoring a Foundry backup) now use an in-window modal instead of the browser's native confirm() popup.
+- "Save without AI" on the Log New Session page moved next to the Back button instead of being repeated under each input mode.
+- Quick Access widget's tab strip is now a scrollable row instead of a fixed grid, so future tabs don't require another layout rework.
+
 ## [1.2.0]
 
 ### Added

@@ -9,12 +9,15 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: var(--font); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    .qa-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    .qa-tab { background: none; border: none; border-bottom: 1px solid transparent; color: var(--text-dim); padding: 8px 6px; cursor: pointer; font-size: 0.75rem; font-family: var(--font); }
+    .qa-tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .qa-tab { background: none; border: none; border-right: 1px solid var(--border); border-bottom: 1px solid transparent; color: var(--text-dim); padding: 8px 10px; cursor: pointer; font-size: 0.75rem; font-family: var(--font); flex-shrink: 0; white-space: nowrap; }
     .qa-tab.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
     .qa-tab:hover:not(.active) { color: var(--text); }
-    .qa-tab:nth-child(odd) { border-right: 1px solid var(--border); }
-    .qa-tab:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+
+    .qa-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+    .qa-modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; width: 100%; }
+    .qa-modal p { font-size: 0.8rem; line-height: 1.6; margin-bottom: 14px; }
+    .qa-spark-result { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.82rem; line-height: 1.5; margin-top: 10px; }
 
     .qa-clock-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
     .qa-clock-row .clock-seg { width: 14px; height: 14px; }
@@ -54,6 +57,7 @@
   <button class="qa-tab" id="qa-tab-names" onclick="qaSwitch('names')">Names</button>
   <button class="qa-tab" id="qa-tab-clocks" onclick="qaSwitch('clocks')">Clocks</button>
   <button class="qa-tab" id="qa-tab-callbacks" onclick="qaSwitch('callbacks')">Callbacks</button>
+  <button class="qa-tab" id="qa-tab-spark" onclick="qaSwitch('spark')">Spark</button>
 </div>
 
 <div class="qa-panel active" id="qa-panel-notes">
@@ -75,6 +79,12 @@
 
 <div class="qa-panel" id="qa-panel-callbacks">
   <div id="qa-callbacks-list"></div>
+</div>
+
+<div class="qa-panel" id="qa-panel-spark">
+  <p class="text-xs" style="color:var(--text-dim);line-height:1.5;margin-bottom:10px">Picks two things you've already logged and asks Claude for a surprising connection between them — improv fuel, grounded in your own campaign.</p>
+  <button class="btn btn-primary" onclick="qaGenerateConnection()">Generate</button>
+  <div id="qa-spark-result"></div>
 </div>
 
 <script src="state.js"></script>
@@ -165,7 +175,7 @@ function qaRenderClocks() {
     ? `<div class="qa-empty">No clocks yet. Add some from the full Untangle window.</div>`
     : c.clocks.map(ck => `
       <div class="qa-clock-row">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ck.label)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openInPlanner('clock','${ck.id}')">${esc(ck.label)}</span>
         ${clockSegmentsHTML(ck, 'qaTickClock', true)}
       </div>`).join('');
 }
@@ -187,9 +197,97 @@ function qaRenderCallbacks() {
     ? `<div class="qa-empty">Nothing stale right now.</div>`
     : stale.slice(0, 10).map(e => `
       <div class="qa-callback-row">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openInPlanner('${e.type}','${e.id}')">${esc(e.name)}</span>
         <span style="flex-shrink:0;color:var(--text-dim)">${e.sessionsSince}s ago</span>
       </div>`).join('');
+}
+
+// ── Random connection ("Spark") ──
+// Compact stand-in for index.html's confirmPaidAction() modal — this widget
+// doesn't share index.html's larger .modal/.modal-overlay CSS (sized for a
+// 1300px window, not this 320px one), so it gets its own minimal version.
+function qaConfirmModal(message) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'qa-modal-overlay';
+    overlay.innerHTML = `
+      <div class="qa-modal">
+        <p>${esc(message)}</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" data-act="cancel">Cancel</button>
+          <button class="btn btn-primary" style="margin-top:0" data-act="confirm">Continue</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.querySelector('[data-act="confirm"]').addEventListener('click', () => { overlay.remove(); resolve(true); });
+  });
+}
+
+function qaConnectionPool() {
+  const c = camp();
+  const pool = [];
+  (c.npcs||[]).forEach(n => pool.push({ type: 'npc', name: n.name, detail: [n.role, n.notes].filter(Boolean).join(' — ') }));
+  (c.locations||[]).forEach(l => pool.push({ type: 'location', name: l.name, detail: l.description||'' }));
+  (c.factions||[]).forEach(f => pool.push({ type: 'faction', name: f.name, detail: f.description||'' }));
+  (c.plotThreads||[]).forEach(t => pool.push({ type: 'thread', name: t.title, detail: t.description||'' }));
+  return pool;
+}
+
+async function qaGenerateConnection() {
+  const pool = qaConnectionPool();
+  const result = document.getElementById('qa-spark-result');
+  if (pool.length < 2) {
+    result.innerHTML = `<div class="qa-empty">Log at least 2 characters, locations, factions, or threads first.</div>`;
+    return;
+  }
+  if (!getClaudeKey()) {
+    result.innerHTML = `<div class="qa-empty">Add your Claude API key in Foundry Configure Settings.</div>`;
+    return;
+  }
+  if (!(await qaConfirmModal('Generating a connection uses your Claude API key and costs a small amount, billed to you by Anthropic directly. Continue?'))) return;
+
+  const a = pool[Math.floor(Math.random() * pool.length)];
+  let b = pool[Math.floor(Math.random() * pool.length)];
+  let tries = 0;
+  while (b.name === a.name && tries < 10) { b = pool[Math.floor(Math.random() * pool.length)]; tries++; }
+
+  result.innerHTML = `<div class="qa-empty">Thinking of something…</div>`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': getClaudeKey(), 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `You are helping a TTRPG GM improvise. Suggest one surprising but plausible connection between these two things from their campaign, in 1-2 short sentences, plain text only, no markdown, no preamble:\n\n1. ${a.name} (${a.type})${a.detail?': '+a.detail:''}\n2. ${b.name} (${b.type})${b.detail?': '+b.detail:''}` }]
+      })
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+    const text = (data.content?.[0]?.text || '').trim();
+    if (!text) throw new Error('Empty response');
+    result.innerHTML = `
+      <div class="qa-spark-result">${esc(text)}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-ghost" style="flex:1" onclick="qaGenerateConnection()">↺ Regenerate</button>
+        <button class="btn btn-ghost" style="flex:1" onclick="qaSaveConnectionAsNote(this)" data-text="${esc(text)}">Save as Note</button>
+      </div>`;
+  } catch (err) {
+    result.innerHTML = `<div class="qa-empty">Error: ${esc(err.message || String(err))}</div>`;
+  }
+}
+
+function qaSaveConnectionAsNote(btn) {
+  const text = btn.dataset.text;
+  if (!text) return;
+  const c = camp();
+  if (!c.quickNotes) c.quickNotes = [];
+  c.quickNotes.push({ id: uid(), text, timestamp: new Date().toLocaleString() });
+  save();
+  qaRenderNotes();
+  btn.textContent = 'Saved!';
+  btn.disabled = true;
 }
 
 qaRenderNotes();

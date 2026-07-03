@@ -372,6 +372,29 @@ function confirmPaidAction(serviceKeys, actionLabel) {
   });
 }
 
+// In-window replacement for the browser's native confirm() — used for
+// deletes and other irreversible actions so the prompt matches the rest of
+// the app's look instead of the OS-styled confirm() dialog.
+function confirmModal(message, opts) {
+  opts = opts || {};
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header"><h3>${esc(opts.title || 'Are you sure?')}</h3></div>
+        <p class="text-sm" style="line-height:1.7;margin-bottom:18px">${esc(message)}</p>
+        <div class="flex gap-8" style="justify-content:flex-end">
+          <button class="btn btn-ghost" data-act="cancel">Cancel</button>
+          <button class="btn ${opts.danger===false?'btn-primary':'btn-danger'}" data-act="confirm">${esc(opts.confirmLabel || 'Delete')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.querySelector('[data-act="confirm"]').addEventListener('click', () => { overlay.remove(); resolve(true); });
+  });
+}
+
 // ═══════════════════════════════════════════════
 // CAMPAIGN SWITCHER
 // ═══════════════════════════════════════════════
@@ -589,7 +612,10 @@ function renderNewSession() {
   return `
     <div class="page-header">
       <div><h2>Log New Session</h2><p class="subtitle">Upload your Craig recording or paste a transcript</p></div>
-      <button class="btn btn-ghost" onclick="navigate('sessions')">← Back</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="navigate('sessions')">← Back</button>
+        <button class="btn btn-ghost" onclick="saveManual()">Save without AI</button>
+      </div>
     </div>
 
     <div class="card">
@@ -631,7 +657,6 @@ function renderNewSession() {
           <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money — roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn btn-ghost" onclick="saveManual()">Save without AI</button>
           <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>Transcribe &amp; Process</button>
         </div>
         <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money — OpenAI (transcription) + Claude (analysis)</div>
@@ -680,7 +705,6 @@ function renderNewSession() {
           Local is only worth it if you have no API key or need full privacy.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn btn-ghost" onclick="saveManual()">Save without AI</button>
           <button class="btn btn-primary" id="local-transcribe-btn" onclick="transcribeLocal()" disabled>Transcribe Locally</button>
         </div>
       </div>
@@ -700,7 +724,6 @@ The AI will extract:
         <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
           <button class="btn btn-ghost btn-sm" onclick="openSpeakerMappingManual()" title="Map speaker labels to real names">Map speakers</button>
           <div style="display:flex;gap:10px">
-            <button class="btn btn-ghost" onclick="saveManual()">Save without AI</button>
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">Process with AI</button>
           </div>
         </div>
@@ -1521,9 +1544,20 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
   if (!getClaudeKey()) throw new Error('Claude API key missing — add it in Foundry Configure Settings.');
 
   const c = camp();
-  const existingNPCs     = c.npcs.map(n => n.name).join(', ') || 'none';
-  const existingLocs     = c.locations.map(l => l.name).join(', ') || 'none';
-  const existingFactions = c.factions.map(f => f.name).join(', ') || 'none';
+  // Short detail per entity (not just names) so Claude has enough to spot a
+  // contradiction (e.g. a restated name/role/description that conflicts with
+  // what's already logged) — capped per category so prompt size stays
+  // bounded on large campaigns.
+  function trimmedList(items, cap, detailFn) {
+    const list = items.slice(0, cap).map(it => {
+      const d = (detailFn(it) || '').slice(0, 100).trim();
+      return d ? `${it.name} (${d})` : it.name;
+    });
+    return list.length ? list.join('; ') : 'none';
+  }
+  const existingNPCs     = trimmedList(c.npcs, 40, n => [n.role, n.notes].filter(Boolean).join(' — '));
+  const existingLocs     = trimmedList(c.locations, 40, l => l.description);
+  const existingFactions = trimmedList(c.factions, 40, f => f.description);
 
   // Claude has a context limit and the extraction task doesn't need every word.
   // Take the first 20k chars (opening), middle 10k, and last 10k to cover the full arc.
@@ -1544,7 +1578,7 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
 
 IMPORTANT: Write all text values (summary, keyEvents, role, notes, descriptions, hook titles and descriptions) in the same language as the transcript. Do not translate to English.
 
-Known NPCs already in campaign: ${existingNPCs}
+Known NPCs already in campaign (with what's already known about them): ${existingNPCs}
 Known locations already in campaign: ${existingLocs}
 Known factions already in campaign: ${existingFactions}${playerNote}
 
@@ -1564,10 +1598,18 @@ Return exactly this structure:
   ],
   "factions": [
     { "name": "Faction name", "notes": "what they did or were mentioned doing this session", "isNew": true }
-  ]
+  ],
+  "contradictions": [
+    { "entityType": "npc", "name": "Name as already known", "existingDetail": "what was already known", "newDetail": "what this transcript says instead", "note": "one sentence on the conflict" }
+  ],
+  "openQuestions": ["a question raised in the transcript that was never answered or resolved"]
 }
 
 Set isNew to false if the name matches something already in the campaign. For factions: only include factions explicitly named or clearly active this session — not every group in passing. Empty array if nothing fits a category.
+
+For contradictions: entityType is "npc", "location", or "faction". Only flag it if the transcript actually conflicts with something already known (a different name, role, description, or fact) — not just when it adds new information. Empty array if nothing conflicts.
+
+For openQuestions: things the party asked about, wondered about, or that were left hanging in this transcript and never got resolved by the end of it. Keep each one short and concrete. Empty array if nothing fits.
 
 Transcript:
 ${condensed}`;
@@ -1708,12 +1750,47 @@ function showReviewModal(session, extracted) {
             </div>
           </div>`;
         }).join('')}` : ''}
+      ${(extracted.openQuestions||[]).length ? `
+        <hr>
+        <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Loose Ends (${extracted.openQuestions.length})</div>
+        ${extracted.openQuestions.map((q,i) => `
+          <div class="review-item">
+            <input type="checkbox" id="oq-${i}" checked>
+            <div class="review-item-content">
+              <p>${esc(q)}</p>
+            </div>
+          </div>`).join('')}` : ''}
+      ${(extracted.contradictions||[]).length ? `
+        <hr>
+        <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--red)">Possible Contradictions (${extracted.contradictions.length})</div>
+        ${extracted.contradictions.map((ct,i) => `
+          <div class="review-item" style="align-items:flex-start">
+            <span style="width:16px;flex-shrink:0;color:var(--red);font-weight:700;text-align:center">!</span>
+            <div class="review-item-content">
+              <h4>${esc(ct.name||'')}</h4>
+              <p>${esc(ct.note||'')}</p>
+              <p class="text-xs text-dim" style="margin-top:4px">Known: "${esc(ct.existingDetail||'')}" — this session says: "${esc(ct.newDetail||'')}"</p>
+              <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="reviewContradiction(${i})">Review →</button>
+            </div>
+          </div>`).join('')}` : ''}
       <div class="flex gap-10" style="justify-content:flex-end;margin-top:22px">
         <button class="btn btn-ghost" onclick="closeReview()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmSave()">Save Session</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+function reviewContradiction(i) {
+  const ct = (window._pe?.contradictions || [])[i];
+  if (!ct) return;
+  const c = camp();
+  const finder = { npc: c.npcs, location: c.locations, faction: c.factions }[ct.entityType];
+  const entity = finder?.find(x => x.name.toLowerCase() === (ct.name||'').toLowerCase());
+  closeReview();
+  if (!entity) { toast('Could not find that entry — it may already have been renamed.', 'error'); return; }
+  const openFn = { npc: 'openNPCModal', location: 'openLocationModal', faction: 'openFactionModal' }[ct.entityType];
+  if (openFn && typeof window[openFn] === 'function') window[openFn](entity.id);
 }
 
 function closeReview() {
@@ -1779,6 +1856,20 @@ function confirmSave() {
     }
   });
 
+  const openQuestions = extracted.openQuestions || [];
+  if (!c.sessionPrep) c.sessionPrep = { notes: '', scenes: [], questions: [] };
+  if (!c.sessionPrep.questions) c.sessionPrep.questions = [];
+  const existingQuestionTexts = new Set(c.sessionPrep.questions.map(q => q.text.trim().toLowerCase()));
+  let oqChk = 0;
+  openQuestions.forEach((q, i) => {
+    if (!document.getElementById(`oq-${i}`)?.checked) return;
+    const text = (q||'').trim();
+    if (!text || existingQuestionTexts.has(text.toLowerCase())) return;
+    c.sessionPrep.questions.push({ id: uid(), text, done: false });
+    existingQuestionTexts.add(text.toLowerCase());
+    oqChk++;
+  });
+
   const reanalyseId = window._reanalyseId;
   window._reanalyseId = null;
   if (reanalyseId) {
@@ -1795,6 +1886,7 @@ function confirmSave() {
   const hChk = hooks.filter((_,i) => document.getElementById(`hc-${i}`)?.checked).length;
   const parts = [`${nChk} NPCs`, `${lChk} locations`, `${hChk} hooks`];
   if (fChk) parts.push(`${fChk} faction${fChk!==1?'s':''}`);
+  if (oqChk) parts.push(`${oqChk} loose end${oqChk!==1?'s':''}`);
 
   document.getElementById('review-overlay')?.remove();
   toast((reanalyseId ? 'Session updated' : 'Session saved') + ' · ' + parts.join(' · '), 'success');
@@ -1960,8 +2052,8 @@ async function reanalyseSession(id) {
   }
 }
 
-function deleteSession(id) {
-  if (!confirm('Delete this session?')) return;
+async function deleteSession(id) {
+  if (!(await confirmModal('Delete this session?'))) return;
   const c = camp();
   c.sessions = c.sessions.filter(s => s.id !== id);
   save();
@@ -3107,8 +3199,8 @@ Write a single short paragraph (2-4 sentences) describing how this character SOU
   }
 }
 
-function deleteNPC(id) {
-  if (!confirm('Delete this character?')) return;
+async function deleteNPC(id) {
+  if (!(await confirmModal('Delete this character?'))) return;
   const c = camp();
   c.npcs = c.npcs.filter(n => n.id !== id);
   save();
@@ -3211,8 +3303,8 @@ function addLocation() {
   render();
 }
 
-function deleteLocation(id) {
-  if (!confirm('Delete this location?')) return;
+async function deleteLocation(id) {
+  if (!(await confirmModal('Delete this location?'))) return;
   const c = camp();
   c.locations = c.locations.filter(l => l.id !== id);
   save();
@@ -3444,8 +3536,8 @@ function deletePin(mapId, pinId) {
   render();
 }
 
-function deleteMap(mapId) {
-  if (!confirm('Delete this map and all its pins?')) return;
+async function deleteMap(mapId) {
+  if (!(await confirmModal('Delete this map and all its pins?'))) return;
   const c = camp();
   c.maps = c.maps.filter(m=>m.id!==mapId);
   save();
@@ -3780,10 +3872,10 @@ function renameCampaign(id) {
   render();
 }
 
-function deleteCampaign(id) {
+async function deleteCampaign(id) {
   if (state.campaigns.length <= 1) { toast("Can't delete the last campaign.", 'error'); return; }
   const c = state.campaigns.find(x => x.id === id);
-  if (!confirm(`Delete "${c?.name}"? All its data will be lost.`)) return;
+  if (!(await confirmModal(`Delete "${c?.name}"? All its data will be lost.`))) return;
   state.campaigns = state.campaigns.filter(x => x.id !== id);
   if (state.currentCampaignId === id) state.currentCampaignId = state.campaigns[0].id;
   save();
@@ -3791,11 +3883,11 @@ function deleteCampaign(id) {
   render();
 }
 
-function restoreFromFoundryBackup() {
+async function restoreFromFoundryBackup() {
   let backup = null;
   try { backup = window.parent?.game?.settings?.get('untangle', 'campaignBackup'); } catch {}
   if (!backup?.state) { toast('No Foundry world backup found.', 'error'); return; }
-  if (!confirm(`Restore campaign data from the Foundry world backup (saved ${new Date(backup.savedAt).toLocaleString()})? This overwrites everything currently in this browser.`)) return;
+  if (!(await confirmModal(`Restore campaign data from the Foundry world backup (saved ${new Date(backup.savedAt).toLocaleString()})? This overwrites everything currently in this browser.`, { title: 'Restore backup?', confirmLabel: 'Restore', danger: false }))) return;
   state = backup.state;
   if (!state.settings) state.settings = {};
   if (state.settings.onboarded === undefined) state.settings.onboarded = true;
@@ -4438,8 +4530,8 @@ function saveThread(id) {
   render();
 }
 
-function deleteThread(id) {
-  if (!confirm('Delete this plot thread?')) return;
+async function deleteThread(id) {
+  if (!(await confirmModal('Delete this plot thread?'))) return;
   const c = camp();
   c.plotThreads = c.plotThreads.filter(t => t.id !== id);
   save();
@@ -4613,8 +4705,8 @@ function saveFaction(id) {
   render();
 }
 
-function deleteFaction(id) {
-  if (!confirm('Delete this faction?')) return;
+async function deleteFaction(id) {
+  if (!(await confirmModal('Delete this faction?'))) return;
   const c = camp();
   c.factions = c.factions.filter(f => f.id !== id);
   save();
@@ -4735,8 +4827,8 @@ function saveClock(id) {
   render();
 }
 
-function deleteClock(id) {
-  if (!confirm('Delete this clock?')) return;
+async function deleteClock(id) {
+  if (!(await confirmModal('Delete this clock?'))) return;
   const c = camp();
   c.clocks = c.clocks.filter(ck => ck.id !== id);
   save();
@@ -4996,6 +5088,19 @@ function maybeShowOnboarding() {
 
 navigate('dashboard');
 maybeShowOnboarding();
+
+// If the Quick Access widget asked us to open a specific clock/NPC/location/
+// thread/faction (see openInPlanner() in state.js), jump straight to it.
+(function handlePendingNav() {
+  const nav = consumePendingNav();
+  if (!nav) return;
+  const PAGE_BY_TYPE = { npc: 'npcs', location: 'locations', thread: 'threads', faction: 'factions', clock: 'clocks' };
+  const OPEN_FN_BY_TYPE = { npc: 'openNPCModal', location: 'openLocationModal', thread: 'openEditThreadModal', faction: 'openFactionModal', clock: 'openEditClockModal' };
+  const page = PAGE_BY_TYPE[nav.type];
+  if (page) navigate(page);
+  const openFn = OPEN_FN_BY_TYPE[nav.type];
+  if (openFn && nav.id && typeof window[openFn] === 'function') window[openFn](nav.id);
+})();
 </script>
 </body>
 </html>

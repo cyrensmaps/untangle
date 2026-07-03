@@ -152,6 +152,29 @@ function computeStaleEntities(threshold) {
   return out.sort((a,b) => b.sessionsSince - a.sessionsSince);
 }
 
+// ── Cross-window navigation ──
+// The Quick Access widget and the main planner are separate Foundry
+// Application windows (separate iframes), each reloaded fresh whenever
+// opened — so "click a name in the widget, open it in the main window"
+// can't reach across iframes directly. Instead the widget stashes what to
+// open here (same-origin localStorage), then asks the top Foundry window
+// to open/focus the planner; the planner checks for this on load.
+function setPendingNav(payload) {
+  try { localStorage.setItem('cp_pending_nav', JSON.stringify(payload)); } catch { /* ignore */ }
+}
+function consumePendingNav() {
+  try {
+    const raw = localStorage.getItem('cp_pending_nav');
+    if (!raw) return null;
+    localStorage.removeItem('cp_pending_nav');
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+function openInPlanner(type, id) {
+  setPendingNav({ type, id });
+  try { window.parent.openCampaignPlanner(); } catch { /* not embedded in Foundry */ }
+}
+
 // API keys live in Foundry's world settings (Configure Settings → Untangle),
 // not in this localStorage-backed state — set there, they're visible to the
 // GM regardless of which browser/device opens the planner.
