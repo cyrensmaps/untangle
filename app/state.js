@@ -335,13 +335,18 @@ function getFeatureToggles() {
   } catch { return {}; }
 }
 
-function setFeatureToggle(key, enabled) {
+// Returns the settings.set() promise (not fire-and-forget) for the same
+// reason setPatreonToken() does: this is a world-scope setting, so it
+// round-trips to the server before game.settings.get() reflects the new
+// value — callers that immediately re-render (which re-reads it via
+// isFeatureEnabled()) must await this first.
+async function setFeatureToggle(key, enabled) {
   try {
     const pgame = window.parent?.game;
     if (!pgame?.settings) return;
     const current = getFeatureToggles();
     current[key] = enabled;
-    pgame.settings.set('untangle', 'featureToggles', toFoundryPlain(current));
+    await pgame.settings.set('untangle', 'featureToggles', toFoundryPlain(current));
   } catch { /* not embedded in Foundry, or setting not registered yet */ }
 }
 
@@ -430,11 +435,15 @@ function getPatreonToken() {
   try { return window.parent?.game?.settings?.get('untangle', 'patreonToken') || ''; } catch { return ''; }
 }
 
-function setPatreonToken(token) {
+// Returns the settings.set() promise (not fire-and-forget): world-scope
+// settings round-trip to the server before game.settings.get() reflects the
+// new value, so callers that immediately re-read it (verifyPatreonToken())
+// must await this first, or they can read the stale pre-save value.
+async function setPatreonToken(token) {
   try {
     const pgame = window.parent?.game;
     if (!pgame?.settings) return;
-    pgame.settings.set('untangle', 'patreonToken', token || '');
+    await pgame.settings.set('untangle', 'patreonToken', token || '');
   } catch { /* not embedded in Foundry, or setting not registered yet */ }
 }
 

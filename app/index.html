@@ -4496,15 +4496,18 @@ function renderSettings() {
           <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${esc(cat)}</div>
           ${FEATURE_REGISTRY.filter(f=>f.category===cat).map(f => `
             <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
-              <input type="checkbox" ${isFeatureEnabled(f.key)?'checked':''} ${f.premium && !isPatreonEntitled() ? 'disabled' : ''} onchange="onToggleFeature('${f.key}', this.checked)">
-              ${esc(f.label)}${f.premium?' <span class="text-xs text-dim">(Premium)</span>':''}
+              <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${isFeatureEnabled(f.key)?'checked':''} ${f.premium && !isPatreonEntitled() ? 'disabled' : ''} onchange="onToggleFeature('${f.key}', this.checked)">
+              <span>${esc(f.label)}${f.premium?' <span class="text-xs text-dim">(Premium)</span>':''}</span>
             </label>`).join('')}
         </div>`).join('')}
     </div>
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Premium Features</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Support development on Patreon to unlock premium features (none yet — everything above is free). Log in below and paste back the token it gives you.</p>
+      <div class="flex gap-10" style="align-items:flex-start;margin-bottom:16px">
+        <img src="assets/patreonlogo.png" alt="" style="height:28px;width:auto;flex-shrink:0;margin-top:2px" onerror="this.style.display='none'">
+        <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (none yet — everything above is free). Log in below and paste back the token it gives you.</p>
+      </div>
       <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? '<span style="color:var(--green)">Linked — active pledge</span>' : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired — log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
       <div class="flex gap-8" style="flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-ghost" onclick="openPatreonLoginTab()">Log in with Patreon</button>
@@ -4535,8 +4538,8 @@ function renderSettings() {
 
 const FEATURE_CATEGORIES = [...new Set(FEATURE_REGISTRY.map(f => f.category))];
 
-function onToggleFeature(key, enabled) {
-  setFeatureToggle(key, enabled);
+async function onToggleFeature(key, enabled) {
+  await setFeatureToggle(key, enabled);
   renderNavLinks();
   render();
 }
@@ -4549,16 +4552,16 @@ function openPatreonLoginTab() {
 async function savePatreonToken() {
   const token = document.getElementById('patreon-token-input')?.value?.trim();
   if (!token) { toast('Paste the token first.', 'error'); return; }
-  setPatreonToken(token);
+  await setPatreonToken(token);
   const ok = await verifyPatreonToken();
   render();
   renderNavLinks();
   toast(ok ? 'Linked! Premium features are now available.' : 'That token is invalid or expired.', ok ? 'success' : 'error');
 }
 
-function unlinkPatreon() {
-  setPatreonToken('');
-  verifyPatreonToken();
+async function unlinkPatreon() {
+  await setPatreonToken('');
+  await verifyPatreonToken();
   render();
   renderNavLinks();
   toast('Unlinked.', 'success');

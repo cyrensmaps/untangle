@@ -4,6 +4,16 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.6.1]
+
+### Fixed
+- Feature toggle checkboxes on Settings looked broken (scattered, uneven spacing) — they were inheriting form-field padding meant for text inputs, which bloats a checkbox's layout box far beyond its visible size. Now styled consistently with every other checkbox in the app.
+- Pasting a Patreon token (or unlinking) could report failure on the first try even when it actually worked — a race condition where the app re-checked the saved token before Foundry's world-scope setting had finished round-tripping to the server. Saving now waits for that to complete before verifying.
+- Toggling a feature off/on could visually snap back until clicked again, for the same underlying race-condition reason as above.
+
+### Added
+- Patreon logo next to the Premium Features description on the Settings page.
+
 ## [1.6.0]
 
 ### Added
