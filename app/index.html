@@ -263,6 +263,9 @@
     #campaign-bible-print .cb-entry h3 { font-size: 1rem; margin-bottom: 3px; }
     #campaign-bible-print .cb-entry p { font-size: 0.92rem; margin: 2px 0; }
     #campaign-bible-print .cb-tag { font-family: var(--font); font-size: 0.7rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
+    #campaign-bible-print .cb-toolbar-check { display: flex; align-items: center; gap: 6px; margin-right: auto; font-family: var(--font); font-size: 0.78rem; color: #333; cursor: pointer; }
+    #campaign-bible-print .cb-entry-npc { display: flex; gap: 12px; align-items: flex-start; }
+    #campaign-bible-print .cb-portrait { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; }
     @media print {
       body > *:not(#campaign-bible-print) { display: none !important; }
       #campaign-bible-print { position: static; }
@@ -398,17 +401,25 @@ function confirmModal(message, opts) {
   });
 }
 
-// Drag an NPC/Location/Thread card onto Foundry's macro bar to create a
-// one-click "jump straight here" macro (handled by the hotbarDrop hook in
-// main.js). Looks the name up here rather than embedding it in the inline
-// ondragstart attribute, since embedding arbitrary text risks breaking the
-// attribute if a name ever contains a quote.
+// Drag-to-hotbar HTML attributes for a card, or '' if the feature is off/
+// not entitled — hides the drag affordance entirely rather than leaving a
+// draggable-looking card that silently does nothing on drop.
+function dragToHotbarAttrs(type, id) {
+  if (!isFeatureEnabled('hotbarMacros')) return '';
+  return `draggable="true" ondragstart="onEntityDragStart(event,'${type}','${id}')" title="Drag to the macro bar for a one-click jump"`;
+}
+
+// Drag a card (NPC/Location/Thread/Faction/Clock/Map) onto Foundry's macro
+// bar to create a one-click "jump straight here" macro (handled by the
+// hotbarDrop hook in main.js). Looks the name up here rather than embedding
+// it in the inline ondragstart attribute, since embedding arbitrary text
+// risks breaking the attribute if a name ever contains a quote.
 function onEntityDragStart(event, type, id) {
   event.stopPropagation();
   const c = camp();
-  const finder = { npc: c.npcs, location: c.locations, thread: c.plotThreads, faction: c.factions }[type];
+  const finder = { npc: c.npcs, location: c.locations, thread: c.plotThreads, faction: c.factions, clock: c.clocks, map: c.maps }[type];
   const entity = finder?.find(x => x.id === id);
-  const name = entity ? (entity.name || entity.title || '') : '';
+  const name = entity ? (entity.name || entity.title || entity.label || '') : '';
   const image = (type === 'npc' && entity?.image) ? entity.image : '';
   event.dataTransfer.effectAllowed = 'copy';
   event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'untangle-entity', entityType: type, entityId: id, name, image }));
@@ -568,7 +579,7 @@ function renderDashboard() {
     </div>
     <div class="stats-row">
       <div class="stat-card"><div class="number">${c.sessions.length}</div><div class="label">Sessions</div></div>
-      <div class="stat-card"><div class="number">${c.npcs.length}</div><div class="label">NPCs</div></div>
+      <div class="stat-card"><div class="number">${c.npcs.length}</div><div class="label">Characters</div></div>
       <div class="stat-card"><div class="number">${c.locations.length}</div><div class="label">Locations</div></div>
       <div class="stat-card"><div class="number">${activeThreads.length}</div><div class="label">Active Threads</div></div>
     </div>
@@ -602,16 +613,16 @@ function renderDashboard() {
       </div>
       <div class="card" style="grid-column:1/-1">
         <div class="flex-between" style="margin-bottom:16px">
-          <h3>${last ? `Last Session — ${esc(last.title)}` : 'NPCs'}</h3>
+          <h3>${last ? `Last Session — ${esc(last.title)}` : 'Characters'}</h3>
           <button class="btn btn-ghost btn-sm" onclick="navigate('npcs')">All characters →</button>
         </div>
         ${last ? (() => {
           const sessionNPCs = c.npcs.filter(n=>(n.sessions||[]).includes(last.id));
           const sessionLocs = c.locations.filter(l=>(l.sessionIds||[]).includes(last.id));
-          if (!sessionNPCs.length && !sessionLocs.length) return `<p class="text-dim text-sm">No tracked NPCs or locations for this session yet.</p>`;
+          if (!sessionNPCs.length && !sessionLocs.length) return `<p class="text-dim text-sm">No tracked characters or locations for this session yet.</p>`;
           return `
             ${sessionNPCs.length?`
-              <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">NPCs in this session</div>
+              <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Characters in this session</div>
               <div class="card-grid" style="margin-bottom:${sessionLocs.length?'20px':'0'}">
                 ${sessionNPCs.map(n=>`
                   <div class="card npc-card" onclick="openNPCModal('${n.id}')" style="padding:14px">
@@ -2097,6 +2108,34 @@ async function syncFoundryRollTables() {
       c.locationRollTableId = await _upsertRollTable(pgame, c.locationRollTableId, `Untangle — ${c.name} — Locations`, c.locations.map(l => l.name));
       count++;
     }
+
+    // "Who's here right now" — one table per Location, listing NPCs based
+    // there, for on-the-fly "who's hanging around the tavern" rolls.
+    if (!c.rollTableIdsByLocation) c.rollTableIdsByLocation = {};
+    for (const loc of c.locations) {
+      const names = c.npcs.filter(n => n.locationId === loc.id).map(n => n.name);
+      if (!names.length) continue;
+      c.rollTableIdsByLocation[loc.id] = await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle — ${c.name} — At ${loc.name}`, names);
+      count++;
+    }
+
+    // Random faction member — one table per Faction with tracked members.
+    if (!c.rollTableIdsByFaction) c.rollTableIdsByFaction = {};
+    for (const f of c.factions) {
+      const names = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)?.name).filter(Boolean);
+      if (!names.length) continue;
+      c.rollTableIdsByFaction[f.id] = await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle — ${c.name} — ${f.name} Members`, names);
+      count++;
+    }
+
+    // Rumors & Hooks — one table drawing from active/rumor Plot Threads, for
+    // "something's going on" improv moments.
+    const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
+    if (rumorThreads.length) {
+      c.rumorRollTableId = await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle — ${c.name} — Rumors & Hooks`, rumorThreads.map(t => t.title));
+      count++;
+    }
+
     save();
     toast(`Synced ${count} Roll Table${count!==1?'s':''} to Foundry — find them in the Rollable Tables sidebar.`, 'success');
   } catch (err) {
@@ -2116,11 +2155,14 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
     table = await pgame.tables.documentClass.create(toFoundryPlain({ name: tableName, formula: `1d${n}`, replacement: true, displayRoll: true, results: resultsData }));
   } else {
     // Replace results wholesale so the table always mirrors the current
-    // campaign list rather than accumulating stale/renamed entries.
+    // campaign list rather than accumulating stale/renamed entries. Also
+    // re-syncs the table's own name, since per-Location/per-Faction tables
+    // are now common enough that renaming the source Location/Faction
+    // (rather than just the campaign) is a routine thing to happen.
     const existingIds = table.results.map(r => r.id);
     if (existingIds.length) await table.deleteEmbeddedDocuments('TableResult', existingIds);
     if (resultsData.length) await table.createEmbeddedDocuments('TableResult', toFoundryPlain(resultsData));
-    await table.update(toFoundryPlain({ formula: `1d${n}` }));
+    await table.update(toFoundryPlain({ name: tableName, formula: `1d${n}` }));
   }
   return table.id;
 }
@@ -2271,7 +2313,7 @@ function renderNPCs() {
     const typeLabel = charTypeLabel(t);
     const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
     return `
-    <div class="card npc-card" onclick="openNPCModal('${n.id}')" draggable="true" ondragstart="onEntityDragStart(event,'npc','${n.id}')" title="Drag to the macro bar for a one-click jump" style="${n.status==='dead'?'opacity:0.6':''}">
+    <div class="card npc-card" onclick="openNPCModal('${n.id}')" ${dragToHotbarAttrs('npc', n.id)} style="${n.status==='dead'?'opacity:0.6':''}">
       <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
       <div style="font-weight:600;display:flex;align-items:center;gap:6px">
         ${showStatus?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}
@@ -3411,7 +3453,7 @@ function renderLocations() {
           const npcsHere = c.npcs.filter(n=>n.locationId===l.id);
           const sessionPills = (l.sessionIds||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" onclick="event.stopPropagation();openSessionModal('${s.id}')">S${s.number}</span>`:''}).join('');
           return `
-          <div class="card npc-card" onclick="openLocationModal('${l.id}')" draggable="true" ondragstart="onEntityDragStart(event,'location','${l.id}')" title="Drag to the macro bar for a one-click jump">
+          <div class="card npc-card" onclick="openLocationModal('${l.id}')" ${dragToHotbarAttrs('location', l.id)}>
             <div style="font-weight:600">${esc(l.name)}</div>
             ${l.description?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.5">${esc(l.description.slice(0,90))}${l.description.length>90?'…':''}</div>`:''}
             ${npcsHere.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${npcsHere.map(n=>`<span class="npc-chip" onclick="event.stopPropagation();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div>`:''}
@@ -3826,7 +3868,7 @@ function renderMaps() {
     ${c.maps.length===0
       ?`<div class="empty-state"><h3>No maps yet</h3><p>Upload a world map, city map, or dungeon layout, or link an existing Foundry Scene.<br>Pins link directly to NPCs and locations.</p></div>`
       :c.maps.map(m=>`
-        <div class="map-list-item" onclick="openMapView('${m.id}')">
+        <div class="map-list-item" onclick="openMapView('${m.id}')" ${dragToHotbarAttrs('map', m.id)}>
           <div>
             <div style="font-weight:600">${esc(m.name)}${m.sceneId?' <span class="text-xs text-dim">(Foundry Scene)</span>':''}</div>
             <div class="text-xs text-dim mt-4">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}</div>
@@ -4310,20 +4352,46 @@ function copyRecapText() {
 // active theme, since a dark theme printed as-is would waste ink.
 
 function openCampaignBibleModal() {
+  window._cbPlayerSafe = false;
+  renderCampaignBible();
+}
+
+// Player-safe mode hides exactly the fields already understood elsewhere in
+// this app as the GM's private read on things (Plot Thread "truth", Faction
+// "goals", NPC "motivation"), plus session key-events (which may capture
+// behind-the-scenes beats players didn't witness) — everything else
+// (descriptions, notes, session summaries) is treated as fair to hand out.
+function renderCampaignBible() {
+  document.getElementById('campaign-bible-print')?.remove();
   const c = camp();
+  const playerSafe = !!window._cbPlayerSafe;
   const activeFactions = c.factions.filter(f => (f.status||'active') !== 'defeated');
   const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned');
   const keyNpcs = c.npcs.filter(n => (n.type||'npc') !== 'pc' && n.status !== 'dead');
+  const sessionsInOrder = [...c.sessions].sort((a,b) => (a.number||0) - (b.number||0));
 
   const html = `
     <div id="campaign-bible-print">
       <div class="cb-toolbar">
+        <label class="cb-toolbar-check">
+          <input type="checkbox" style="width:auto" ${playerSafe?'checked':''} onchange="window._cbPlayerSafe=this.checked;renderCampaignBible()">
+          Player-safe version (hides GM secrets)
+        </label>
         <button class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
         <button class="btn btn-ghost" onclick="document.getElementById('campaign-bible-print').remove()">Close</button>
       </div>
       <div class="cb-page">
         <h1>${esc(c.name)}</h1>
-        <p class="cb-sub">Campaign bible — generated ${new Date().toLocaleDateString()}</p>
+        <p class="cb-sub">Campaign bible — generated ${new Date().toLocaleDateString()}${playerSafe?' · Player-safe version':''}</p>
+
+        ${sessionsInOrder.length?`
+        <h2>The Story So Far</h2>
+        ${sessionsInOrder.map(s => `
+          <div class="cb-entry">
+            <h3>Session ${s.number}${s.title?`: ${esc(s.title)}`:''}${s.date?` <span class="cb-tag">${esc(s.date)}</span>`:''}</h3>
+            ${s.summary?`<p>${esc(s.summary)}</p>`:''}
+            ${!playerSafe && s.keyEvents?.length?`<ul>${s.keyEvents.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`:''}
+          </div>`).join('')}` : ''}
 
         ${activeFactions.length?`
         <h2>Factions</h2>
@@ -4331,7 +4399,7 @@ function openCampaignBibleModal() {
           <div class="cb-entry">
             <h3>${esc(f.name)} <span class="cb-tag">${esc((FACTION_ATTITUDES.find(a=>a.value===f.attitude)||{}).label||'')}</span></h3>
             ${f.description?`<p>${esc(f.description)}</p>`:''}
-            ${f.goals?`<p><strong>Goals:</strong> ${esc(f.goals)}</p>`:''}
+            ${!playerSafe && f.goals?`<p><strong>Goals:</strong> ${esc(f.goals)}</p>`:''}
           </div>`).join('')}` : ''}
 
         ${activeThreads.length?`
@@ -4340,16 +4408,19 @@ function openCampaignBibleModal() {
           <div class="cb-entry">
             <h3>${esc(t.title)} <span class="cb-tag">${esc((THREAD_STATUSES.find(s=>s.value===t.status)||{}).label||'')}</span></h3>
             ${t.description?`<p>${esc(t.description)}</p>`:''}
-            ${t.truth?`<p><strong>GM Truth:</strong> ${esc(t.truth)}</p>`:''}
+            ${!playerSafe && t.truth?`<p><strong>GM Truth:</strong> ${esc(t.truth)}</p>`:''}
           </div>`).join('')}` : ''}
 
         ${keyNpcs.length?`
         <h2>Characters</h2>
         ${keyNpcs.map(n => `
-          <div class="cb-entry">
-            <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''}</h3>
-            ${n.motivation?`<p><strong>Wants:</strong> ${esc(n.motivation)}</p>`:''}
-            ${n.notes?`<p>${esc(n.notes)}</p>`:''}
+          <div class="cb-entry cb-entry-npc">
+            ${n.image?`<img class="cb-portrait" src="${esc(resolveFoundryImgSrc(n.image))}" alt="">`:''}
+            <div>
+              <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''}</h3>
+              ${!playerSafe && n.motivation?`<p><strong>Wants:</strong> ${esc(n.motivation)}</p>`:''}
+              ${n.notes?`<p>${esc(n.notes)}</p>`:''}
+            </div>
           </div>`).join('')}` : ''}
 
         ${c.locations.length?`
@@ -5282,7 +5353,7 @@ function renderPlotThreads() {
       `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;${n.image?'':`background:rgba(var(--accent-rgb),0.1);`}flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(n.name[0]||'?').toUpperCase()}</div>`
     ).join('');
     return `
-      <div class="card" onclick="openEditThreadModal('${t.id}')" draggable="true" ondragstart="onEntityDragStart(event,'thread','${t.id}')" title="Drag to the macro bar for a one-click jump" style="cursor:pointer;border-left:3px solid ${si.color}">
+      <div class="card" onclick="openEditThreadModal('${t.id}')" ${dragToHotbarAttrs('thread', t.id)} style="cursor:pointer;border-left:3px solid ${si.color}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px">${esc(t.title)}</div>
@@ -5490,7 +5561,7 @@ function renderFactions() {
     ).join('');
     const statSt = FACTION_STATUSES.find(s=>s.value===(f.status||'active'));
     return `
-      <div class="card faction-card" onclick="openFactionModal('${f.id}')" style="border-left:3px solid ${col}">
+      <div class="card faction-card" onclick="openFactionModal('${f.id}')" ${dragToHotbarAttrs('faction', f.id)} style="border-left:3px solid ${col}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
           <div>
             <div style="font-weight:600;font-size:0.95rem">${esc(f.name)}</div>
@@ -5650,7 +5721,7 @@ function renderClocks() {
     if (ck.linkedType === 'faction') linkedName = c.factions.find(f => f.id === ck.linkedId)?.name || '';
     if (ck.linkedType === 'thread') linkedName = c.plotThreads.find(t => t.id === ck.linkedId)?.title || '';
     return `
-      <div class="card" onclick="openEditClockModal('${ck.id}')" style="cursor:pointer">
+      <div class="card" onclick="openEditClockModal('${ck.id}')" ${dragToHotbarAttrs('clock', ck.id)} style="cursor:pointer">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
           <div style="font-weight:600;font-size:0.95rem">${esc(ck.label)}</div>
           <span class="text-xs text-dim">${ck.filled}/${ck.segments}</span>
@@ -6021,6 +6092,7 @@ verifyPatreonToken().then(() => renderNavLinks()); // re-check Patreon entitleme
 (function handlePendingNav() {
   const nav = consumePendingNav();
   if (!nav) return;
+  if (nav.type === 'map') { if (nav.id) openMapView(nav.id); return; } // sets the map + navigates in one call, doesn't fit the page/openFn pattern below
   const PAGE_BY_TYPE = { npc: 'npcs', location: 'locations', thread: 'threads', faction: 'factions', clock: 'clocks' };
   const OPEN_FN_BY_TYPE = { npc: 'openNPCModal', location: 'openLocationModal', thread: 'openEditThreadModal', faction: 'openFactionModal', clock: 'openEditClockModal' };
   const page = PAGE_BY_TYPE[nav.type];

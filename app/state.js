@@ -319,12 +319,12 @@ const FEATURE_REGISTRY = [
   { key: 'globalSearch',      label: 'Search',                    category: 'Tools',               premium: false },
   { key: 'nameGenerator',     label: 'Name Generator',            category: 'Tools',               premium: false },
   { key: 'voiceDictation',    label: 'Voice Dictation',           category: 'Tools',               premium: false },
-  { key: 'campaignBible',     label: 'Printable Campaign Bible',  category: 'Tools',               premium: false },
-  { key: 'rollTableSync',     label: 'Roll Table Sync',           category: 'Tools',               premium: false },
-  { key: 'postToJournal',     label: 'Post to Journal',           category: 'Tools',               premium: false },
+  { key: 'campaignBible',     label: 'Printable Campaign Bible',  category: 'Tools',               premium: true  },
+  { key: 'rollTableSync',     label: 'Roll Table Sync',           category: 'Tools',               premium: true  },
+  { key: 'postToJournal',     label: 'Post to Journal',           category: 'Tools',               premium: true  },
   { key: 'pullFromFoundry',   label: 'Pull from Foundry',         category: 'Tools',               premium: false },
   { key: 'hoverTokenTooltip', label: 'Hover Token Tooltip',       category: 'Foundry Integration', premium: false },
-  { key: 'hotbarMacros',      label: 'Drag-to-Hotbar Macros',     category: 'Foundry Integration', premium: false },
+  { key: 'hotbarMacros',      label: 'Drag-to-Hotbar Macros',     category: 'Foundry Integration', premium: true  },
   { key: 'addToUntangleButton', label: '"Add to Untangle" Button', category: 'Foundry Integration', premium: false },
   { key: 'simpleCalendar',    label: 'Simple Calendar Integration', category: 'Foundry Integration', premium: false },
 ];
@@ -393,7 +393,21 @@ function base64urlToUint8Array(b64url) {
 // so callers use the sync isPatreonEntitled() below for actual gating, and
 // only call this once on load (and right after saving a new token) to keep
 // that cache fresh.
+//
+// Also mirrors the result into localStorage (shared same-origin with the
+// top Foundry window, same mechanism as cp_v1/cp_pending_nav) so
+// scripts/main.js — which runs outside this iframe and can't call this
+// function or do its own async crypto verify inside a synchronous hook
+// guard — can cheaply read a premium feature's entitlement without
+// re-verifying the token itself. Missing/stale cache reads as "not
+// entitled," which is the safe default for a goodwill gate.
 async function verifyPatreonToken() {
+  const result = await _verifyPatreonTokenInner();
+  try { localStorage.setItem('cp_patreon_entitled', result ? '1' : '0'); } catch { /* ignore */ }
+  return result;
+}
+
+async function _verifyPatreonTokenInner() {
   _patreonEntitled = false;
   _patreonExpiry = 0;
   if (!PATREON_PUBLIC_JWK) return false;

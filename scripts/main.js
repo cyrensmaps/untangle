@@ -401,16 +401,32 @@ Hooks.on('renderJournalDirectory', (_app, html) => {
 // already uses for export/import/clear — no need for the planner iframe
 // to be open.
 
+// Which of the three features gated from this top-window script are
+// premium — keep this in sync with the `premium` flags on the matching
+// entries in FEATURE_REGISTRY, app/state.js.
+const PREMIUM_FEATURES_MAIN = new Set(['hotbarMacros']);
+
+// Synchronous read of the Patreon-entitlement cache app/state.js's
+// verifyPatreonToken() mirrors into localStorage (shared same-origin with
+// the iframe, same mechanism as cp_v1/cp_pending_nav). This script can't
+// call verifyPatreonToken() itself (different JS scope than the iframe) or
+// do its own async crypto verify inside a synchronous hook guard, so it
+// trusts whatever the iframe last verified. Missing/stale reads as "not
+// entitled" — the safe default for a goodwill gate, not a hard blocker.
+function _isPatreonEntitledMain() {
+  try { return localStorage.getItem('cp_patreon_entitled') === '1'; } catch { return false; }
+}
+
 // Mirrors app/state.js's isFeatureEnabled() for the handful of features that
 // live in this top-window script rather than the iframe app — same
 // featureToggles world setting, just read directly since main.js has no
-// access to the iframe's JS scope. None of these three are ever premium, so
-// (unlike the iframe version) there's no Patreon-entitlement check to make.
+// access to the iframe's JS scope.
 function _isFeatureEnabledMain(key) {
   try {
     const toggles = game.settings.get(MODULE_ID, 'featureToggles') || {};
-    return toggles[key] !== false;
+    if (toggles[key] === false) return false;
   } catch { return true; }
+  return !PREMIUM_FEATURES_MAIN.has(key) || _isPatreonEntitledMain();
 }
 
 function _stripHtmlMain(html) {
@@ -542,11 +558,21 @@ Hooks.on('hoverToken', (token, hovered) => {
 Hooks.on('canvasPan', _removeTokenTooltip);
 Hooks.on('canvasReady', _removeTokenTooltip);
 
-// ── Drag an NPC/Location/Thread card to the hotbar for a one-click jump ──
+// ── Drag a card (NPC/Location/Thread/Faction/Clock/Map) to the hotbar for a
+// one-click jump ──
 // The card's dragstart (app/index.html) sets a custom
 // { type: 'untangle-entity', entityType, entityId, name, image } payload via
 // dataTransfer — Foundry's TextEditor.getDragEventData parses it and passes
 // it straight to this hook as `data`.
+const HOTBAR_FALLBACK_ICON = {
+  npc: 'icons/svg/mystery-man.svg',
+  location: 'icons/svg/village.svg',
+  thread: 'icons/svg/book.svg',
+  faction: 'icons/svg/statue.svg',
+  clock: 'icons/svg/clockwork.svg',
+  map: 'icons/svg/map.svg',
+};
+
 Hooks.on('hotbarDrop', (_bar, data, slot) => {
   if (!game.user.isGM || data?.type !== 'untangle-entity' || !_isFeatureEnabledMain('hotbarMacros')) return;
   const { entityType, entityId, name, image } = data;
@@ -560,7 +586,7 @@ Hooks.on('hotbarDrop', (_bar, data, slot) => {
           type: 'script',
           scope: 'global',
           command,
-          img: image || (entityType === 'npc' ? 'icons/svg/mystery-man.svg' : 'icons/svg/book.svg'),
+          img: image || HOTBAR_FALLBACK_ICON[entityType] || 'icons/svg/book.svg',
         });
         await macro.setFlag(MODULE_ID, 'entityId', entityId);
         await macro.setFlag(MODULE_ID, 'entityType', entityType);

@@ -4,6 +4,22 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.7.0]
+
+### Added
+- **First Patreon-gated premium features**: Printable Campaign Bible, Roll Table Sync, Post to Journal, and Drag-to-Hotbar Macros now require an active Patreon pledge linked in Untangle Settings. Everything else stays free — including Hover Token Tooltip and Simple Calendar, and any future integration with another Foundry module, by standing policy.
+- Campaign Bible: a "Player-safe version" toggle that hides GM-only fields (Plot Thread truths, Faction goals, NPC motivations, session key-events), a new "The Story So Far" chapter listing every session in order, and NPC portraits.
+- Roll Table Sync: per-Location "who's here right now" tables, per-Faction member tables, and a "Rumors & Hooks" table built from active/rumor Plot Threads.
+- Drag-to-Hotbar Macros now also works for Factions, Clocks, and Maps (previously only Characters, Locations, and Plot Threads), each with its own fallback macro icon.
+
+### Changed
+- Dashboard's "NPCs" stat and related labels renamed to "Characters," since the count always included Player Characters too.
+- Roll Table sync now also re-syncs a table's Foundry-visible name on every sync, not just its results — matters more now that Location/Faction tables exist, since renaming one of those is more common than renaming the whole campaign.
+
+### Fixed
+- The Patreon entitlement check for the three features gated from `scripts/main.js` (only Drag-to-Hotbar Macros currently) only ever checked the manual on/off toggle, never actual Patreon entitlement, since it was written before any feature was premium. Non-entitled GMs would have kept getting a working feature. Fixed via a small cross-context entitlement cache.
+- The drag-to-hotbar handles themselves are now hidden for non-entitled GMs, rather than left draggable-looking while silently doing nothing on drop.
+
 ## [1.6.1]
 
 ### Fixed
