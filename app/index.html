@@ -201,9 +201,16 @@
     .map-list-item:hover { border-color: var(--border-hover); }
 
     /* ── TIMELINE ── */
-    .timeline-session { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; }
-    .timeline-session-hd { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
-    .timeline-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 14px; }
+    .timeline-track { position: relative; margin: 20px 0 60px; }
+    .timeline-spine { position: absolute; left: 50%; top: 0; bottom: 0; width: 6px; margin-left: -3px; background: var(--border); border-radius: 3px; cursor: copy; }
+    .timeline-node { position: absolute; left: 50%; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); box-shadow: 0 0 0 2px var(--accent); cursor: grab; z-index: 2; }
+    .timeline-node:active { cursor: grabbing; }
+    .timeline-node.tl-node-event { background: var(--bg-elevated); box-shadow: 0 0 0 2px var(--text-dim); }
+    .timeline-connector { position: absolute; top: 9px; height: 2px; background: var(--border); }
+    .timeline-box { position: absolute; width: calc(50% - 60px); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; cursor: pointer; transition: border-color 0.15s; }
+    .timeline-box:hover { border-color: var(--border-hover); }
+    .timeline-box.tl-box-left { right: calc(50% + 30px); text-align: right; }
+    .timeline-box.tl-box-right { left: calc(50% + 30px); }
     .tl-chip { padding: 3px 10px; border-radius: 12px; font-size: 0.73rem; cursor: pointer; border: 1px solid; transition: opacity 0.15s; }
     .tl-chip:hover { opacity: 0.8; }
     .tl-chip-npc { background: rgba(var(--accent-rgb),0.1); border-color: rgba(var(--accent-rgb),0.25); color: var(--accent); }
@@ -256,7 +263,6 @@
     #campaign-bible-print .cb-entry h3 { font-size: 1rem; margin-bottom: 3px; }
     #campaign-bible-print .cb-entry p { font-size: 0.92rem; margin: 2px 0; }
     #campaign-bible-print .cb-tag { font-family: var(--font); font-size: 0.7rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
-    #campaign-bible-print .cb-clock { font-size: 0.92rem; margin: 2px 0; }
     @media print {
       body > *:not(#campaign-bible-print) { display: none !important; }
       #campaign-bible-print { position: static; }
@@ -284,29 +290,7 @@
     </div>
   </div>
 
-  <button class="nav-btn" onclick="openSearchModal()" id="nav-search">Search <span class="text-dim" style="margin-left:auto;font-size:0.65rem">/</span></button>
-  <button class="nav-btn" onclick="navigate('dashboard')" id="nav-dashboard">Dashboard</button>
-
-  <div class="nav-section">At the Table</div>
-  <button class="nav-btn" onclick="navigate('prep')" id="nav-prep">Session Prep</button>
-  <button class="nav-btn" onclick="navigate('sessions')" id="nav-sessions">Sessions</button>
-  <button class="nav-btn" onclick="navigate('timeline')" id="nav-timeline">Timeline</button>
-
-  <div class="nav-section">World</div>
-  <button class="nav-btn" onclick="navigate('npcs')" id="nav-npcs">Characters</button>
-  <button class="nav-btn" onclick="navigate('factions')" id="nav-factions">Factions</button>
-  <button class="nav-btn" onclick="navigate('locations')" id="nav-locations">Locations</button>
-  <button class="nav-btn" onclick="navigate('maps')" id="nav-maps">Maps</button>
-
-  <div class="nav-section">Story</div>
-  <button class="nav-btn" onclick="navigate('threads')" id="nav-threads">Plot Threads</button>
-  <button class="nav-btn" onclick="navigate('clocks')" id="nav-clocks">Clocks</button>
-  <button class="nav-btn" onclick="navigate('web')" id="nav-web">Relationships</button>
-  <button class="nav-btn" onclick="navigate('fieldnotes')" id="nav-fieldnotes">Field Notes</button>
-
-  <div class="nav-spacer"></div>
-  <hr class="nav-divider">
-  <button class="nav-btn" onclick="navigate('settings')" id="nav-settings">Settings</button>
+  <div id="nav-links"></div>
 </nav>
 
 <main id="main-content"></main>
@@ -332,6 +316,7 @@ state.campaigns.forEach(c => {
   if (!c.factions) c.factions = [];
   if (!c.factionPositions) c.factionPositions = {};
   if (!c.clocks) c.clocks = [];
+  if (!c.timelineEvents) c.timelineEvents = [];
   if (!c.sessionPrep) c.sessionPrep = { notes: '', scenes: [], questions: [] };
   // Migrate hooks → plotThreads
   if (c.hooks.length) {
@@ -424,8 +409,9 @@ function onEntityDragStart(event, type, id) {
   const finder = { npc: c.npcs, location: c.locations, thread: c.plotThreads, faction: c.factions }[type];
   const entity = finder?.find(x => x.id === id);
   const name = entity ? (entity.name || entity.title || '') : '';
+  const image = (type === 'npc' && entity?.image) ? entity.image : '';
   event.dataTransfer.effectAllowed = 'copy';
-  event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'untangle-entity', entityType: type, entityId: id, name }));
+  event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'untangle-entity', entityType: type, entityId: id, name, image }));
 }
 
 // ═══════════════════════════════════════════════
@@ -503,12 +489,50 @@ function createCampaign() {
 
 let view = 'dashboard';
 
+// Nav entries that aren't core (Dashboard/Sessions/Characters/Factions/
+// Locations/Plot Threads/Settings are always shown) — each maps to a
+// FEATURE_REGISTRY key in state.js so isFeatureEnabled() can hide it.
+// Sections aren't conditionally hidden since every section keeps at least
+// one core item.
+const NAV_LINKS = [
+  { id: 'search',     feature: 'globalSearch',    html: `<button class="nav-btn" onclick="openSearchModal()" id="nav-search">Search <span class="text-dim" style="margin-left:auto;font-size:0.65rem">/</span></button>` },
+  { id: 'dashboard',  feature: null,              html: `<button class="nav-btn" onclick="navigate('dashboard')" id="nav-dashboard">Dashboard</button>` },
+  { section: 'At the Table' },
+  { id: 'prep',       feature: 'sessionPrep',     html: `<button class="nav-btn" onclick="navigate('prep')" id="nav-prep">Session Prep</button>` },
+  { id: 'sessions',   feature: null,              html: `<button class="nav-btn" onclick="navigate('sessions')" id="nav-sessions">Sessions</button>` },
+  { id: 'timeline',   feature: 'timeline',        html: `<button class="nav-btn" onclick="navigate('timeline')" id="nav-timeline">Timeline</button>` },
+  { section: 'World' },
+  { id: 'npcs',       feature: null,              html: `<button class="nav-btn" onclick="navigate('npcs')" id="nav-npcs">Characters</button>` },
+  { id: 'factions',   feature: null,              html: `<button class="nav-btn" onclick="navigate('factions')" id="nav-factions">Factions</button>` },
+  { id: 'locations',  feature: null,              html: `<button class="nav-btn" onclick="navigate('locations')" id="nav-locations">Locations</button>` },
+  { id: 'maps',       feature: 'maps',            html: `<button class="nav-btn" onclick="navigate('maps')" id="nav-maps">Maps</button>` },
+  { section: 'Story' },
+  { id: 'threads',    feature: null,              html: `<button class="nav-btn" onclick="navigate('threads')" id="nav-threads">Plot Threads</button>` },
+  { id: 'clocks',     feature: 'clocks',          html: `<button class="nav-btn" onclick="navigate('clocks')" id="nav-clocks">Clocks</button>` },
+  { id: 'web',        feature: 'relationshipWeb', html: `<button class="nav-btn" onclick="navigate('web')" id="nav-web">Relationships</button>` },
+  { id: 'fieldnotes', feature: 'fieldNotes',      html: `<button class="nav-btn" onclick="navigate('fieldnotes')" id="nav-fieldnotes">Field Notes</button>` },
+];
+
+function renderNavLinks() {
+  const parts = NAV_LINKS
+    .filter(entry => entry.section || isFeatureEnabled(entry.feature))
+    .map((entry, i, arr) => entry.section ? `<div class="nav-section">${esc(entry.section)}</div>` : entry.html);
+  parts.push(`<div class="nav-spacer"></div><hr class="nav-divider"><button class="nav-btn" onclick="navigate('settings')" id="nav-settings">Settings</button>`);
+  document.getElementById('nav-links').innerHTML = parts.join('');
+  const btn = document.getElementById('nav-' + view);
+  if (btn) btn.classList.add('active');
+}
+
+// If a view was navigated to (or left active from before a feature was
+// toggled off) while its feature is now disabled, fall back to the dashboard
+// rather than rendering a page whose nav entry no longer exists.
+const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes' };
+
 function navigate(v) {
+  if (VIEW_FEATURE[v] && !isFeatureEnabled(VIEW_FEATURE[v])) v = 'dashboard';
   view = v;
   window._audioFile = null; // clear audio selection on navigation
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('nav-' + v);
-  if (btn) btn.classList.add('active');
+  renderNavLinks();
   render();
 }
 
@@ -516,6 +540,7 @@ function render() {
   const main = document.getElementById('main-content');
   document.getElementById('nav-campaign-name').textContent = camp().name;
   const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings };
+  if (VIEW_FEATURE[view] && !isFeatureEnabled(VIEW_FEATURE[view])) { view = 'dashboard'; renderNavLinks(); }
   if (view === 'prep') {
     window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes || []));
     window._prepQuestions = JSON.parse(JSON.stringify(camp().sessionPrep?.questions || []));
@@ -523,6 +548,7 @@ function render() {
   main.innerHTML = (views[view] || renderDashboard)();
   if (view === 'session-new') { bindAudioDrop(); bindLocalDrop(); }
   if (view === 'web') setupRelationshipWebEvents();
+  if (view === 'timeline') setupTimelineEvents();
 }
 
 // ═══════════════════════════════════════════════
@@ -564,7 +590,7 @@ function renderDashboard() {
         <div class="flex-between" style="margin-bottom:16px">
           <h3>Last Session</h3>
           <div class="flex gap-8">
-            ${last ? `<button class="btn btn-ghost btn-sm" onclick="openRecapModal()">Recap</button>` : ''}
+            ${last && isFeatureEnabled('recap') ? `<button class="btn btn-ghost btn-sm" onclick="openRecapModal()">Recap</button>` : ''}
             ${last ? `<button class="btn btn-ghost btn-sm" onclick="navigate('sessions')">All →</button>` : ''}
           </div>
         </div>
@@ -647,7 +673,11 @@ window._audioFile = null;
 // defensive and fails quietly (hiding the button) rather than breaking
 // session logging if the API doesn't match what's expected.
 function simpleCalendarActive() {
-  try { return !!window.parent?.game?.modules?.get('foundryvtt-simple-calendar')?.active && !!window.parent?.SimpleCalendar?.api; }
+  // Checks for the global API surface rather than a specific module ID, so
+  // this works with both the original Simple Calendar and forks like
+  // Simple Calendar Reborn (Foundry v13) that use a different module ID
+  // but keep the same window.SimpleCalendar.api for compatibility.
+  try { return !!window.parent?.SimpleCalendar?.api; }
   catch { return false; }
 }
 
@@ -689,7 +719,7 @@ function renderNewSession() {
         <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8">
           <input type="text" id="s-inworld-date" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
-          ${simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('s-inworld-date')">Pull from Calendar</button>`:''}
+          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('s-inworld-date')">Pull from Calendar</button>`:''}
         </div>
       </div>
 
@@ -1989,7 +2019,7 @@ function openSessionModal(id) {
       <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
         <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')">Delete</button>
         ${s.rawTranscript ? `<button class="btn btn-ghost" onclick="reanalyseSession('${s.id}')">Re-analyse with AI</button>` : ''}
-        <button class="btn btn-ghost" onclick="postSessionToJournal('${s.id}')">Post to Journal</button>
+        ${isFeatureEnabled('postToJournal')?`<button class="btn btn-ghost" onclick="postSessionToJournal('${s.id}')">Post to Journal</button>`:''}
         <button class="btn btn-ghost" onclick="openEditSessionModal('${s.id}')">Edit</button>
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
       </div>
@@ -2050,11 +2080,21 @@ async function syncFoundryRollTables() {
   try {
     let count = 0;
     if (c.npcs.length) {
-      await _syncOneRollTable(pgame, c, 'npcRollTableId', `Untangle — ${c.name} — NPCs`, c.npcs.map(n => n.name));
+      c.npcRollTableId = await _upsertRollTable(pgame, c.npcRollTableId, `Untangle — ${c.name} — All Characters`, c.npcs.map(n => n.name));
+      count++;
+    }
+    // One table per character type group too (Player Characters, Enemies,
+    // Contacts, etc — same grouping already used on the Characters page),
+    // so "roll on the enemies table" is possible without pulling in PCs.
+    if (!c.rollTableIdsByGroup) c.rollTableIdsByGroup = {};
+    for (const group of TYPE_GROUPS) {
+      const names = c.npcs.filter(n => group.types.includes(n.type || 'npc')).map(n => n.name);
+      if (!names.length) continue;
+      c.rollTableIdsByGroup[group.label] = await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle — ${c.name} — ${group.label}`, names);
       count++;
     }
     if (c.locations.length) {
-      await _syncOneRollTable(pgame, c, 'locationRollTableId', `Untangle — ${c.name} — Locations`, c.locations.map(l => l.name));
+      c.locationRollTableId = await _upsertRollTable(pgame, c.locationRollTableId, `Untangle — ${c.name} — Locations`, c.locations.map(l => l.name));
       count++;
     }
     save();
@@ -2064,8 +2104,8 @@ async function syncFoundryRollTables() {
   }
 }
 
-async function _syncOneRollTable(pgame, c, idField, tableName, names) {
-  let table = c[idField] ? pgame.tables.get(c[idField]) : null;
+async function _upsertRollTable(pgame, existingId, tableName, names) {
+  let table = existingId ? pgame.tables.get(existingId) : null;
   if (!table) table = pgame.tables.find(t => t.name === tableName);
 
   const n = names.length;
@@ -2082,7 +2122,7 @@ async function _syncOneRollTable(pgame, c, idField, tableName, names) {
     if (resultsData.length) await table.createEmbeddedDocuments('TableResult', toFoundryPlain(resultsData));
     await table.update(toFoundryPlain({ formula: `1d${n}` }));
   }
-  c[idField] = table.id;
+  return table.id;
 }
 
 function openEditSessionModal(id) {
@@ -2105,7 +2145,7 @@ function openEditSessionModal(id) {
         <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8">
           <input type="text" id="es-inworld-date" value="${esc(s.inWorldDate||'')}" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
-          ${simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('es-inworld-date')">Pull from Calendar</button>`:''}
+          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('es-inworld-date')">Pull from Calendar</button>`:''}
         </div>
       </div>
       <div class="form-group"><label>Summary</label><textarea id="es-summary" rows="3" placeholder="What happened this session…">${esc(s.summary||'')}</textarea></div>
@@ -2208,11 +2248,13 @@ const TYPE_GROUPS = [
   { label: 'NPCs',                types: ['npc','neutral'],            tint: null      },
   { label: 'Enemies',             types: ['enemy','villain'],          tint: '#7a2020' },
   { label: 'Deities',             types: ['deity'],                    tint: '#a07820' },
+  { label: 'Settlements & Cities',types: ['settlement','city'],        tint: '#6b5638' },
   { label: 'Unknown',             types: ['unknown'],                  tint: '#555'    },
 ];
 const TYPE_BADGE = {
   pc:'#5a3fa0', ally:'#2a6e4a', companion:'#2a6e4a', contact:'#2c5f7a',
-  npc:null, neutral:'#555', enemy:'#7a2020', villain:'#7a2020', deity:'#a07820', unknown:'#555',
+  npc:null, neutral:'#555', enemy:'#7a2020', villain:'#7a2020', deity:'#a07820',
+  settlement:'#6b5638', city:'#6b5638', unknown:'#555',
 };
 
 function renderNPCs() {
@@ -2266,7 +2308,7 @@ function renderNPCs() {
   if (c.npcs.length === 0) {
     return `<div class="page-header"><div><h2>Characters</h2><p class="subtitle">0 characters</p></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>
+        ${isFeatureEnabled('pullFromFoundry')?`<button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>`:''}
         <button class="btn btn-primary" onclick="openAddNPC()">+ Add</button>
       </div>
     </div>
@@ -2280,8 +2322,8 @@ function renderNPCs() {
     <div class="page-header">
       <div><h2>Characters</h2><p class="subtitle">${c.npcs.length} total · ${totalPCs} PC${totalPCs!==1?'s':''}, ${totalNonPC} NPC${totalNonPC!==1?'s':''}</p></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="openNameGeneratorModal()">Names</button>
-        <button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>
+        ${isFeatureEnabled('nameGenerator')?`<button class="btn btn-ghost" onclick="openNameGeneratorModal()">Names</button>`:''}
+        ${isFeatureEnabled('pullFromFoundry')?`<button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>`:''}
         ${c.npcs.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateCharacters()">Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddNPC()">+ Add</button>
       </div>
@@ -2384,6 +2426,8 @@ const CHAR_TYPES = [
   { value: 'enemy',      label: 'Enemy'                  },
   { value: 'villain',    label: 'Villain'                },
   { value: 'deity',      label: 'Deity'                  },
+  { value: 'settlement', label: 'Settlement'             },
+  { value: 'city',       label: 'City'                   },
   { value: 'unknown',   label: 'Unknown / Mysterious'   },
 ];
 function charTypeLabel(t) { return (CHAR_TYPES.find(x=>x.value===t)||{label:'NPC'}).label; }
@@ -3036,9 +3080,9 @@ function openNPCModal(id) {
           </div>
         </div>`;
       })() : ''}
-      <div class="form-group" style="display:flex;justify-content:flex-end">
+      ${isFeatureEnabled('relationshipWeb')?`<div class="form-group" style="display:flex;justify-content:flex-end">
         <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove();openSparkModal('npc','${n.id}')">Spark a Connection…</button>
-      </div>
+      </div>`:''}
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <label style="margin:0">Voice Description</label>
@@ -3472,39 +3516,259 @@ async function deleteLocation(id) {
 // TIMELINE
 // ═══════════════════════════════════════════════
 
+const TIMELINE_GAP = 140;     // px between auto-placed nodes, top to bottom
+const TIMELINE_MIN_GAP = 50;  // px minimum spacing enforced while dragging (the "stoppers")
+
 function renderTimeline() {
   const c = camp();
-  const sorted = [...c.sessions].sort((a,b) => a.number - b.number);
+  if (!c.timelineEvents) c.timelineEvents = [];
+
+  const nodes = [
+    ...c.sessions.map(s => ({ kind: 'session', id: s.id, ref: s })),
+    ...c.timelineEvents.map(ev => ({ kind: 'event', id: ev.id, ref: ev })),
+  ];
+
+  if (!nodes.length) {
+    return `
+      <div class="page-header">
+        <div><h2>Timeline</h2><p class="subtitle">When did everything happen?</p></div>
+      </div>
+      <div class="empty-state"><h3>Nothing here yet</h3><p>Log your first session, or click below once you have one, to start building your timeline.</p></div>`;
+  }
+
+  // Auto-assign a position to anything that doesn't have one yet (new
+  // sessions, freshly-added freeform entries) — it lands at the bottom,
+  // the natural place for "the newest thing" — then persists immediately
+  // so the position is sticky from then on.
+  let maxPos = 0;
+  nodes.forEach(n => {
+    const pos = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
+    if (typeof pos === 'number' && pos > maxPos) maxPos = pos;
+  });
+  let changed = false;
+  nodes.forEach(n => {
+    const hasPos = typeof (n.kind === 'session' ? n.ref.timelinePosition : n.ref.position) === 'number';
+    if (!hasPos) {
+      maxPos += TIMELINE_GAP;
+      if (n.kind === 'session') n.ref.timelinePosition = maxPos; else n.ref.position = maxPos;
+      changed = true;
+    }
+  });
+  if (changed) save();
+
+  nodes.forEach(n => { n.position = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position; });
+  nodes.sort((a, b) => a.position - b.position);
+
+  const trackHeight = Math.max(400, maxPos + 160);
+
+  const html = nodes.map((n, i) => {
+    const side = i % 2 === 0 ? 'left' : 'right';
+    const top = n.position;
+    let boxContent, openFn, nodeClass = 'timeline-node';
+
+    if (n.kind === 'session') {
+      const s = n.ref;
+      const npcsInSession = c.npcs.filter(x => (x.sessions||[]).includes(s.id));
+      const locsInSession = c.locations.filter(x => (x.sessionIds||[]).includes(s.id));
+      openFn = `openSessionModal('${s.id}')`;
+      boxContent = `
+        <div style="font-weight:600">${esc(s.title)}</div>
+        <div class="text-xs text-dim mt-4">${esc(s.date)} · Session ${s.number}${s.inWorldDate?` · ${esc(s.inWorldDate)}`:''}</div>
+        ${s.summary?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.6">${esc(s.summary.slice(0,180))}${s.summary.length>180?'…':''}</div>`:''}
+        ${(npcsInSession.length||locsInSession.length)?`<div class="text-xs text-dim" style="margin-top:8px">${npcsInSession.length} NPC${npcsInSession.length!==1?'s':''} · ${locsInSession.length} location${locsInSession.length!==1?'s':''}</div>`:''}`;
+    } else {
+      const ev = n.ref;
+      nodeClass += ' tl-node-event';
+      openFn = `openTimelineEventModal('${ev.id}')`;
+      boxContent = `
+        <div style="font-weight:600">${esc(ev.title)}</div>
+        ${ev.text?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.6">${esc(ev.text.slice(0,180))}${ev.text.length>180?'…':''}</div>`:''}`;
+    }
+
+    const connectorStyle = side === 'left' ? 'right:50%;width:calc(50% - 40px);' : 'left:50%;width:calc(50% - 40px);';
+    const dataAttrs = `data-node-kind="${n.kind}" data-node-id="${n.id}"`;
+
+    return `
+      <div class="${nodeClass}" style="top:${top-10}px" ${dataAttrs}></div>
+      <div class="timeline-connector" style="top:${top-1}px;${connectorStyle}" ${dataAttrs}></div>
+      <div class="timeline-box tl-box-${side}" style="top:${top-14}px" ${dataAttrs} onclick="${openFn}">${boxContent}</div>`;
+  }).join('');
+
   return `
     <div class="page-header">
-      <div><h2>Timeline</h2><p class="subtitle">When did everything happen?</p></div>
+      <div><h2>Timeline</h2><p class="subtitle">Click the spine to add an entry · drag a circle to reposition it</p></div>
     </div>
-    ${sorted.length===0
-      ?`<div class="empty-state"><h3>No sessions yet</h3><p>Process your first session and NPCs and locations will appear here grouped by when they appeared.</p></div>`
-      :sorted.map(s=>{
-          const npcsInSession = c.npcs.filter(n=>(n.sessions||[]).includes(s.id));
-          const locsInSession = c.locations.filter(l=>(l.sessionIds||[]).includes(s.id));
-          const hasEntities = npcsInSession.length || locsInSession.length;
-          return `
-          <div class="timeline-session">
-            <div class="timeline-session-hd">
-              <div>
-                <div style="font-weight:600">${esc(s.title)}</div>
-                <div class="text-xs text-dim mt-4">${esc(s.date)} · Session ${s.number}${s.inWorldDate?` · ${esc(s.inWorldDate)}`:''}</div>
-              </div>
-              <div class="flex gap-8" style="align-items:center">
-                <span class="text-xs text-dim">${npcsInSession.length} NPC${npcsInSession.length!==1?'s':''} · ${locsInSession.length} location${locsInSession.length!==1?'s':''}</span>
-                <button class="btn btn-ghost btn-sm" onclick="openSessionModal('${s.id}')">Notes</button>
-              </div>
-            </div>
-            ${s.summary?`<div class="text-sm text-dim" style="padding:0 20px 14px;line-height:1.7">${esc(s.summary)}</div>`:''}
-            ${hasEntities?`
-            <div class="timeline-chips">
-              ${npcsInSession.map(n=>`<span class="tl-chip tl-chip-npc" onclick="openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}
-              ${locsInSession.map(l=>`<span class="tl-chip tl-chip-loc" onclick="openLocationModal('${l.id}')">${esc(l.name)}</span>`).join('')}
-            </div>`:`<div class="text-xs text-dim" style="padding:0 20px 14px">No tracked entities for this session yet.</div>`}
-          </div>`;
-        }).join('')}`;
+    <div class="timeline-track" id="timeline-track" style="height:${trackHeight}px">
+      <div class="timeline-spine" id="timeline-spine" style="height:${trackHeight}px" onclick="handleTimelineSpineClick(event)"></div>
+      ${html}
+    </div>`;
+}
+
+function handleTimelineSpineClick(e) {
+  const track = document.getElementById('timeline-track');
+  if (!track) return;
+  const rect = track.getBoundingClientRect();
+  const y = Math.max(20, e.clientY - rect.top);
+  openAddTimelineEventModal(y);
+}
+
+let _tlDrag = null;
+let _tlMouseMoveHandler = null;
+let _tlMouseUpHandler = null;
+
+function setupTimelineEvents() {
+  const track = document.getElementById('timeline-track');
+  if (!track) return;
+
+  // Clean up any listeners from a previous render of this page before
+  // adding new ones, since document-level listeners otherwise pile up
+  // every time the Timeline page re-renders.
+  if (_tlMouseMoveHandler) document.removeEventListener('mousemove', _tlMouseMoveHandler);
+  if (_tlMouseUpHandler) document.removeEventListener('mouseup', _tlMouseUpHandler);
+
+  track.querySelectorAll('.timeline-node').forEach(node => {
+    node.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const kind = node.dataset.nodeKind;
+      const id = node.dataset.nodeId;
+      const c = camp();
+      const ref = kind === 'session' ? c.sessions.find(s=>s.id===id) : c.timelineEvents.find(x=>x.id===id);
+      if (!ref) return;
+      const startPos = kind === 'session' ? ref.timelinePosition : ref.position;
+      const connectorEl = track.querySelector(`.timeline-connector[data-node-kind="${kind}"][data-node-id="${id}"]`);
+      const boxEl = track.querySelector(`.timeline-box[data-node-kind="${kind}"][data-node-id="${id}"]`);
+      _tlDrag = { kind, id, startY: e.clientY, startPos, moved: false, nodeEl: node, connectorEl, boxEl };
+    });
+  });
+
+  _tlMouseMoveHandler = e => {
+    if (!_tlDrag) return;
+    const dy = e.clientY - _tlDrag.startY;
+    if (Math.abs(dy) > 3) _tlDrag.moved = true;
+    if (!_tlDrag.moved) return;
+
+    const c = camp();
+    const nodes = [
+      ...c.sessions.map(s => ({ kind:'session', id:s.id, position:s.timelinePosition })),
+      ...(c.timelineEvents||[]).map(ev => ({ kind:'event', id:ev.id, position:ev.position })),
+    ].sort((a,b) => a.position - b.position);
+    const idx = nodes.findIndex(n => n.kind === _tlDrag.kind && n.id === _tlDrag.id);
+    const prev = nodes[idx - 1];
+    const next = nodes[idx + 1];
+    const trackEl = document.getElementById('timeline-track');
+    const trackHeight = trackEl ? trackEl.offsetHeight : 100000;
+
+    const lowerBound = prev ? prev.position + TIMELINE_MIN_GAP : 20;
+    const upperBound = next ? next.position - TIMELINE_MIN_GAP : trackHeight - 20;
+    const newPos = Math.max(lowerBound, Math.min(upperBound, _tlDrag.startPos + dy));
+
+    _tlDrag.currentPos = newPos;
+    if (_tlDrag.nodeEl) _tlDrag.nodeEl.style.top = (newPos - 10) + 'px';
+    if (_tlDrag.connectorEl) _tlDrag.connectorEl.style.top = (newPos - 1) + 'px';
+    if (_tlDrag.boxEl) _tlDrag.boxEl.style.top = (newPos - 14) + 'px';
+  };
+
+  _tlMouseUpHandler = () => {
+    if (!_tlDrag) return;
+    const { kind, id, moved, currentPos } = _tlDrag;
+    if (moved && typeof currentPos === 'number') {
+      const c = camp();
+      if (kind === 'session') {
+        const s = c.sessions.find(x=>x.id===id);
+        if (s) s.timelinePosition = currentPos;
+      } else {
+        const ev = (c.timelineEvents||[]).find(x=>x.id===id);
+        if (ev) ev.position = currentPos;
+      }
+      save();
+      render();
+    } else if (!moved) {
+      if (kind === 'session') openSessionModal(id); else openTimelineEventModal(id);
+    }
+    _tlDrag = null;
+  };
+
+  document.addEventListener('mousemove', _tlMouseMoveHandler);
+  document.addEventListener('mouseup', _tlMouseUpHandler);
+}
+
+function openAddTimelineEventModal(atPosition) {
+  window._tlPendingPosition = atPosition;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header"><h3>Add Timeline Entry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Title</label><input type="text" id="tl-title" placeholder="The bridge collapses…"></div>
+      <div class="form-group"><label>Details <span class="text-dim text-xs">(optional)</span></label><textarea id="tl-text" rows="4" placeholder="What happened…"></textarea></div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveNewTimelineEvent()">Add</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('tl-title')?.focus(), 50);
+}
+
+function saveNewTimelineEvent() {
+  const title = document.getElementById('tl-title')?.value.trim();
+  if (!title) { toast('Title is required.', 'error'); return; }
+  const text = document.getElementById('tl-text')?.value.trim() || '';
+  const c = camp();
+  if (!c.timelineEvents) c.timelineEvents = [];
+  c.timelineEvents.push({ id: uid(), title, text, position: window._tlPendingPosition || 20 });
+  window._tlPendingPosition = null;
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+function openTimelineEventModal(id) {
+  const c = camp();
+  const ev = (c.timelineEvents||[]).find(x => x.id === id);
+  if (!ev) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header"><h3>Edit Timeline Entry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Title</label><input type="text" id="tl-title" value="${esc(ev.title)}"></div>
+      <div class="form-group"><label>Details <span class="text-dim text-xs">(optional)</span></label><textarea id="tl-text" rows="4">${esc(ev.text||'')}</textarea></div>
+      <div class="flex gap-8" style="justify-content:space-between">
+        <button class="btn btn-danger" onclick="deleteTimelineEvent('${ev.id}')">Delete</button>
+        <div class="flex gap-8">
+          <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveTimelineEventEdits('${ev.id}')">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function saveTimelineEventEdits(id) {
+  const c = camp();
+  const ev = (c.timelineEvents||[]).find(x => x.id === id);
+  if (!ev) return;
+  const title = document.getElementById('tl-title')?.value.trim();
+  if (!title) { toast('Title is required.', 'error'); return; }
+  ev.title = title;
+  ev.text = document.getElementById('tl-text')?.value.trim() || '';
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast('Timeline entry updated.', 'success');
+  render();
+}
+
+async function deleteTimelineEvent(id) {
+  if (!(await confirmModal('Delete this timeline entry?'))) return;
+  const c = camp();
+  c.timelineEvents = (c.timelineEvents||[]).filter(x => x.id !== id);
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  toast('Timeline entry deleted.', 'success');
+  render();
 }
 
 // ═══════════════════════════════════════════════
@@ -3878,7 +4142,7 @@ function openQuickNoteModal() {
       <div class="modal-header"><h3>Field Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group">
         <textarea id="qn-text" rows="5" placeholder="NPC name, location idea, player action, plot twist… anything that needs capturing right now." style="font-size:0.95rem"></textarea>
-        ${speechRecognitionSupported()?`<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('qn-text', this)">Dictate</button>`:''}
+        ${isFeatureEnabled('voiceDictation') && speechRecognitionSupported()?`<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('qn-text', this)">Dictate</button>`:''}
       </div>
       <div class="form-group"><label>About <span class="text-dim text-xs">(optional)</span></label>
         <select id="qn-about"><option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}</select>
@@ -4095,10 +4359,6 @@ function openCampaignBibleModal() {
             <h3>${esc(l.name)}</h3>
             ${l.description?`<p>${esc(l.description)}</p>`:''}
           </div>`).join('')}` : ''}
-
-        ${(c.clocks||[]).length?`
-        <h2>Clocks</h2>
-        ${c.clocks.map(ck => `<p class="cb-clock">${esc(ck.label)} — ${ck.filled}/${ck.segments}</p>`).join('')}` : ''}
       </div>
     </div>`;
 
@@ -4223,8 +4483,39 @@ function renderSettings() {
       <h3 style="margin-bottom:6px">Tools</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
       <div class="flex gap-8" style="flex-wrap:wrap">
-        <button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>
-        <button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>
+        ${isFeatureEnabled('campaignBible')?`<button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>`:''}
+        ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>`:''}
+      </div>
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <h3 style="margin-bottom:6px">Features</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way — flipping one back on later picks up right where you left it.</p>
+      ${FEATURE_CATEGORIES.map(cat => `
+        <div style="margin-bottom:14px">
+          <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${esc(cat)}</div>
+          ${FEATURE_REGISTRY.filter(f=>f.category===cat).map(f => `
+            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
+              <input type="checkbox" ${isFeatureEnabled(f.key)?'checked':''} ${f.premium && !isPatreonEntitled() ? 'disabled' : ''} onchange="onToggleFeature('${f.key}', this.checked)">
+              ${esc(f.label)}${f.premium?' <span class="text-xs text-dim">(Premium)</span>':''}
+            </label>`).join('')}
+        </div>`).join('')}
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <h3 style="margin-bottom:6px">Premium Features</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Support development on Patreon to unlock premium features (none yet — everything above is free). Log in below and paste back the token it gives you.</p>
+      <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? '<span style="color:var(--green)">Linked — active pledge</span>' : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired — log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
+      <div class="flex gap-8" style="flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-ghost" onclick="openPatreonLoginTab()">Log in with Patreon</button>
+        ${getPatreonToken() ? `<button class="btn btn-ghost" onclick="unlinkPatreon()">Unlink</button>` : ''}
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Paste token from the login page</label>
+        <div class="flex gap-8">
+          <input type="text" id="patreon-token-input" placeholder="eyJhbGciOi…" style="flex:1;font-family:monospace;font-size:0.8rem">
+          <button class="btn btn-primary btn-sm" onclick="savePatreonToken()">Save</button>
+        </div>
       </div>
     </div>
 
@@ -4240,6 +4531,37 @@ function renderSettings() {
           : `<p class="text-xs text-dim">No backup synced yet — it'll appear here after your first change.</p>`;
       })()}
     </div>`;
+}
+
+const FEATURE_CATEGORIES = [...new Set(FEATURE_REGISTRY.map(f => f.category))];
+
+function onToggleFeature(key, enabled) {
+  setFeatureToggle(key, enabled);
+  renderNavLinks();
+  render();
+}
+
+function openPatreonLoginTab() {
+  if (!PATREON_WORKER_URL) { toast('Patreon integration is not set up yet.', 'error'); return; }
+  window.parent.open(PATREON_WORKER_URL + '/login', '_blank');
+}
+
+async function savePatreonToken() {
+  const token = document.getElementById('patreon-token-input')?.value?.trim();
+  if (!token) { toast('Paste the token first.', 'error'); return; }
+  setPatreonToken(token);
+  const ok = await verifyPatreonToken();
+  render();
+  renderNavLinks();
+  toast(ok ? 'Linked! Premium features are now available.' : 'That token is invalid or expired.', ok ? 'success' : 'error');
+}
+
+function unlinkPatreon() {
+  setPatreonToken('');
+  verifyPatreonToken();
+  render();
+  renderNavLinks();
+  toast('Unlinked.', 'success');
 }
 
 function renameCampaignModal(id) {
@@ -5689,6 +6011,7 @@ function onExternalStateChange() { render(); }
 
 navigate('dashboard');
 maybeShowOnboarding();
+verifyPatreonToken().then(() => renderNavLinks()); // re-check Patreon entitlement once on load; no-op today (no premium features yet)
 
 // If the Quick Access widget asked us to open a specific clock/NPC/location/
 // thread/faction (see openInPlanner() in state.js), jump straight to it.

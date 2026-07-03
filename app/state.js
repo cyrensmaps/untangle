@@ -6,7 +6,7 @@
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
+function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], timelineEvents: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
 
 const DEFAULT_STATE = () => ({
   settings: { onboarded: false, theme: 'foundry-basic' },
@@ -293,6 +293,149 @@ function toggleDictation(textareaId, btn) {
   } catch (err) {
     console.error('Untangle | Could not start dictation', err);
   }
+}
+
+// ── Feature toggles ──
+// Lets the GM hide any optional feature from Untangle's own Settings page
+// (not Foundry's native Configure Settings sheet — see the "Features" card
+// in renderSettings()). Hiding is "hide only": the underlying data and logic
+// keep running either way, only the UI entry points disappear. Every entry
+// here is something layered on top of the core Sessions/Characters/
+// Locations/Factions/Plot-Threads tracking, which is never gated.
+//
+// `premium` marks a feature as requiring an active Patreon pledge (see
+// isPatreonEntitled() below) in addition to being manually enabled. Nothing
+// is premium yet — flipping one to `true` later is a one-line change, not a
+// rearchitecture.
+const FEATURE_REGISTRY = [
+  { key: 'sessionPrep',       label: 'Session Prep',              category: 'At the Table',       premium: false },
+  { key: 'timeline',          label: 'Timeline',                  category: 'At the Table',       premium: false },
+  { key: 'recap',             label: 'Session Recap',             category: 'At the Table',       premium: false },
+  { key: 'staleCallbacks',    label: 'Stale Callback Surfacing',  category: 'At the Table',       premium: false },
+  { key: 'maps',              label: 'Maps',                      category: 'World',              premium: false },
+  { key: 'clocks',            label: 'Clocks',                    category: 'Story',               premium: false },
+  { key: 'relationshipWeb',   label: 'Relationships & Spark',     category: 'Story',               premium: false },
+  { key: 'fieldNotes',        label: 'Field Notes',                category: 'Story',               premium: false },
+  { key: 'globalSearch',      label: 'Search',                    category: 'Tools',               premium: false },
+  { key: 'nameGenerator',     label: 'Name Generator',            category: 'Tools',               premium: false },
+  { key: 'voiceDictation',    label: 'Voice Dictation',           category: 'Tools',               premium: false },
+  { key: 'campaignBible',     label: 'Printable Campaign Bible',  category: 'Tools',               premium: false },
+  { key: 'rollTableSync',     label: 'Roll Table Sync',           category: 'Tools',               premium: false },
+  { key: 'postToJournal',     label: 'Post to Journal',           category: 'Tools',               premium: false },
+  { key: 'pullFromFoundry',   label: 'Pull from Foundry',         category: 'Tools',               premium: false },
+  { key: 'hoverTokenTooltip', label: 'Hover Token Tooltip',       category: 'Foundry Integration', premium: false },
+  { key: 'hotbarMacros',      label: 'Drag-to-Hotbar Macros',     category: 'Foundry Integration', premium: false },
+  { key: 'addToUntangleButton', label: '"Add to Untangle" Button', category: 'Foundry Integration', premium: false },
+  { key: 'simpleCalendar',    label: 'Simple Calendar Integration', category: 'Foundry Integration', premium: false },
+];
+
+function getFeatureToggles() {
+  try {
+    return window.parent?.game?.settings?.get('untangle', 'featureToggles') || {};
+  } catch { return {}; }
+}
+
+function setFeatureToggle(key, enabled) {
+  try {
+    const pgame = window.parent?.game;
+    if (!pgame?.settings) return;
+    const current = getFeatureToggles();
+    current[key] = enabled;
+    pgame.settings.set('untangle', 'featureToggles', toFoundryPlain(current));
+  } catch { /* not embedded in Foundry, or setting not registered yet */ }
+}
+
+// Unknown key -> true (fail open, so a feature not yet registered here isn't
+// accidentally hidden). Otherwise: manually enabled (default true) AND, if
+// the feature is marked premium, the GM is Patreon-entitled.
+function isFeatureEnabled(key) {
+  const feature = FEATURE_REGISTRY.find(f => f.key === key);
+  if (!feature) return true;
+  const toggles = getFeatureToggles();
+  const manuallyEnabled = toggles[key] !== false;
+  if (!manuallyEnabled) return false;
+  return !feature.premium || isPatreonEntitled();
+}
+
+// ── Patreon entitlement ──
+// Real verification needs a client_secret that can never live in code anyone
+// can download, so this module never talks to Patreon directly — a small
+// stateless Cloudflare Worker (see patreon-worker/) does the OAuth handshake
+// and hands back a signed ES256 JWT this module verifies LOCALLY via Web
+// Crypto (no server call needed per feature check, only at login time).
+//
+// PATREON_WORKER_URL / PATREON_PUBLIC_JWK are filled in once the Worker is
+// deployed (see patreon-worker/README.md). Until then, isPatreonEntitled()
+// simply returns false — no premium features exist yet, so this has no
+// visible effect.
+const PATREON_WORKER_URL = 'https://untangle-patreon.untangle-patreon.workers.dev';
+const PATREON_PUBLIC_JWK = {"key_ops":["verify"],"ext":true,"kty":"EC","x":"TIbKYsGeOMKG4DRtVGgE4X1oFrr6UpXQKCBKB63wOIs","y":"0FocwsV0rKzEA3MebrxPKhjlHOc3I7KgePA4yMVVjzk","crv":"P-256"}; // paste the PUBLIC JWK from generate-keys.js here
+
+let _patreonEntitled = false;
+let _patreonExpiry = 0;
+
+function base64urlToUint8Array(b64url) {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(b64url.length + (4 - b64url.length % 4) % 4, '=');
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+// Verifies the stored Patreon token's signature + expiry, then caches the
+// result. Async because Web Crypto's verify is Promise-based, but the app's
+// render paths (render(), nav building, widget tabs) are all synchronous —
+// so callers use the sync isPatreonEntitled() below for actual gating, and
+// only call this once on load (and right after saving a new token) to keep
+// that cache fresh.
+async function verifyPatreonToken() {
+  _patreonEntitled = false;
+  _patreonExpiry = 0;
+  if (!PATREON_PUBLIC_JWK) return false;
+  const token = getPatreonToken();
+  if (!token) return false;
+
+  try {
+    const [headerB64, payloadB64, sigB64] = token.split('.');
+    if (!headerB64 || !payloadB64 || !sigB64) return false;
+
+    const payload = JSON.parse(new TextDecoder().decode(base64urlToUint8Array(payloadB64)));
+    if (!payload.exp || payload.exp * 1000 < Date.now()) return false;
+
+    const key = await crypto.subtle.importKey(
+      'jwk', PATREON_PUBLIC_JWK, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+    );
+    const signingInput = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+    const valid = await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' }, key, base64urlToUint8Array(sigB64), signingInput
+    );
+    if (!valid || !payload.entitled) return false;
+
+    _patreonEntitled = true;
+    _patreonExpiry = payload.exp * 1000;
+    return true;
+  } catch { return false; }
+}
+
+// Sync read for use in render paths: trusts the cache from the last
+// verifyPatreonToken() call, but still catches an expiry that's since
+// passed without needing another async crypto call.
+function isPatreonEntitled() {
+  if (!_patreonEntitled) return false;
+  if (Date.now() > _patreonExpiry) { _patreonEntitled = false; return false; }
+  return true;
+}
+
+function getPatreonToken() {
+  try { return window.parent?.game?.settings?.get('untangle', 'patreonToken') || ''; } catch { return ''; }
+}
+
+function setPatreonToken(token) {
+  try {
+    const pgame = window.parent?.game;
+    if (!pgame?.settings) return;
+    pgame.settings.set('untangle', 'patreonToken', token || '');
+  } catch { /* not embedded in Foundry, or setting not registered yet */ }
 }
 
 // API keys live in Foundry's world settings (Configure Settings → Untangle),

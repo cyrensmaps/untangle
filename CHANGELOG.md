@@ -4,6 +4,19 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.6.0]
+
+### Added
+- **Redesigned Timeline** — a vertical spine with sessions and custom events as circular nodes, connected to alternating left/right summary boxes. Click anywhere on the spine to add a new entry at that point; drag a node to reorder it along the timeline (with stoppers so order can't invert); the track grows automatically as entries are added.
+- **Feature toggles** — every optional feature (Session Prep, Timeline, Recap, Stale Callback surfacing, Maps, Clocks, Relationships & Spark, Field Notes, Search, Name Generator, Voice Dictation, Campaign Bible, Roll Table Sync, Post to Journal, Pull from Foundry, Hover Token Tooltip, Drag-to-Hotbar Macros, the "Add to Untangle" button, and Simple Calendar integration) can now be shown or hidden from a new "Features" card on Untangle's own Settings page. Hiding is hide-only — the underlying data keeps working, so re-enabling a feature never loses anything.
+- **Patreon integration (opt-in)** — a new "Premium Features" card on Settings lets a GM log in with Patreon and link an active pledge, verified entirely locally via a signed token (no feature currently requires this; it's groundwork for optional future premium features).
+- Settlement and City added as Character types, for systems that track settlements as their own sheets.
+
+### Changed
+- The main planner window opens smaller by default (1180×740, was 1300×860) so it doesn't cover the macro bar as much on smaller displays.
+- Foundry v13 verified compatible.
+- The old dedicated "Show Token Hover Tooltip" Foundry setting was folded into the new unified Features toggle system (Settings → Features → Hover Token Tooltip), so there's one place to control it instead of two.
+
 ## [1.5.0]
 
 ### Added

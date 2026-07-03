@@ -41,6 +41,7 @@ Keys are stored in this Foundry world's settings (GM-only, hidden from players) 
 |---|---|
 | v11 | Minimum |
 | v12 | Verified |
+| v13 | Verified |
 
 ---
 

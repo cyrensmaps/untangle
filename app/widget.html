@@ -44,14 +44,9 @@
 <body>
 
 <div class="qa-campaign"><b id="qa-camp-name">…</b></div>
-<div class="qa-tabs">
-  <button class="qa-tab active" id="qa-tab-notes" onclick="qaSwitch('notes')">Field Notes</button>
-  <button class="qa-tab" id="qa-tab-names" onclick="qaSwitch('names')">Names</button>
-  <button class="qa-tab" id="qa-tab-clocks" onclick="qaSwitch('clocks')">Clocks</button>
-  <button class="qa-tab" id="qa-tab-callbacks" onclick="qaSwitch('callbacks')">Callbacks</button>
-</div>
+<div class="qa-tabs" id="qa-tabs"></div>
 
-<div class="qa-panel active" id="qa-panel-notes">
+<div class="qa-panel" id="qa-panel-notes">
   <textarea id="qa-note-text" rows="4" placeholder="Capture anything mid-session…"></textarea>
   <button type="button" class="btn btn-ghost" id="qa-dictate-btn" onclick="toggleDictation('qa-note-text', this)">Dictate</button>
   <select id="qa-note-about">
@@ -81,13 +76,32 @@
 <script>
 document.getElementById('qa-camp-name').textContent = camp().name;
 
+// Each tab maps to a FEATURE_REGISTRY key (state.js) so it can be hidden
+// from Untangle's own Settings page — same "hide only" behavior as the main
+// window's nav.
+const QA_TABS = [
+  { id: 'notes',     feature: 'fieldNotes',     label: 'Field Notes' },
+  { id: 'names',     feature: 'nameGenerator',  label: 'Names' },
+  { id: 'clocks',    feature: 'clocks',         label: 'Clocks' },
+  { id: 'callbacks', feature: 'staleCallbacks', label: 'Callbacks' },
+];
+let qaActiveTab = null;
+
+function qaRenderTabs() {
+  const enabled = QA_TABS.filter(t => isFeatureEnabled(t.feature));
+  if (!enabled.some(t => t.id === qaActiveTab)) qaActiveTab = enabled[0]?.id || null;
+  document.getElementById('qa-tabs').innerHTML = enabled.map(t =>
+    `<button class="qa-tab${t.id===qaActiveTab?' active':''}" id="qa-tab-${t.id}" onclick="qaSwitch('${t.id}')">${esc(t.label)}</button>`
+  ).join('');
+  QA_TABS.forEach(t => document.getElementById('qa-panel-' + t.id)?.classList.toggle('active', t.id === qaActiveTab));
+  if (!enabled.length) return;
+  if (qaActiveTab === 'clocks') qaRenderClocks();
+  if (qaActiveTab === 'callbacks') qaRenderCallbacks();
+}
+
 function qaSwitch(tab) {
-  document.querySelectorAll('.qa-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.qa-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('qa-tab-' + tab).classList.add('active');
-  document.getElementById('qa-panel-' + tab).classList.add('active');
-  if (tab === 'clocks') qaRenderClocks();
-  if (tab === 'callbacks') qaRenderCallbacks();
+  qaActiveTab = tab;
+  qaRenderTabs();
 }
 
 // ── Field notes ──
@@ -190,15 +204,16 @@ function qaRenderCallbacks() {
 function onExternalStateChange() {
   document.getElementById('qa-camp-name').textContent = camp().name;
   qaRenderNoteAboutOptions();
-  qaRenderClocks();
-  qaRenderCallbacks();
+  qaRenderTabs();
 }
 
-if (!speechRecognitionSupported()) document.getElementById('qa-dictate-btn')?.remove();
+if (!isFeatureEnabled('voiceDictation') || !speechRecognitionSupported()) document.getElementById('qa-dictate-btn')?.remove();
 
+qaRenderTabs();
 qaRenderNoteAboutOptions();
 qaRenderStyles();
 qaRegenerateNames();
+verifyPatreonToken().then(() => qaRenderTabs()); // re-check Patreon entitlement once on load; no-op today (no premium features yet)
 </script>
 </body>
 </html>

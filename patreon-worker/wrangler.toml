@@ -1,0 +1,18 @@
+name = "untangle-patreon"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Secrets (set these with `wrangler secret put <NAME>`, never in this file):
+#   PATREON_CLIENT_ID
+#   PATREON_CLIENT_SECRET
+#   JWT_PRIVATE_KEY     (the PRIVATE JWK printed by scripts/generate-keys.js)
+#   PATREON_CAMPAIGN_ID (not actually sensitive, but "secret" is the simplest
+#                        way to set a value without touching this file — see
+#                        README.md's "Scope entitlement to your campaign" step.
+#                        Log in once with PATREON_CAMPAIGN_ID unset and the
+#                        Worker will show you the id to use.)
+#   TEST_BYPASS_SECRET  (optional — a long random string of your choosing.
+#                        Enables GET /test-login?secret=<this value>, which
+#                        fakes an "entitled" JWT without touching Patreon, so
+#                        you can test without a real pledge. Leave unset to
+#                        disable the route entirely. See README.md.)

@@ -12,8 +12,8 @@ class CampaignPlannerApp extends Application {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-app',
       title: 'Untangle',
-      width: 1300,
-      height: 860,
+      width: 1180,
+      height: 740,
       resizable: true,
       minimizable: true,
     });
@@ -303,6 +303,32 @@ Hooks.on('init', () => {
   } catch (err) { console.error('Untangle | Failed to register quick bar settings', err); }
 
   try {
+    // Per-feature show/hide, set from Untangle's own in-app Settings page
+    // (the "Features" card) — not Foundry's native Configure Settings list.
+    // config:false since app/state.js's isFeatureEnabled() is the only
+    // intended way to read/write this; main.js hooks read it directly since
+    // they run in the top window, outside the iframe app/state.js lives in.
+    game.settings.register(MODULE_ID, 'featureToggles', {
+      scope: 'world',
+      config: false,
+      type: Object,
+      default: {},
+    });
+  } catch (err) { console.error('Untangle | Failed to register featureToggles setting', err); }
+
+  try {
+    // Holds the signed JWT from a completed Patreon login (see
+    // patreon-worker/). Verified locally by app/state.js's
+    // verifyPatreonToken() — this module never talks to Patreon directly.
+    game.settings.register(MODULE_ID, 'patreonToken', {
+      scope: 'world',
+      config: false,
+      type: String,
+      default: '',
+    });
+  } catch (err) { console.error('Untangle | Failed to register patreonToken setting', err); }
+
+  try {
     // API keys — used by the planner's AI extraction (Claude) and audio
     // transcription (Whisper) features. Read directly from these settings by
     // app/index.html via window.parent.game.settings.get(...). config:false
@@ -375,6 +401,18 @@ Hooks.on('renderJournalDirectory', (_app, html) => {
 // already uses for export/import/clear — no need for the planner iframe
 // to be open.
 
+// Mirrors app/state.js's isFeatureEnabled() for the handful of features that
+// live in this top-window script rather than the iframe app — same
+// featureToggles world setting, just read directly since main.js has no
+// access to the iframe's JS scope. None of these three are ever premium, so
+// (unlike the iframe version) there's no Patreon-entitlement check to make.
+function _isFeatureEnabledMain(key) {
+  try {
+    const toggles = game.settings.get(MODULE_ID, 'featureToggles') || {};
+    return toggles[key] !== false;
+  } catch { return true; }
+}
+
 function _stripHtmlMain(html) {
   const div = document.createElement('div');
   div.innerHTML = html || '';
@@ -409,7 +447,7 @@ function addActorToUntangle(actor) {
 
 Hooks.on('renderActorSheet', (app, html) => {
   try {
-    if (!game.user.isGM) return;
+    if (!game.user.isGM || !_isFeatureEnabledMain('addToUntangleButton')) return;
     const el = app.element;
     if (!el || !el.length) return;
     const header = el.find('.window-header');
@@ -470,7 +508,7 @@ function _removeTokenTooltip() {
 Hooks.on('hoverToken', (token, hovered) => {
   try {
     if (!game.user.isGM) return;
-    if (!hovered) { _removeTokenTooltip(); return; }
+    if (!hovered || !_isFeatureEnabledMain('hoverTokenTooltip')) { _removeTokenTooltip(); return; }
 
     const actorId = token.actor?.id;
     if (!actorId) return;
@@ -506,12 +544,12 @@ Hooks.on('canvasReady', _removeTokenTooltip);
 
 // ── Drag an NPC/Location/Thread card to the hotbar for a one-click jump ──
 // The card's dragstart (app/index.html) sets a custom
-// { type: 'untangle-entity', entityType, entityId, name } payload via
+// { type: 'untangle-entity', entityType, entityId, name, image } payload via
 // dataTransfer — Foundry's TextEditor.getDragEventData parses it and passes
 // it straight to this hook as `data`.
 Hooks.on('hotbarDrop', (_bar, data, slot) => {
-  if (!game.user.isGM || data?.type !== 'untangle-entity') return;
-  const { entityType, entityId, name } = data;
+  if (!game.user.isGM || data?.type !== 'untangle-entity' || !_isFeatureEnabledMain('hotbarMacros')) return;
+  const { entityType, entityId, name, image } = data;
   (async () => {
     try {
       let macro = game.macros.find(m => m.getFlag(MODULE_ID, 'entityId') === entityId && m.getFlag(MODULE_ID, 'entityType') === entityType);
@@ -522,7 +560,7 @@ Hooks.on('hotbarDrop', (_bar, data, slot) => {
           type: 'script',
           scope: 'global',
           command,
-          img: entityType === 'npc' ? 'icons/svg/mystery-man.svg' : 'icons/svg/book.svg',
+          img: image || (entityType === 'npc' ? 'icons/svg/mystery-man.svg' : 'icons/svg/book.svg'),
         });
         await macro.setFlag(MODULE_ID, 'entityId', entityId);
         await macro.setFlag(MODULE_ID, 'entityType', entityType);
