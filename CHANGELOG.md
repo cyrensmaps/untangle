@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.3]
+
+### Fixed
+- Fixed the Untangle hotbar buttons (Open Untangle / Quick Access / Player Wiki) rendering on top of the macro bar instead of floating above it. They were anchored via `top:0` plus internal padding, which only clears the macro row if the hotbar's own container has empty space above it - not guaranteed for every player/GM hotbar configuration. Now anchored to the hotbar's bottom edge instead, which floats them clear regardless.
+
 ## [1.10.2]
 
 ### Fixed

@@ -82,10 +82,10 @@
 #untangle-quickbar {
   position: absolute;
   left: 50%;
-  top: 0;
+  bottom: 100%;
+  margin-bottom: 8px;
   display: flex;
   gap: 6px;
-  padding-bottom: 8px;
   z-index: 25;
 }
 
@@ -117,8 +117,9 @@
 #untangle-wiki-btn-bar {
   position: absolute;
   left: 50%;
-  top: 0;
-  padding-bottom: 8px;
+  bottom: 100%;
+  margin-bottom: 8px;
+  display: flex;
   z-index: 25;
 }
 
