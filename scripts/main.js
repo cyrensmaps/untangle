@@ -105,7 +105,7 @@ class PlayerWikiApp extends Application {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-wiki-viewer',
-      title: 'Player Wiki',
+      title: 'Player Companion',
       width: 720,
       height: 640,
       resizable: true,
@@ -136,7 +136,7 @@ function toggleWikiViewer() {
     if (!_wikiViewerApp) _wikiViewerApp = new PlayerWikiApp();
     _wikiViewerApp.render(true);
   } catch (err) {
-    console.error('Untangle | Failed to open Player Wiki', err);
+    console.error('Untangle | Failed to open Player Companion', err);
   }
 }
 
@@ -745,7 +745,7 @@ function renderWikiButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'untangle-wiki-btn';
-    btn.title = 'Player Wiki';
+    btn.title = 'Player Companion';
     btn.innerHTML = '<i class="fas fa-book-open"></i>';
     btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleWikiViewer(); });
     bar.appendChild(btn);

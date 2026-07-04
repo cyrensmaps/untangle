@@ -4,6 +4,12 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.6]
+
+### Changed
+- Renamed "Player Wiki" to "Player Companion" everywhere it's shown (nav link, window title, hotbar button, publish page, toast messages) - a more honest name for what it actually is.
+- The Quick Access and Player Companion windows now use the same themed scrollbar as the main Untangle window, instead of the browser's default.
+
 ## [1.10.5]
 
 ### Fixed

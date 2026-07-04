@@ -172,9 +172,6 @@
     .campaign-list-item .active-tag { font-size: 0.7rem; color: var(--accent); background: rgba(var(--accent-rgb),0.12); padding: 2px 7px; border-radius: 4px; }
 
     hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 3px; }
 
     .flex { display: flex; }
     .flex-between { display: flex; justify-content: space-between; align-items: center; }
@@ -529,7 +526,7 @@ const NAV_LINKS = [
   { id: 'web',        feature: 'relationshipWeb', html: `<button class="nav-btn" onclick="navigate('web')" id="nav-web">Relationships</button>` },
   { id: 'fieldnotes', feature: 'fieldNotes',      html: `<button class="nav-btn" onclick="navigate('fieldnotes')" id="nav-fieldnotes">Field Notes</button>` },
   { section: 'Sharing' },
-  { id: 'playerwiki', feature: 'playerWiki',      html: `<button class="nav-btn" onclick="navigate('playerwiki')" id="nav-playerwiki">Player Wiki</button>` },
+  { id: 'playerwiki', feature: 'playerWiki',      html: `<button class="nav-btn" onclick="navigate('playerwiki')" id="nav-playerwiki">Player Companion</button>` },
 ];
 
 function renderNavLinks() {
@@ -2215,10 +2212,10 @@ function renderPlayerWiki() {
 
   return `
     <div class="page-header">
-      <div><h2>Player Wiki</h2><p class="subtitle">Check what's safe to share, then publish — nothing reaches players until you do</p></div>
-      <button class="btn btn-primary" onclick="publishPlayerWiki()">Publish / Refresh Player Wiki</button>
+      <div><h2>Player Companion</h2><p class="subtitle">Check what's safe to share, then publish - nothing reaches players until you do</p></div>
+      <button class="btn btn-primary" onclick="publishPlayerWiki()">Publish / Refresh Player Companion</button>
     </div>
-    <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing updates the Player Wiki window players can open near their hotbar.</p>
+    <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing updates the Player Companion window players can open near their hotbar.</p>
 
     <div class="card" style="max-width:640px;margin-bottom:16px">
       <h3 style="margin-bottom:10px">Characters</h3>
@@ -2368,9 +2365,9 @@ async function publishPlayerWiki() {
     c.playerWikiLastPublished = Date.now();
     save();
     render();
-    toast('Player Wiki published.', 'success');
+    toast('Player Companion published.', 'success');
   } catch (err) {
-    toast('Error publishing Player Wiki: ' + (err.message || String(err)), 'error');
+    toast('Error publishing Player Companion: ' + (err.message || String(err)), 'error');
   }
 }
 

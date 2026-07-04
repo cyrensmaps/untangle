@@ -32,3 +32,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .clock-segments { display: flex; gap: 4px; flex-wrap: wrap; }
 .clock-seg { width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-elevated); cursor: pointer; }
 .clock-seg.filled { border-color: transparent; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 3px; }
