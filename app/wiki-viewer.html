@@ -17,7 +17,11 @@
     .wv-map-wrap { padding: 16px; }
     .wv-map-inner { position: relative; display: inline-block; max-width: 100%; }
     .wv-map-img { max-width: 100%; display: block; border-radius: 8px; }
-    .wv-pin { position: absolute; width: 18px; height: 18px; margin-left: -9px; margin-top: -9px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 2px var(--accent); cursor: pointer; }
+    .wv-pin { position: absolute; transform: translate(-50%, -100%); cursor: pointer; z-index: 5; }
+    .wv-pin-dot { width: 22px; height: 22px; background: var(--accent); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid rgba(0,0,0,0.5); box-shadow: 0 2px 6px rgba(0,0,0,0.5); transition: transform 0.15s; }
+    .wv-pin:hover .wv-pin-dot { transform: rotate(-45deg) scale(1.2); }
+    .wv-pin-label { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; white-space: nowrap; font-size: 0.72rem; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
+    .wv-pin:hover .wv-pin-label { opacity: 1; }
     .wv-pin-info { margin: 0 16px 16px; padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
     .wv-empty { padding: 60px 24px; text-align: center; color: var(--text-dim); font-size: 0.9rem; line-height: 1.7; }
   </style>
@@ -58,8 +62,11 @@ function wvRender() {
     : '';
 
   const map = wvMapData[wvActiveMapId];
-  const pinsHtml = (map.pins||[]).map(p =>
-    `<div class="wv-pin" style="left:${p.x}%;top:${p.y}%" title="${esc(p.label||'')}" onclick="wvShowPin('${p.id}')"></div>`
+  const pinsHtml = (map.pins||[]).map(p => `
+    <div class="wv-pin" style="left:${p.x}%;top:${p.y}%" onclick="wvShowPin('${p.id}')">
+      <div class="wv-pin-dot"></div>
+      ${p.label ? `<div class="wv-pin-label">${esc(p.label)}</div>` : ''}
+    </div>`
   ).join('');
 
   body.innerHTML = `

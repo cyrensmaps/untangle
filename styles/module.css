@@ -21,6 +21,33 @@
   display: block;
 }
 
+/* Quick Access and Player Wiki Map windows are smaller companion popups but
+   use the same full-bleed iframe technique as the main planner above — without
+   this they keep Foundry's default .window-content padding/background, which
+   shows as a pale border around the (dark-themed) iframe content. */
+#untangle-quick-access .window-content,
+#untangle-wiki-viewer .window-content {
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#untangle-quick-access .window-content > div,
+#untangle-wiki-viewer .window-content > div {
+  flex: 1;
+  min-height: 0;
+}
+
+#untangle-quick-access .window-content iframe,
+#untangle-wiki-viewer .window-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
 /* Journal sidebar button */
 .cp-sidebar-btn {
   display: block;

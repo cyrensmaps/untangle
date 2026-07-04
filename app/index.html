@@ -2264,52 +2264,113 @@ function togglePinVisible(mapId, pinId, checked) {
 // except here that exclusion is unconditional, layered underneath the
 // opt-in `playerVisible` whitelist rather than behind a toggle.
 
-function buildWikiCharactersHTML(c) {
+const WIKI_NPC_STATUS_LABELS = { alive: 'Alive', dead: 'Dead', unknown: 'Unknown / Missing', fled: 'Fled', imprisoned: 'Imprisoned' };
+
+// Foundry content links (@UUID[...]) only navigate to a page, not a specific
+// heading inside it — so every cross-link below points at the target's whole
+// wiki page, not a precise in-page anchor. Still real navigation, just not
+// scroll-to-paragraph precise. `links` is null until playerWikiPageIds is
+// known (see publishPlayerWiki's two-pass build) — falls back to plain text.
+function wikiPageLink(links, key, label) {
+  const pid = links?.pageIds?.[key];
+  if (!pid) return esc(label);
+  return `@UUID[JournalEntry.${links.journalId}.JournalEntryPage.${pid}]{${esc(label)}}`;
+}
+
+function wikiBadge(text, color) {
+  return `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.8em;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}55;margin-right:6px">${esc(text)}</span>`;
+}
+
+function buildWikiCharactersHTML(c, links) {
   const visible = c.npcs.filter(n => n.playerVisible);
   if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
-  return visible.map(n => [
-    `<h2>${esc(n.name)}${n.role ? ` — ${esc(n.role)}` : ''}</h2>`,
-    n.image ? `<p><img src="${esc(resolveFoundryImgSrc(n.image))}" style="max-width:120px;border-radius:8px" alt=""></p>` : '',
-    n.notes ? `<p>${esc(n.notes)}</p>` : '',
-  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+
+  const entry = n => {
+    const loc = n.locationId ? c.locations.find(l => l.id === n.locationId) : null;
+    const faction = c.factions.find(f => f.memberIds?.includes(n.id));
+    const meta = [
+      (n.status && n.status !== 'alive') ? wikiBadge(WIKI_NPC_STATUS_LABELS[n.status] || n.status, '#cc4444') : '',
+      loc?.playerVisible ? `<span style="font-size:0.85em;opacity:0.8">Found in: ${wikiPageLink(links, 'locations', loc.name)}</span>` : '',
+      faction?.playerVisible ? `<span style="font-size:0.85em;opacity:0.8">Faction: ${wikiPageLink(links, 'factions', faction.name)}</span>` : '',
+    ].filter(Boolean).join(' &nbsp; ');
+    return `
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:10px">
+        ${n.image ? `<img src="${esc(resolveFoundryImgSrc(n.image))}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0" alt="">` : ''}
+        <div style="flex:1">
+          <h3 style="margin:0 0 2px">${esc(n.name)}${n.role ? ` <span style="font-weight:400;opacity:0.75">— ${esc(n.role)}</span>` : ''}</h3>
+          ${meta ? `<p style="margin:2px 0 6px">${meta}</p>` : ''}
+          ${n.notes ? `<p style="margin:0">${esc(n.notes)}</p>` : ''}
+        </div>
+      </div>`;
+  };
+
+  const pcs = visible.filter(n => n.type === 'pc');
+  const npcs = visible.filter(n => n.type !== 'pc');
+  return [
+    pcs.length ? `<h2>Player Characters</h2>${pcs.map(entry).join('<hr>')}` : '',
+    npcs.length ? `<h2>NPCs</h2>${npcs.map(entry).join('<hr>')}` : '',
+  ].filter(Boolean).join('<hr>');
 }
 
-function buildWikiLocationsHTML(c) {
+function buildWikiLocationsHTML(c, links) {
   const visible = c.locations.filter(l => l.playerVisible);
   if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
-  return visible.map(l => [
-    `<h2>${esc(l.name)}</h2>`,
-    l.description ? `<p>${esc(l.description)}</p>` : '',
-  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+  return visible.map(l => {
+    const residents = c.npcs.filter(n => n.locationId === l.id && n.playerVisible);
+    return [
+      `<h2>${esc(l.name)}</h2>`,
+      l.description ? `<p>${esc(l.description)}</p>` : '',
+      residents.length ? `<p style="font-size:0.85em;opacity:0.8">Notable residents: ${residents.map(n => wikiPageLink(links, 'characters', n.name)).join(', ')}</p>` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n<hr>\n');
 }
 
-function buildWikiFactionsHTML(c) {
+function buildWikiFactionsHTML(c, links) {
   const visible = c.factions.filter(f => f.playerVisible);
   if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
-  return visible.map(f => [
-    `<h2>${esc(f.name)}</h2>`,
-    f.description ? `<p>${esc(f.description)}</p>` : '',
-  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+  return visible.map(f => {
+    const att = FACTION_ATTITUDES.find(a => a.value === f.attitude);
+    const members = c.npcs.filter(n => f.memberIds?.includes(n.id) && n.playerVisible);
+    return [
+      `<h2>${esc(f.name)} ${att ? wikiBadge(att.label, att.color) : ''}</h2>`,
+      f.description ? `<p>${esc(f.description)}</p>` : '',
+      members.length ? `<p style="font-size:0.85em;opacity:0.8">Known members: ${members.map(n => wikiPageLink(links, 'characters', n.name)).join(', ')}</p>` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n<hr>\n');
 }
 
-function buildWikiStoryHTML(c) {
+function buildWikiStoryHTML(c, links) {
   const visible = [...c.sessions].filter(s => s.playerVisible).sort((a,b) => (a.number||0) - (b.number||0));
   if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
-  return visible.map(s => [
-    `<h2>Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</h2>`,
-    s.date ? `<p><em>${esc(s.date)}</em></p>` : '',
-    s.summary ? `<p>${esc(s.summary)}</p>` : '',
-  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+  return visible.map(s => {
+    const featuring = [
+      ...c.npcs.filter(n => n.sessions?.includes(s.id) && n.playerVisible).map(n => wikiPageLink(links, 'characters', n.name)),
+      ...c.locations.filter(l => l.sessionIds?.includes(s.id) && l.playerVisible).map(l => wikiPageLink(links, 'locations', l.name)),
+    ];
+    return [
+      `<h2>Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</h2>`,
+      s.date ? `<p><em>${esc(s.date)}</em></p>` : '',
+      s.summary ? `<p>${esc(s.summary)}</p>` : '',
+      featuring.length ? `<p style="font-size:0.85em;opacity:0.8">Featuring: ${featuring.join(', ')}</p>` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n<hr>\n');
 }
 
-function buildWikiRumorsHTML(c) {
+function buildWikiRumorsHTML(c, links) {
   const visible = c.plotThreads.filter(t => t.playerVisible);
   if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
-  return visible.map(t => [
-    `<h2>${esc(t.title)}</h2>`,
-    t.description ? `<p>${esc(t.description)}</p>` : '',
-    t.clues?.length ? `<ul>${t.clues.map(cl => `<li>${esc(cl.text)}</li>`).join('')}</ul>` : '',
-  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+  return visible.map(t => {
+    const related = [
+      ...c.npcs.filter(n => t.npcIds?.includes(n.id) && n.playerVisible).map(n => wikiPageLink(links, 'characters', n.name)),
+      ...c.locations.filter(l => t.locationIds?.includes(l.id) && l.playerVisible).map(l => wikiPageLink(links, 'locations', l.name)),
+    ];
+    return [
+      `<h2>${esc(t.title)}</h2>`,
+      t.description ? `<p>${esc(t.description)}</p>` : '',
+      t.clues?.length ? `<ul>${t.clues.map(cl => `<li>${esc(cl.text)}</li>`).join('')}</ul>` : '',
+      related.length ? `<p style="font-size:0.85em;opacity:0.8">Related: ${related.join(', ')}</p>` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n<hr>\n');
 }
 
 // Everything the companion Map Viewer (app/wiki-viewer.html) will ever see —
@@ -2363,24 +2424,40 @@ async function publishPlayerWiki() {
       await journal.update(toFoundryPlain({ ownership: { default: OBSERVER } }));
     }
 
-    const pages = [
-      { key: 'characters', name: 'Characters', html: buildWikiCharactersHTML(c) },
-      { key: 'locations',  name: 'Locations',   html: buildWikiLocationsHTML(c) },
-      { key: 'factions',   name: 'Factions',    html: buildWikiFactionsHTML(c) },
-      { key: 'story',      name: 'The Story So Far', html: buildWikiStoryHTML(c) },
-      { key: 'rumors',     name: 'Rumors & Open Questions', html: buildWikiRumorsHTML(c) },
+    const pageDefs = [
+      { key: 'characters', name: 'Characters' },
+      { key: 'locations',  name: 'Locations' },
+      { key: 'factions',   name: 'Factions' },
+      { key: 'story',      name: 'The Story So Far' },
+      { key: 'rumors',     name: 'Rumors & Open Questions' },
     ];
     if (!c.playerWikiPageIds) c.playerWikiPageIds = {};
-    for (const p of pages) {
-      let page = c.playerWikiPageIds[p.key] ? journal.pages.get(c.playerWikiPageIds[p.key]) : null;
-      if (page) {
-        await page.update(toFoundryPlain({ name: p.name, text: { content: p.html, format: 1 }, ownership: { default: OBSERVER } }));
-      } else {
+
+    // Pass 1: make sure every page exists first, so their ids are stable and
+    // available for the cross-page @UUID links built in pass 2 — matters most
+    // on a campaign's very first publish, when no page ids exist yet.
+    for (const p of pageDefs) {
+      const exists = c.playerWikiPageIds[p.key] && journal.pages.get(c.playerWikiPageIds[p.key]);
+      if (!exists) {
         const [created] = await journal.createEmbeddedDocuments('JournalEntryPage', toFoundryPlain([
-          { name: p.name, type: 'text', text: { content: p.html, format: 1 }, ownership: { default: OBSERVER } },
+          { name: p.name, type: 'text', text: { content: '', format: 1 }, ownership: { default: OBSERVER } },
         ]));
         c.playerWikiPageIds[p.key] = created.id;
       }
+    }
+
+    // Pass 2: build real content now that every cross-link target page id is known.
+    const links = { journalId: journal.id, pageIds: c.playerWikiPageIds };
+    const content = {
+      characters: buildWikiCharactersHTML(c, links),
+      locations:  buildWikiLocationsHTML(c, links),
+      factions:   buildWikiFactionsHTML(c, links),
+      story:      buildWikiStoryHTML(c, links),
+      rumors:     buildWikiRumorsHTML(c, links),
+    };
+    for (const p of pageDefs) {
+      const page = journal.pages.get(c.playerWikiPageIds[p.key]);
+      await page.update(toFoundryPlain({ name: p.name, text: { content: content[p.key], format: 1 }, ownership: { default: OBSERVER } }));
     }
 
     const mapSnapshot = buildPlayerWikiMapSnapshot(c);

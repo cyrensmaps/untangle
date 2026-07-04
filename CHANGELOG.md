@@ -4,6 +4,17 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.9.2]
+
+### Changed
+- Player Wiki pages are far more wiki-like: Characters split into "Player Characters" and "NPCs", and every page now cross-links to related pages (a Character's Location and Faction, a Location's notable residents, a Faction's known members, a Session's featured Characters/Locations, a Rumor's related Characters/Locations).
+- Player Wiki Characters now show status (if not simply "Alive") and Faction attitude is now shown on the Factions page - both were already tracked but never surfaced to players.
+- Replaced the plain heading-and-paragraph layout on every Player Wiki page with a cleaner portrait-beside-text layout and small status/attitude badges.
+
+### Fixed
+- Removed a pale border that showed around the Quick Access and Player Wiki Map companion windows.
+- Player Wiki map pins now show their name on hover, matching the GM's own map view, instead of requiring a click.
+
 ## [1.9.1]
 
 ### Changed
