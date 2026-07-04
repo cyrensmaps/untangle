@@ -385,11 +385,17 @@ Hooks.on('init', () => {
     // (PlayerWikiApp, below) runs in a player's own browser and has no
     // access to the GM's cp_v1 localStorage at all, so this is its only
     // data source.
+    // onChange fires on every connected client (Foundry broadcasts world
+    // settings over the socket) whenever the GM publishes/republishes from
+    // inside the iframe — without it the hotbar button only ever gets
+    // (re-)evaluated on page load or hotbar-page-switch, so it wouldn't
+    // appear until someone reloaded Foundry after the very first publish.
     game.settings.register(MODULE_ID, 'playerWikiData', {
       scope: 'world',
       config: false,
       type: Object,
       default: {},
+      onChange: () => renderWikiButton(),
     });
   } catch (err) { console.error('Untangle | Failed to register playerWikiData setting', err); }
 

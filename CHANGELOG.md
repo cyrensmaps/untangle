@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.2]
+
+### Fixed
+- The Player Wiki hotbar button now appears immediately when the GM publishes/refreshes the wiki, instead of only after reloading Foundry. Publishing happens from inside the campaign planner's iframe, and nothing was telling the main Foundry window to re-check whether the button should show.
+
 ## [1.10.1]
 
 ### Changed
