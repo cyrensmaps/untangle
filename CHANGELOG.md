@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.4]
+
+### Fixed
+- The sidebar navigation menu could silently cut off its bottom entries (e.g. Player Wiki, Settings) with no way to reach them, if the window wasn't tall enough to fit the whole list - it's now scrollable. Also bumped the main Untangle window's default height slightly so the full menu fits without scrolling on most screens.
+
 ## [1.10.3]
 
 ### Fixed

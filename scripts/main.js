@@ -13,7 +13,7 @@ class CampaignPlannerApp extends Application {
       id: 'untangle-app',
       title: 'Untangle',
       width: 1180,
-      height: 740,
+      height: 800,
       resizable: true,
       minimizable: true,
     });
