@@ -1160,14 +1160,11 @@ async function transcribeAndProcess() {
 
 // ── Decode audio → split PCM → encode valid WAV chunks → transcribe ──
 async function transcribeChunked(file) {
-  console.log('[Transcribe] Starting. File:', file.name, file.size, 'bytes', file.type);
-
   // Step 1: read the file into memory
   setStatus('Reading audio file…');
   let arrayBuffer;
   try {
     arrayBuffer = await file.arrayBuffer();
-    console.log('[Transcribe] arrayBuffer loaded:', arrayBuffer.byteLength, 'bytes');
   } catch (e) {
     console.error('[Transcribe] arrayBuffer failed:', e);
     throw new Error('Could not read file: ' + (e.message || String(e)));
@@ -1179,7 +1176,6 @@ async function transcribeChunked(file) {
   let audioCtx;
   try {
     audioCtx = new AudioContext();
-    console.log('[Transcribe] AudioContext created. sampleRate:', audioCtx.sampleRate);
   } catch (e) {
     console.error('[Transcribe] AudioContext creation failed:', e);
     throw new Error('Browser could not create audio context: ' + (e.message || String(e)));
@@ -1188,7 +1184,6 @@ async function transcribeChunked(file) {
   let audioBuffer;
   try {
     audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    console.log('[Transcribe] Decoded. duration:', audioBuffer.duration.toFixed(1), 's  sampleRate:', audioBuffer.sampleRate, '  channels:', audioBuffer.numberOfChannels);
   } catch (e) {
     console.warn('[Transcribe] decodeAudioData failed, falling back to raw byte-chunking:', e);
     audioCtx.close();
@@ -1203,7 +1198,6 @@ async function transcribeChunked(file) {
   const SAMPLE_RATE = audioBuffer.sampleRate; // use the actual rate, not the hint
   const numSamples = audioBuffer.length;
   const numChannels = audioBuffer.numberOfChannels;
-  console.log('[Transcribe] Mixing', numChannels, 'channels to mono…');
 
   const monoFloat = new Float32Array(numSamples);
   for (let ch = 0; ch < numChannels; ch++) {
@@ -1217,7 +1211,6 @@ async function transcribeChunked(file) {
     const s = Math.max(-1, Math.min(1, monoFloat[i]));
     pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
-  console.log('[Transcribe] PCM ready. Total samples:', numSamples);
 
   // Step 4: split into ≤15 MB WAV chunks and send each to Whisper
   // 15 MB of 16-bit samples = 15*1024*1024/2 samples
@@ -1225,7 +1218,6 @@ async function transcribeChunked(file) {
   const numChunks = Math.ceil(numSamples / SAMPLES_PER_CHUNK);
   const durationMin = Math.round(numSamples / SAMPLE_RATE / 60);
 
-  console.log('[Transcribe] Will send', numChunks, 'chunk(s). Detected duration:', durationMin, 'min');
   setStatus(`Audio decoded (${durationMin} min) - transcribing${numChunks > 1 ? ` in ${numChunks} parts` : ''}…`);
   if (numChunks > 1) showChunkProgress(0, numChunks);
 
@@ -1240,7 +1232,6 @@ async function transcribeChunked(file) {
     const start = i * SAMPLES_PER_CHUNK;
     const end = Math.min(start + SAMPLES_PER_CHUNK, numSamples);
     const wavFile = encodeWAV(pcm16.subarray(start, end), SAMPLE_RATE);
-    console.log(`[Transcribe] Chunk ${i + 1}/${numChunks}: samples ${start}-${end}, WAV size ${wavFile.size} bytes`);
 
     // Retry up to 3 times
     let lastErr;
@@ -1269,8 +1260,6 @@ async function transcribeChunked(file) {
         });
         clearTimeout(timer);
 
-        console.log(`[Transcribe] Chunk ${i + 1} response: HTTP ${res.status}`);
-
         if (!res.ok) {
           const errBody = await res.json().catch(() => ({}));
           const msg = errBody.error?.message || `HTTP ${res.status}`;
@@ -1280,7 +1269,6 @@ async function transcribeChunked(file) {
         }
 
         const data = await res.json();
-        console.log(`[Transcribe] Chunk ${i + 1} text length:`, data.text?.length);
         if (data.text) fullTranscript += (fullTranscript ? ' ' : '') + data.text.trim();
         lastErr = null;
         break;
@@ -1296,7 +1284,6 @@ async function transcribeChunked(file) {
   }
 
   showChunkProgress(numChunks, numChunks);
-  console.log('[Transcribe] Done. Total transcript length:', fullTranscript.length);
   return fullTranscript;
 }
 
@@ -1309,7 +1296,6 @@ async function transcribeRawChunked(file) {
   const mime = file.type || 'audio/mpeg';
   const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
 
-  console.log(`[RawChunk] ${numChunks} chunk(s), mime: ${mime}, ext: .${ext}`);
   setStatus(`Transcribing${numChunks > 1 ? ` in ${numChunks} parts` : ''}…`);
   if (numChunks > 1) showChunkProgress(0, numChunks);
 
@@ -1324,7 +1310,6 @@ async function transcribeRawChunked(file) {
     const start = i * CHUNK_BYTES;
     const end = Math.min(start + CHUNK_BYTES, file.size);
     const chunkFile = new File([file.slice(start, end, mime)], `chunk_${i + 1}.${ext}`, { type: mime });
-    console.log(`[RawChunk] Chunk ${i + 1}/${numChunks}: bytes ${start}-${end} (${chunkFile.size} bytes)`);
 
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -1352,8 +1337,6 @@ async function transcribeRawChunked(file) {
         });
         clearTimeout(timer);
 
-        console.log(`[RawChunk] Chunk ${i + 1} response: HTTP ${res.status}`);
-
         if (!res.ok) {
           const errBody = await res.json().catch(() => ({}));
           const msg = errBody.error?.message || `HTTP ${res.status}`;
@@ -1363,7 +1346,6 @@ async function transcribeRawChunked(file) {
         }
 
         const data = await res.json();
-        console.log(`[RawChunk] Chunk ${i + 1} text length:`, data.text?.length);
         if (data.text) fullTranscript += (fullTranscript ? ' ' : '') + data.text.trim();
         lastErr = null;
         break;
@@ -1379,7 +1361,6 @@ async function transcribeRawChunked(file) {
   }
 
   showChunkProgress(numChunks, numChunks);
-  console.log('[RawChunk] Done. Total transcript length:', fullTranscript.length);
   return fullTranscript;
 }
 
@@ -3337,10 +3318,10 @@ function openNPCModal(id) {
       </div>`:''}
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <label style="margin:0">Voice Description</label>
-          <button class="btn btn-ghost btn-sm" onclick="generateVoiceDescription('${n.id}')" id="voice-gen-btn">Generate</button>
+          <label style="margin:0">Voice Coach <span class="text-dim text-xs">(how they sound, a tic, a sample line, a mannerism, a quirk)</span></label>
+          <button class="btn btn-ghost btn-sm" onclick="generateVoiceCoach('${n.id}')" id="voice-gen-btn">Generate</button>
         </div>
-        <textarea id="en-voice" rows="2" placeholder="How they sound: accent, speech rhythm, tone, quirks… (AI can generate this)">${esc(n.voiceDescription||'')}</textarea>
+        <textarea id="en-voice" rows="5" placeholder="Accent, speech rhythm, tone… (AI can generate a full cheat card here)">${esc(n.voiceDescription||'')}</textarea>
       </div>
       <div class="form-group"><label>Motivation</label><input type="text" id="en-motivation" placeholder="What do they want?" value="${esc(n.motivation||'')}"></div>
       <div class="form-group"><label>Background Notes</label><textarea id="en-notes" rows="3" placeholder="Appearance, history, general behaviour…">${esc(n.notes||'')}</textarea></div>
@@ -3584,12 +3565,20 @@ function toggleEventEdit(btn) {
   }
 }
 
-async function generateVoiceDescription(npcId) {
+// "NPC Voice Coach" - a free (never premium; see Patreon gating policy) AI
+// cheat card for playing a character at the table. Upgrades what used to be
+// a single "how they sound" paragraph into four concrete, usable-at-the-
+// table pieces: a verbal tic, an actual sample line, a physical mannerism,
+// and a random quirk (open-ended - a habit, belief, superstition, whatever).
+// Deliberately kept as plain text in the existing voiceDescription field (not
+// a new structured object) so the hover-token tooltip and NPC card preview -
+// both of which just display this field as-is - need no changes at all.
+async function generateVoiceCoach(npcId) {
   if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); return; }
   const c = camp();
   const n = c.npcs.find(x => x.id === npcId);
   if (!n) return;
-  if (!(await confirmPaidAction(['claude'], 'Generating a voice description with AI'))) return;
+  if (!(await confirmPaidAction(['claude'], 'Generating a Voice Coach cheat card with AI'))) return;
   const btn = document.getElementById('voice-gen-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   const context = [
@@ -3606,13 +3595,19 @@ async function generateVoiceDescription(npcId) {
       headers: { 'x-api-key': getClaudeKey(), 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-opus-4-8',
-        max_tokens: 256,
-        messages: [{ role: 'user', content: `You are helping a GM (Game Master/Dungeon Master) remember how to voice a TTRPG character at the table.
+        max_tokens: 320,
+        messages: [{ role: 'user', content: `You are helping a GM (Game Master/Dungeon Master) prep how to portray a TTRPG character at the table.
 
 Character info:
 ${context}
 
-Write a single short paragraph (2-4 sentences) describing how this character SOUNDS when they speak - their accent or dialect, speech rhythm (fast/slow/halting), vocal tone (gravelly/high/smooth), characteristic phrases or verbal tics, and overall impression. Be specific and practical so the GM can immediately use this as a performance guide. Do not repeat the character's name or role back - just describe the voice.` }]
+Give the GM a compact "cheat card" for playing this character, as exactly four short lines in this format - no markdown, no headers, no extra commentary:
+Tic: <a distinctive verbal tic or speech habit they repeat often>
+Line: "<one sample line of dialogue in their voice - something they might actually say>"
+Mannerism: <one physical mannerism or behavior, separate from how they sound>
+Quirk: <one random, memorable quirk - a habit, belief, superstition, preference, fear, anything - that makes them feel like a real person>
+
+Be specific and practical so the GM can use this immediately at the table.` }]
       })
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
@@ -3624,7 +3619,7 @@ Write a single short paragraph (2-4 sentences) describing how this character SOU
       // Also save immediately to the data model so it survives if modal is closed without Save
       n.voiceDescription = text;
       save();
-      toast('Voice description generated.', 'success');
+      toast('Voice Coach cheat card generated.', 'success');
     }
   } catch(e) {
     toast('Generation failed: ' + (e.message||e), 'error');
@@ -5120,10 +5115,12 @@ function renderRelationshipWeb() {
   const facR = 110;
 
   // Auto-layout: position any un-positioned NPCs in outer ring
+  let positionsChanged = false;
   c.npcs.forEach((n, i) => {
     if (!c.npcPositions[n.id]) {
       const angle = (2 * Math.PI * i / c.npcs.length) - Math.PI/2;
       c.npcPositions[n.id] = { x: Math.round(cx + npcR * Math.cos(angle)), y: Math.round(cy + npcR * Math.sin(angle)) };
+      positionsChanged = true;
     }
   });
   // Auto-layout: position any un-positioned factions in inner ring
@@ -5132,10 +5129,14 @@ function renderRelationshipWeb() {
       if (!c.factionPositions[f.id]) {
         const angle = (2 * Math.PI * i / c.factions.length) - Math.PI/2;
         c.factionPositions[f.id] = { x: Math.round(cx + facR * Math.cos(angle)), y: Math.round(cy + facR * Math.sin(angle)) };
+        positionsChanged = true;
       }
     });
   }
-  save();
+  // Only re-serialize and re-save the whole (potentially image-heavy)
+  // campaign state when auto-layout actually assigned something new -
+  // simply opening/re-rendering this view used to write it every time.
+  if (positionsChanged) save();
 
   // Faction member edges (dashed, faction-coloured)
   const factionEdgeSvg = hasFactions ? c.factions.map(f => {
@@ -5787,28 +5788,38 @@ function openEditThreadModal(id) {
   openThreadModal(t);
 }
 
+// Shared "N-column checkbox picker table" builder, used by any modal that
+// lets the GM multi-select from a list of entities (NPCs, Locations,
+// Factions, Plot Threads, Hooks). Was two separately-drifting local closures
+// copy-pasted into openThreadModal() and openFactionModal() - one of them
+// also missing a closing </td>, and neither guarding the empty-list case
+// consistently.
+function buildCheckboxTable(items, nameKey, selectedIds, cbClass) {
+  if (!items.length) return '<p class="text-xs text-dim">None available.</p>';
+  let rows = '';
+  for (let i = 0; i < items.length; i += 2) {
+    const a = items[i], b = items[i+1];
+    const cellStyle = 'padding:5px 0;vertical-align:middle;font-size:0.875rem;color:var(--text)';
+    const cbStyle = 'padding:5px 8px;vertical-align:middle;width:28px;text-align:right';
+    const cls = cbClass ? ` class="${cbClass}"` : '';
+    rows += `<tr>
+      <td style="${cellStyle}">${esc(a[nameKey])}</td>
+      <td style="${cbStyle}"><input type="checkbox"${cls} value="${a.id}" ${selectedIds.includes(a.id)?'checked':''} style="cursor:pointer"></td>
+      <td style="width:20px"></td>
+      <td style="${cellStyle}">${b?esc(b[nameKey]):''}</td>
+      <td style="${cbStyle}">${b?`<input type="checkbox"${cls} value="${b.id}" ${selectedIds.includes(b.id)?'checked':''} style="cursor:pointer">`:''}</td>
+    </tr>`;
+  }
+  return `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
+}
+
 function openThreadModal(t) {
   const c = camp();
   const isEdit = !!t;
   const statusOpts = THREAD_STATUSES.map(s => `<option value="${s.value}" ${t?.status===s.value?'selected':''}>${s.label}</option>`).join('');
-  function buildCheckboxTable(items, selectedIds) {
-    let rows = '';
-    for (let i = 0; i < items.length; i += 2) {
-      const a = items[i], b = items[i+1];
-      const cellStyle = 'padding:5px 0;vertical-align:middle;font-size:0.875rem;color:var(--text)';
-      const cbStyle = 'padding:5px 8px;vertical-align:middle;width:28px;text-align:right';
-      rows += `<tr>
-        <td style="${cellStyle}">${esc(a.name)}</td>
-        <td style="${cbStyle}"><input type="checkbox" value="${a.id}" ${selectedIds.includes(a.id)?'checked':''} style="cursor:pointer"></td>
-        <td style="width:20px"></td>
-        <td style="${cellStyle}">${b ? esc(b.name) : ''}</td>
-        <td style="${cbStyle}">${b ? `<input type="checkbox" value="${b.id}" ${selectedIds.includes(b.id)?'checked':''} style="cursor:pointer">` : ''}</td>
-      </tr>`;
-    }
-    return `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
-  }
-  const npcCheckboxes = buildCheckboxTable(c.npcs, t?.npcIds||[]);
-  const locationCheckboxes = buildCheckboxTable(c.locations, t?.locationIds||[]);
+  const npcCheckboxes = buildCheckboxTable(c.npcs, 'name', t?.npcIds||[]);
+  const locationCheckboxes = buildCheckboxTable(c.locations, 'name', t?.locationIds||[]);
+  const hookCheckboxes = buildCheckboxTable(c.hooks, 'title', t?.hookIds||[]);
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -6166,26 +6177,8 @@ function openFactionModal(id) {
     `<div class="fc-swatch" onclick="window._factionColor='${col}';document.querySelectorAll('.fc-swatch').forEach(s=>{s.style.outline='none';s.style.outlineOffset='0'});this.style.outline='2px solid white';this.style.outlineOffset='2px'" style="width:22px;height:22px;border-radius:50%;background:${col};cursor:pointer;flex-shrink:0;${col===selectedColor?'outline:2px solid white;outline-offset:2px':''}"></div>`
   ).join('');
 
-  function buildCheckboxTable(items, nameKey, cbClass, selectedIds) {
-    if (!items.length) return '<p class="text-xs text-dim">None available.</p>';
-    let rows = '';
-    for (let i = 0; i < items.length; i += 2) {
-      const a = items[i], b = items[i+1];
-      const cs = 'padding:5px 0;vertical-align:middle;font-size:0.875rem;color:var(--text)';
-      const cbs = 'padding:5px 8px;vertical-align:middle;width:28px;text-align:right';
-      rows += `<tr>
-        <td style="${cs}">${esc(a[nameKey])}</td>
-        <td style="${cbs}"><input type="checkbox" class="${cbClass}" value="${a.id}" ${selectedIds.includes(a.id)?'checked':''} style="cursor:pointer"></td>
-        <td style="width:20px"></td>
-        <td style="${cs}">${b?esc(b[nameKey]):''}</td>
-        <td style="${cbs}">${b?`<input type="checkbox" class="${cbClass}" value="${b.id}" ${selectedIds.includes(b.id)?'checked':''} style="cursor:pointer">`:''}
-      </tr>`;
-    }
-    return `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
-  }
-
-  const npcCBs    = buildCheckboxTable(c.npcs,        'name',  'fc-npc-cb',    f?.memberIds||[]);
-  const threadCBs = buildCheckboxTable(c.plotThreads,  'title', 'fc-thread-cb', f?.threadIds||[]);
+  const npcCBs    = buildCheckboxTable(c.npcs,        'name',  f?.memberIds||[], 'fc-npc-cb');
+  const threadCBs = buildCheckboxTable(c.plotThreads, 'title', f?.threadIds||[], 'fc-thread-cb');
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -6400,6 +6393,32 @@ function tickClock(id, segIndex) {
 // SESSION PREP
 // ═══════════════════════════════════════════════
 
+// Single source of truth for a prep-scene / prep-question row's markup -
+// used by the full-page render below and by addPrepScene()/removePrepScene()
+// (and their question equivalents), which used to each carry their own
+// copy-pasted version of this HTML that had already started to drift (e.g.
+// mismatched placeholder text between add/remove).
+function sceneRowHTML(sc, i) {
+  return `
+    <div data-scene-idx="${i}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" ${sc.done?'checked':''} onchange="window._prepScenes[${i}].done=this.checked">
+      <div style="flex:1">
+        <input type="text" value="${esc(sc.title)}" placeholder="Scene title…" oninput="window._prepScenes[${i}].title=this.value" style="${sc.done?'text-decoration:line-through;color:var(--text-dim)':''}">
+        <textarea rows="2" placeholder="What happens…" oninput="window._prepScenes[${i}].description=this.value" style="margin-top:6px;resize:vertical">${esc(sc.description||'')}</textarea>
+      </div>
+      <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removePrepScene(${i})">✕</button>
+    </div>`;
+}
+
+function questionRowHTML(q, i) {
+  return `
+    <div data-question-idx="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked">
+      <input type="text" value="${esc(q.text)}" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value" style="flex:1;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">
+      <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removePrepQuestion(${i})">✕</button>
+    </div>`;
+}
+
 function renderSessionPrep() {
   const c = camp();
   const prep      = c.sessionPrep || { notes: '', scenes: [], questions: [] };
@@ -6412,22 +6431,8 @@ function renderSessionPrep() {
   const activeFactions    = c.factions.filter(f => (f.status||'active') === 'active');
   const staleEntities     = computeStaleEntities();
 
-  const sceneRows = scenes.map((sc, i) => `
-    <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
-      <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" ${sc.done?'checked':''} onchange="window._prepScenes[${i}].done=this.checked">
-      <div style="flex:1">
-        <input type="text" value="${esc(sc.title)}" placeholder="Scene title…" oninput="window._prepScenes[${i}].title=this.value" style="${sc.done?'text-decoration:line-through;color:var(--text-dim)':''}">
-        <textarea rows="2" placeholder="What happens…" oninput="window._prepScenes[${i}].description=this.value" style="margin-top:6px;resize:vertical">${esc(sc.description||'')}</textarea>
-      </div>
-      <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removePrepScene(${i})">✕</button>
-    </div>`).join('');
-
-  const qRows = questions.map((q, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked">
-      <input type="text" value="${esc(q.text)}" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value" style="flex:1;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">
-      <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removePrepQuestion(${i})">✕</button>
-    </div>`).join('');
+  const sceneRows = scenes.map(sceneRowHTML).join('');
+  const qRows = questions.map(questionRowHTML).join('');
 
   return `
     <div class="page-header">
@@ -6535,23 +6540,11 @@ function saveSessionPrep() {
 
 function addPrepScene() {
   if (!window._prepScenes) window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes||[]));
-  const i = window._prepScenes.length;
   window._prepScenes.push({ id: uid(), title: '', description: '', done: false });
   const list = document.getElementById('prep-scenes-list');
   if (!list) return;
-  const empty = list.querySelector('p');
-  if (empty) empty.remove();
-  const div = document.createElement('div');
-  div.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)';
-  div.innerHTML = `
-    <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" onchange="window._prepScenes[${i}].done=this.checked">
-    <div style="flex:1">
-      <input type="text" placeholder="Scene title…" oninput="window._prepScenes[${i}].title=this.value">
-      <textarea rows="2" placeholder="What happens…" oninput="window._prepScenes[${i}].description=this.value" style="margin-top:6px;resize:vertical"></textarea>
-    </div>
-    <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removePrepScene(${i})">✕</button>`;
-  list.appendChild(div);
-  div.querySelector('input[type=text]')?.focus();
+  list.innerHTML = window._prepScenes.map(sceneRowHTML).join('');
+  list.querySelector(`[data-scene-idx="${window._prepScenes.length-1}"] input[type=text]`)?.focus();
 }
 
 function removePrepScene(i) {
@@ -6559,34 +6552,18 @@ function removePrepScene(i) {
   window._prepScenes.splice(i, 1);
   const list = document.getElementById('prep-scenes-list');
   if (!list) return;
-  list.innerHTML = window._prepScenes.length===0 ? `<p class="text-xs text-dim" style="padding:4px 0">No scenes planned yet.</p>` :
-    window._prepScenes.map((sc,idx)=>`
-      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
-        <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" ${sc.done?'checked':''} onchange="window._prepScenes[${idx}].done=this.checked">
-        <div style="flex:1">
-          <input type="text" value="${esc(sc.title)}" placeholder="Scene title…" oninput="window._prepScenes[${idx}].title=this.value" style="${sc.done?'text-decoration:line-through;color:var(--text-dim)':''}">
-          <textarea rows="2" placeholder="What happens…" oninput="window._prepScenes[${idx}].description=this.value" style="margin-top:6px;resize:vertical">${esc(sc.description||'')}</textarea>
-        </div>
-        <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removePrepScene(${idx})">✕</button>
-      </div>`).join('');
+  list.innerHTML = window._prepScenes.length===0
+    ? `<p class="text-xs text-dim" style="padding:4px 0">No scenes planned yet.</p>`
+    : window._prepScenes.map(sceneRowHTML).join('');
 }
 
 function addPrepQuestion() {
   if (!window._prepQuestions) window._prepQuestions = JSON.parse(JSON.stringify(camp().sessionPrep?.questions||[]));
-  const i = window._prepQuestions.length;
   window._prepQuestions.push({ id: uid(), text: '', done: false });
   const list = document.getElementById('prep-questions-list');
   if (!list) return;
-  const empty = list.querySelector('p');
-  if (empty) empty.remove();
-  const div = document.createElement('div');
-  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
-  div.innerHTML = `
-    <input type="checkbox" style="width:auto;accent-color:var(--accent)" onchange="window._prepQuestions[${i}].done=this.checked">
-    <input type="text" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value" style="flex:1">
-    <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removePrepQuestion(${i})">✕</button>`;
-  list.appendChild(div);
-  div.querySelector('input[type=text]')?.focus();
+  list.innerHTML = window._prepQuestions.map(questionRowHTML).join('');
+  list.querySelector(`[data-question-idx="${window._prepQuestions.length-1}"] input[type=text]`)?.focus();
 }
 
 function removePrepQuestion(i) {
@@ -6594,13 +6571,9 @@ function removePrepQuestion(i) {
   window._prepQuestions.splice(i, 1);
   const list = document.getElementById('prep-questions-list');
   if (!list) return;
-  list.innerHTML = window._prepQuestions.length===0 ? `<p class="text-xs text-dim">Things you need to figure out before the session.</p>` :
-    window._prepQuestions.map((q,idx)=>`
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${idx}].done=this.checked">
-        <input type="text" value="${esc(q.text)}" placeholder="Question…" oninput="window._prepQuestions[${idx}].text=this.value" style="flex:1;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">
-        <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removePrepQuestion(${idx})">✕</button>
-      </div>`).join('');
+  list.innerHTML = window._prepQuestions.length===0
+    ? `<p class="text-xs text-dim">Things you need to figure out before the session.</p>`
+    : window._prepQuestions.map(questionRowHTML).join('');
 }
 
 // ═══════════════════════════════════════════════

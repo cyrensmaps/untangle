@@ -4,6 +4,21 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.12.0]
+
+### Added
+- **NPC Voice Coach (free)**: the "Voice Description" field is now "Voice Coach" - the same AI-generate button now produces a full cheat card for playing the character at the table: a verbal tic, a sample line of in-character dialogue, a physical mannerism, and a random quirk (a habit, belief, superstition, or anything else memorable). Still free, still just needs your own Claude API key, same as before.
+
+### Fixed
+- Fixed a bug where opening a Plot Thread's edit modal would crash if the campaign had any hooks/rumors extracted from a session transcript.
+- Ticking into the Relationship Web no longer re-saves the entire campaign (including every embedded map/portrait image) unless something actually changed.
+- `save()` failures (e.g. the browser's storage running full) now surface an error instead of silently failing to persist.
+- The Foundry token-hover tooltip no longer re-parses the whole campaign from scratch on every hover; it's now cached and only refreshed when the data actually changes.
+
+### Changed
+- Consolidated several duplicated UI-builder functions (checkbox pickers, Session Prep row rendering) that had already started to drift from each other into shared implementations.
+- Removed leftover debug logging from the audio transcription pipeline.
+
 ## [1.11.0]
 
 ### Added

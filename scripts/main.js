@@ -525,9 +525,31 @@ function _stripHtmlMain(html) {
   return (div.textContent || div.innerText || '').trim();
 }
 
+// Cached parse of the cp_v1 localStorage blob. This module's own window
+// doesn't touch canvas rendering when it's idle, but hoverToken (below)
+// fires on every mouse-in/out over a token during active play - re-parsing
+// a campaign's full state (which can run into the low megabytes once maps
+// and NPC portraits are counted) on every single hover was doing real work
+// on the same thread that drives token/canvas rendering. Invalidated by the
+// 'storage' event, which fires here whenever the planner or Quick Access
+// iframe (different browsing contexts) writes to the same key - but NOT for
+// a write this exact window makes itself, which is why addActorToUntangle()
+// below also clears the flag manually right after its own direct write.
+let _untangleStateCache = null;
+let _untangleStateCacheLoaded = false;
+
 function _readUntangleState() {
-  try { return JSON.parse(localStorage.getItem('cp_v1') || 'null'); } catch { return null; }
+  if (!_untangleStateCacheLoaded) {
+    try { _untangleStateCache = JSON.parse(localStorage.getItem('cp_v1') || 'null'); }
+    catch { _untangleStateCache = null; }
+    _untangleStateCacheLoaded = true;
+  }
+  return _untangleStateCache;
 }
+
+window.addEventListener('storage', (e) => {
+  if (e.key === 'cp_v1') _untangleStateCacheLoaded = false;
+});
 
 function addActorToUntangle(actor) {
   const state = _readUntangleState();
@@ -548,6 +570,7 @@ function addActorToUntangle(actor) {
     sessions: [], events: [], image: img, imageOffsetX: 50, imageOffsetY: 50, foundryActorId: actor.id,
   });
   localStorage.setItem('cp_v1', JSON.stringify(state));
+  _untangleStateCacheLoaded = false; // this window's own write - no 'storage' event fires for it
   ui.notifications.info(`Added "${actor.name}" to Untangle.`);
 }
 

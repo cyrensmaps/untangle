@@ -90,7 +90,21 @@ function _mirrorBackup() {
   }, 1500);
 }
 
-function save() { localStorage.setItem('cp_v1', JSON.stringify(state)); _mirrorBackup(); }
+function save() {
+  try {
+    localStorage.setItem('cp_v1', JSON.stringify(state));
+  } catch (err) {
+    // Most likely the browser's localStorage quota - state includes every
+    // campaign's base64 NPC portraits and map images, which can add up.
+    // Previously this threw uncaught and whatever the user just did (add an
+    // NPC, tick a clock...) silently failed to persist with no indication.
+    console.error('Untangle | Failed to save - localStorage quota likely exceeded', err);
+    const msg = 'Untangle could not save - your browser storage may be full. Try removing a large map image.';
+    if (typeof toast === 'function') toast(msg, 'error'); else alert(msg);
+    return;
+  }
+  _mirrorBackup();
+}
 function camp() { return state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0]; }
 
 // The main planner, the Quick Access widget, and main.js's "Add to Untangle"
