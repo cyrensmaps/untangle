@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.9.1]
+
+### Changed
+- Timeline is now a premium feature, requiring an active Patreon pledge linked in Untangle Settings.
+
 ## [1.9.0]
 
 ### Added

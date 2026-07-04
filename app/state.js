@@ -309,7 +309,7 @@ function toggleDictation(textareaId, btn) {
 // rearchitecture.
 const FEATURE_REGISTRY = [
   { key: 'sessionPrep',       label: 'Session Prep',              category: 'At the Table',       premium: false },
-  { key: 'timeline',          label: 'Timeline',                  category: 'At the Table',       premium: false },
+  { key: 'timeline',          label: 'Timeline',                  category: 'At the Table',       premium: true  },
   { key: 'recap',             label: 'Session Recap',             category: 'At the Table',       premium: false },
   { key: 'staleCallbacks',    label: 'Stale Callback Surfacing',  category: 'At the Table',       premium: false },
   { key: 'maps',              label: 'Maps',                      category: 'World',              premium: false },
