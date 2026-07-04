@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Untangle — Quick Access</title>
+  <title>Untangle - Quick Access</title>
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="components.css">
   <style>
@@ -50,7 +50,7 @@
   <textarea id="qa-note-text" rows="4" placeholder="Capture anything mid-session…"></textarea>
   <button type="button" class="btn btn-ghost" id="qa-dictate-btn" onclick="toggleDictation('qa-note-text', this)">Dictate</button>
   <select id="qa-note-about">
-    <option value="">— Not tied to anything —</option>
+    <option value="">- Not tied to anything -</option>
   </select>
   <button class="btn btn-primary" onclick="qaSaveNote()">+ Add Note</button>
   <div class="qa-hint" id="qa-note-hint"></div>
@@ -112,7 +112,7 @@ function qaRenderNoteAboutOptions() {
   const sel = document.getElementById('qa-note-about');
   if (!sel) return;
   const prev = sel.value;
-  sel.innerHTML = `<option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}`;
+  sel.innerHTML = `<option value="">- Not tied to anything -</option>${_noteEntityOpts('','')}`;
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 

@@ -38,13 +38,13 @@ class CampaignPlannerApp extends Application {
 let _plannerApp = null;
 
 function openCampaignPlanner() {
-  if (!game.user.isGM) return; // Untangle holds GM secrets — never open for players
+  if (!game.user.isGM) return; // Untangle holds GM secrets - never open for players
   try {
     if (!_plannerApp) _plannerApp = new CampaignPlannerApp();
     _plannerApp.render(true, { focus: true });
   } catch (err) {
     console.error('Untangle | Failed to open planner', err);
-    ui.notifications?.error('Untangle failed to open — see console (F12) for details.');
+    ui.notifications?.error('Untangle failed to open - see console (F12) for details.');
   }
 }
 
@@ -54,7 +54,7 @@ class QuickAccessApp extends Application {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-quick-access',
-      title: 'Untangle — Quick Access',
+      title: 'Untangle - Quick Access',
       width: 320,
       height: 440,
       resizable: true,
@@ -88,7 +88,7 @@ function toggleQuickAccessWidget() {
     _quickAccessApp.render(true);
   } catch (err) {
     console.error('Untangle | Failed to open Quick Access', err);
-    ui.notifications?.error('Untangle Quick Access failed to open — see console (F12) for details.');
+    ui.notifications?.error('Untangle Quick Access failed to open - see console (F12) for details.');
   }
 }
 
@@ -101,7 +101,7 @@ class UntangleDataConfig extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-data-config',
-      title: 'Untangle — Campaign Data',
+      title: 'Untangle - Campaign Data',
       width: 420,
       height: 'auto',
     });
@@ -177,7 +177,7 @@ class UntangleDataConfig extends FormApplication {
   }
 
   _clear() {
-    if (!confirm('Clear all Untangle data stored in this browser? This cannot be undone — export a backup first if unsure.')) return;
+    if (!confirm('Clear all Untangle data stored in this browser? This cannot be undone - export a backup first if unsure.')) return;
     localStorage.removeItem('cp_v1');
     ui.notifications.info('Untangle data cleared.');
   }
@@ -193,7 +193,7 @@ class UntangleApiKeyConfig extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-api-key-config',
-      title: 'Untangle — API Keys',
+      title: 'Untangle - API Keys',
       width: 420,
       height: 'auto',
     });

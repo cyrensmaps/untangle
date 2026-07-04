@@ -215,6 +215,12 @@
     .tl-chip:hover { opacity: 0.8; }
     .tl-chip-npc { background: rgba(var(--accent-rgb),0.1); border-color: rgba(var(--accent-rgb),0.25); color: var(--accent); }
     .tl-chip-loc { background: rgba(var(--green-rgb),0.12); border-color: rgba(var(--green-rgb),0.3); color: var(--green); }
+    .tl-chip-faction { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); color: var(--text-dim); }
+    .tl-chip-thread { background: rgba(221,136,0,0.12); border-color: rgba(221,136,0,0.3); color: #dd8800; }
+    .tl-chip-remove { margin-left: 5px; opacity: 0.6; }
+    .tl-chip-remove:hover { opacity: 1; }
+    .tl-color-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
+    .tl-color-swatch:hover { transform: scale(1.15); }
 
     /* ── ENTITY LINKS ── */
     .session-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
@@ -363,9 +369,9 @@ function confirmPaidAction(serviceKeys, actionLabel) {
     overlay.innerHTML = `
       <div class="modal" style="max-width:460px">
         <div class="modal-header"><h3>This costs money</h3></div>
-        <p class="text-sm" style="line-height:1.7;margin-bottom:12px">${esc(actionLabel)} uses ${services.length>1?'API keys that draw':'an API key that draws'} from your own account balance${services.length>1?'s':''} — this module never charges you directly, but the provider${services.length>1?'s':''} will:</p>
+        <p class="text-sm" style="line-height:1.7;margin-bottom:12px">${esc(actionLabel)} uses ${services.length>1?'API keys that draw':'an API key that draws'} from your own account balance${services.length>1?'s':''} - this module never charges you directly, but the provider${services.length>1?'s':''} will:</p>
         <ul class="text-sm" style="line-height:2;margin:0 0 18px 18px">
-          ${services.map(s => `<li>${esc(s.label)} — <a href="${s.url}" target="_blank">check your balance</a></li>`).join('')}
+          ${services.map(s => `<li>${esc(s.label)} - <a href="${s.url}" target="_blank">check your balance</a></li>`).join('')}
         </ul>
         <div class="flex gap-8" style="justify-content:flex-end">
           <button class="btn btn-ghost" data-act="cancel">Cancel</button>
@@ -613,7 +619,7 @@ function renderDashboard() {
       </div>
       <div class="card" style="grid-column:1/-1">
         <div class="flex-between" style="margin-bottom:16px">
-          <h3>${last ? `Last Session — ${esc(last.title)}` : 'Characters'}</h3>
+          <h3>${last ? `Last Session - ${esc(last.title)}` : 'Characters'}</h3>
           <button class="btn btn-ghost btn-sm" onclick="navigate('npcs')">All characters →</button>
         </div>
         ${last ? (() => {
@@ -718,7 +724,7 @@ function renderNewSession() {
     <div class="card">
       <div class="form-row" style="margin-bottom:4px">
         <div class="form-group">
-          <label>Session Title (optional — AI will suggest one)</label>
+          <label>Session Title (optional - AI will suggest one)</label>
           <input type="text" id="s-title" placeholder="The Docks Ambush…">
         </div>
         <div class="form-group">
@@ -748,22 +754,22 @@ function renderNewSession() {
         </div>
         <div id="audio-selected" style="display:none" class="audio-file-selected" style="margin-top:12px">
           <div class="file-info">
-            <div class="file-name" id="audio-file-name">—</div>
-            <div class="file-size" id="audio-file-size">—</div>
+            <div class="file-name" id="audio-file-name">-</div>
+            <div class="file-size" id="audio-file-size">-</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="clearAudio()">✕ Remove</button>
         </div>
         <input type="file" id="audio-file-input" accept=".mp3,.ogg,.flac,.wav,.m4a,.webm,.opus" style="display:none" onchange="onAudioSelected(this)">
         <p class="text-xs text-dim" style="margin-top:10px;line-height:1.6">
-          Download as <strong style="color:var(--text)">MP3</strong> or <strong style="color:var(--text)">OGG</strong> from Craig. Large files are automatically split and transcribed in chunks — no size limit.
+          Download as <strong style="color:var(--text)">MP3</strong> or <strong style="color:var(--text)">OGG</strong> from Craig. Large files are automatically split and transcribed in chunks - no size limit.
         </p>
         <p class="text-xs" style="margin-top:8px;line-height:1.6;padding:10px 12px;background:rgba(var(--red-rgb),0.08);border:1px solid rgba(var(--red-rgb),0.25);border-radius:6px;color:var(--text)">
-          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money — roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
+          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
           <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>Transcribe &amp; Process</button>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money — OpenAI (transcription) + Claude (analysis)</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + Claude (analysis)</div>
       </div>
 
       <!-- LOCAL WHISPER MODE -->
@@ -774,8 +780,8 @@ function renderNewSession() {
         </div>
         <div id="local-selected" style="display:none" class="audio-file-selected">
           <div class="file-info">
-            <div class="file-name" id="local-file-name">—</div>
-            <div class="file-size" id="local-file-size">—</div>
+            <div class="file-name" id="local-file-name">-</div>
+            <div class="file-size" id="local-file-size">-</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="clearLocalAudio()">✕ Remove</button>
         </div>
@@ -783,9 +789,9 @@ function renderNewSession() {
         <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <label class="text-sm" style="flex-shrink:0">Model quality:</label>
           <select id="local-model" style="font-size:0.85rem">
-            <option value="Xenova/whisper-tiny" selected>Tiny — fastest, ~75 MB (recommended)</option>
-            <option value="Xenova/whisper-base">Base — better quality, ~140 MB</option>
-            <option value="Xenova/whisper-small">Small — best quality, ~250 MB</option>
+            <option value="Xenova/whisper-tiny" selected>Tiny - fastest, ~75 MB (recommended)</option>
+            <option value="Xenova/whisper-base">Base - better quality, ~140 MB</option>
+            <option value="Xenova/whisper-small">Small - best quality, ~250 MB</option>
           </select>
           <label class="text-sm" style="flex-shrink:0;margin-left:8px">Language:</label>
           <select id="local-lang" style="font-size:0.85rem">
@@ -801,10 +807,10 @@ function renderNewSession() {
           </select>
         </div>
         <p class="text-xs" style="margin-top:12px;line-height:1.6;padding:10px 12px;background:rgba(var(--accent-rgb),0.07);border:1px solid var(--border);border-radius:6px;color:var(--text-dim)">
-          <strong style="color:var(--text)">Local transcription is slow — much slower than you'd expect.</strong>
-          A 1-hour session can take 15–60 minutes depending on your hardware, and the progress bar may appear stuck for long stretches. This is normal.
+          <strong style="color:var(--text)">Local transcription is slow - much slower than you'd expect.</strong>
+          A 1-hour session can take 15-60 minutes depending on your hardware, and the progress bar may appear stuck for long stretches. This is normal.
           <br><br>
-          If you want results in under a minute, use <strong style="color:var(--text)">Whisper via OpenAI</strong> instead — it runs on their servers and handles long files instantly. You'll need an OpenAI API key in Settings.
+          If you want results in under a minute, use <strong style="color:var(--text)">Whisper via OpenAI</strong> instead - it runs on their servers and handles long files instantly. You'll need an OpenAI API key in Settings.
           <br><br>
           Local is only worth it if you have no API key or need full privacy.
         </p>
@@ -831,7 +837,7 @@ The AI will extract:
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">Process with AI</button>
           </div>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money — uses your Claude API key</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your Claude API key</div>
       </div>
 
       <div id="status-box" style="display:none" class="status-box">
@@ -973,7 +979,7 @@ async function transcribeLocal() {
       const dtype  = hasWebGPU ? 'fp16' : 'q8';
       window._whisperDevice = device; // store for status display
 
-      setStatus(`Downloading model "${modelId}" (${hasWebGPU ? 'GPU' : 'CPU'} mode) — this only happens once…`);
+      setStatus(`Downloading model "${modelId}" (${hasWebGPU ? 'GPU' : 'CPU'} mode) - this only happens once…`);
       _whisperPipeline = await pipeline('automatic-speech-recognition', modelId, {
         device,
         dtype,
@@ -981,7 +987,7 @@ async function transcribeLocal() {
           if (prog.status === 'downloading' && prog.total) {
             const pct = Math.round(prog.progress);
             const mb  = (prog.total / 1048576).toFixed(0);
-            setStatus(`Downloading model: ${pct}% of ${mb} MB — cached after this`);
+            setStatus(`Downloading model: ${pct}% of ${mb} MB - cached after this`);
           } else if (prog.status === 'loading') {
             setStatus('Loading model into memory…');
           }
@@ -1015,7 +1021,7 @@ async function transcribeLocal() {
           ? ` (up to ${(estMin / 60).toFixed(1)}h on ${deviceLabel})`
           : ` (up to ${estMin}m on ${deviceLabel})`)
       : '';
-    setStatus(`Transcribing audio (≈${durationMin} min)${timeWarning} — please wait…`);
+    setStatus(`Transcribing audio (≈${durationMin} min)${timeWarning} - please wait…`);
     if (totalChunks > 1) showChunkProgress(0, totalChunks);
 
     const audioUrl = URL.createObjectURL(file);
@@ -1051,7 +1057,7 @@ async function transcribeLocal() {
       if (progressLabel) progressLabel.textContent = `${elapsedLabel} elapsed`;
 
       const gpuNote = (usingGPU && chunksDone === 0 && elapsedSec > 30)
-        ? ' — GPU warming up, hang tight' : '';
+        ? ' - GPU warming up, hang tight' : '';
       setStatus(`Transcribing audio${gpuNote}`);
     }, 1000);
 
@@ -1090,7 +1096,7 @@ async function transcribeLocal() {
       hideChunkProgress();
       setStatus(null);
       lockUI(false);
-      toast('Transcription done — add your Claude key to extract NPCs, or save manually.', 'success');
+      toast('Transcription done - add your Claude key to extract NPCs, or save manually.', 'success');
       return;
     }
 
@@ -1145,7 +1151,7 @@ async function transcribeAndProcess() {
     await runClaudeExtraction(transcript);
   } catch (err) {
     console.error('[transcribeAndProcess] caught:', err);
-    const msg = err?.message || err?.name || String(err) || 'Unknown error — check the browser console (F12) for details.';
+    const msg = err?.message || err?.name || String(err) || 'Unknown error - check the browser console (F12) for details.';
     toast('Error: ' + msg, 'error');
     lockUI(false);
     setStatus(null);
@@ -1221,7 +1227,7 @@ async function transcribeChunked(file) {
   const durationMin = Math.round(numSamples / SAMPLE_RATE / 60);
 
   console.log('[Transcribe] Will send', numChunks, 'chunk(s). Detected duration:', durationMin, 'min');
-  setStatus(`Audio decoded (${durationMin} min) — transcribing${numChunks > 1 ? ` in ${numChunks} parts` : ''}…`);
+  setStatus(`Audio decoded (${durationMin} min) - transcribing${numChunks > 1 ? ` in ${numChunks} parts` : ''}…`);
   if (numChunks > 1) showChunkProgress(0, numChunks);
 
   let fullTranscript = '';
@@ -1235,14 +1241,14 @@ async function transcribeChunked(file) {
     const start = i * SAMPLES_PER_CHUNK;
     const end = Math.min(start + SAMPLES_PER_CHUNK, numSamples);
     const wavFile = encodeWAV(pcm16.subarray(start, end), SAMPLE_RATE);
-    console.log(`[Transcribe] Chunk ${i + 1}/${numChunks}: samples ${start}–${end}, WAV size ${wavFile.size} bytes`);
+    console.log(`[Transcribe] Chunk ${i + 1}/${numChunks}: samples ${start}-${end}, WAV size ${wavFile.size} bytes`);
 
     // Retry up to 3 times
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         if (attempt > 1) {
-          setStatus(`Part ${i + 1} of ${numChunks} — retrying (${attempt}/3)…`);
+          setStatus(`Part ${i + 1} of ${numChunks} - retrying (${attempt}/3)…`);
           await sleep(2000 * attempt);
         }
 
@@ -1319,13 +1325,13 @@ async function transcribeRawChunked(file) {
     const start = i * CHUNK_BYTES;
     const end = Math.min(start + CHUNK_BYTES, file.size);
     const chunkFile = new File([file.slice(start, end, mime)], `chunk_${i + 1}.${ext}`, { type: mime });
-    console.log(`[RawChunk] Chunk ${i + 1}/${numChunks}: bytes ${start}–${end} (${chunkFile.size} bytes)`);
+    console.log(`[RawChunk] Chunk ${i + 1}/${numChunks}: bytes ${start}-${end} (${chunkFile.size} bytes)`);
 
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         if (attempt > 1) {
-          setStatus(`Part ${i + 1} of ${numChunks} — retrying (${attempt}/3)…`);
+          setStatus(`Part ${i + 1} of ${numChunks} - retrying (${attempt}/3)…`);
           await sleep(2000 * attempt);
         }
 
@@ -1645,7 +1651,7 @@ async function processWithAI() {
 
 // ── Shared Claude extraction logic ──
 async function runClaudeExtraction(transcript, existingSession, playerNames = []) {
-  if (!getClaudeKey()) throw new Error('Claude API key missing — add it in Foundry Configure Settings.');
+  if (!getClaudeKey()) throw new Error('Claude API key missing - add it in Foundry Configure Settings.');
 
   const c = camp();
   // Short detail per entity (not just names) so Claude has enough to spot a
@@ -1659,7 +1665,7 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
     });
     return list.length ? list.join('; ') : 'none';
   }
-  const existingNPCs     = trimmedList(c.npcs, 40, n => [n.role, n.notes].filter(Boolean).join(' — '));
+  const existingNPCs     = trimmedList(c.npcs, 40, n => [n.role, n.notes].filter(Boolean).join(' - '));
   const existingLocs     = trimmedList(c.locations, 40, l => l.description);
   const existingFactions = trimmedList(c.factions, 40, f => f.description);
 
@@ -1675,10 +1681,10 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
   }
 
   const playerNote = playerNames.length
-    ? `\nThese are the REAL PLAYERS (GM and players at the table) — do NOT include them as NPCs: ${playerNames.join(', ')}.`
+    ? `\nThese are the REAL PLAYERS (GM and players at the table) - do NOT include them as NPCs: ${playerNames.join(', ')}.`
     : '';
 
-  const prompt = `You are a TTRPG campaign assistant helping a GM organize session notes. Analyze the transcript below and return structured data as valid JSON only — no markdown, no explanation, just the JSON object.
+  const prompt = `You are a TTRPG campaign assistant helping a GM organize session notes. Analyze the transcript below and return structured data as valid JSON only - no markdown, no explanation, just the JSON object.
 
 IMPORTANT: Write all text values (summary, keyEvents, role, notes, descriptions, hook titles and descriptions) in the same language as the transcript. Do not translate to English.
 
@@ -1709,9 +1715,9 @@ Return exactly this structure:
   "openQuestions": ["a question raised in the transcript that was never answered or resolved"]
 }
 
-Set isNew to false if the name matches something already in the campaign. For factions: only include factions explicitly named or clearly active this session — not every group in passing. Empty array if nothing fits a category.
+Set isNew to false if the name matches something already in the campaign. For factions: only include factions explicitly named or clearly active this session - not every group in passing. Empty array if nothing fits a category.
 
-For contradictions: entityType is "npc", "location", or "faction". Only flag it if the transcript actually conflicts with something already known (a different name, role, description, or fact) — not just when it adds new information. Empty array if nothing conflicts.
+For contradictions: entityType is "npc", "location", or "faction". Only flag it if the transcript actually conflicts with something already known (a different name, role, description, or fact) - not just when it adds new information. Empty array if nothing conflicts.
 
 For openQuestions: things the party asked about, wondered about, or that were left hanging in this transcript and never got resolved by the end of it. Keep each one short and concrete. Empty array if nothing fits.
 
@@ -1885,7 +1891,7 @@ function showReviewModal(session, extracted) {
             <div class="review-item-content">
               <h4>${esc(ct.name||'')}</h4>
               <p>${esc(ct.note||'')}</p>
-              <p class="text-xs text-dim" style="margin-top:4px">Known: "${esc(ct.existingDetail||'')}" — this session says: "${esc(ct.newDetail||'')}"</p>
+              <p class="text-xs text-dim" style="margin-top:4px">Known: "${esc(ct.existingDetail||'')}" - this session says: "${esc(ct.newDetail||'')}"</p>
               <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="reviewContradiction(${i})">Review →</button>
             </div>
           </div>`).join('')}` : ''}
@@ -1904,7 +1910,7 @@ function reviewContradiction(i) {
   const finder = { npc: c.npcs, location: c.locations, faction: c.factions }[ct.entityType];
   const entity = finder?.find(x => x.name.toLowerCase() === (ct.name||'').toLowerCase());
   closeReview();
-  if (!entity) { toast('Could not find that entry — it may already have been renamed.', 'error'); return; }
+  if (!entity) { toast('Could not find that entry - it may already have been renamed.', 'error'); return; }
   const openFn = { npc: 'openNPCModal', location: 'openLocationModal', faction: 'openFactionModal' }[ct.entityType];
   if (openFn && typeof window[openFn] === 'function') window[openFn](entity.id);
 }
@@ -2047,7 +2053,7 @@ async function postSessionToJournal(id) {
   if (!s) return;
 
   try {
-    const journalName = `Untangle — ${c.name}`;
+    const journalName = `Untangle - ${c.name}`;
     let journal = c.journalEntryId ? pgame.journal.get(c.journalEntryId) : null;
     if (!journal) journal = pgame.journal.find(j => j.name === journalName);
     if (!journal) journal = await pgame.journal.documentClass.create(toFoundryPlain({ name: journalName }));
@@ -2091,7 +2097,7 @@ async function syncFoundryRollTables() {
   try {
     let count = 0;
     if (c.npcs.length) {
-      c.npcRollTableId = await _upsertRollTable(pgame, c.npcRollTableId, `Untangle — ${c.name} — All Characters`, c.npcs.map(n => n.name));
+      c.npcRollTableId = await _upsertRollTable(pgame, c.npcRollTableId, `Untangle - ${c.name} - All Characters`, c.npcs.map(n => n.name));
       count++;
     }
     // One table per character type group too (Player Characters, Enemies,
@@ -2101,11 +2107,11 @@ async function syncFoundryRollTables() {
     for (const group of TYPE_GROUPS) {
       const names = c.npcs.filter(n => group.types.includes(n.type || 'npc')).map(n => n.name);
       if (!names.length) continue;
-      c.rollTableIdsByGroup[group.label] = await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle — ${c.name} — ${group.label}`, names);
+      c.rollTableIdsByGroup[group.label] = await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names);
       count++;
     }
     if (c.locations.length) {
-      c.locationRollTableId = await _upsertRollTable(pgame, c.locationRollTableId, `Untangle — ${c.name} — Locations`, c.locations.map(l => l.name));
+      c.locationRollTableId = await _upsertRollTable(pgame, c.locationRollTableId, `Untangle - ${c.name} - Locations`, c.locations.map(l => l.name));
       count++;
     }
 
@@ -2115,7 +2121,7 @@ async function syncFoundryRollTables() {
     for (const loc of c.locations) {
       const names = c.npcs.filter(n => n.locationId === loc.id).map(n => n.name);
       if (!names.length) continue;
-      c.rollTableIdsByLocation[loc.id] = await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle — ${c.name} — At ${loc.name}`, names);
+      c.rollTableIdsByLocation[loc.id] = await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle - ${c.name} - At ${loc.name}`, names);
       count++;
     }
 
@@ -2124,7 +2130,7 @@ async function syncFoundryRollTables() {
     for (const f of c.factions) {
       const names = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)?.name).filter(Boolean);
       if (!names.length) continue;
-      c.rollTableIdsByFaction[f.id] = await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle — ${c.name} — ${f.name} Members`, names);
+      c.rollTableIdsByFaction[f.id] = await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle - ${c.name} - ${f.name} Members`, names);
       count++;
     }
 
@@ -2132,12 +2138,12 @@ async function syncFoundryRollTables() {
     // "something's going on" improv moments.
     const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
     if (rumorThreads.length) {
-      c.rumorRollTableId = await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle — ${c.name} — Rumors & Hooks`, rumorThreads.map(t => t.title));
+      c.rumorRollTableId = await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle - ${c.name} - Rumors & Hooks`, rumorThreads.map(t => t.title));
       count++;
     }
 
     save();
-    toast(`Synced ${count} Roll Table${count!==1?'s':''} to Foundry — find them in the Rollable Tables sidebar.`, 'success');
+    toast(`Synced ${count} Roll Table${count!==1?'s':''} to Foundry - find them in the Rollable Tables sidebar.`, 'success');
   } catch (err) {
     toast('Error syncing Roll Tables: ' + (err.message || String(err)), 'error');
   }
@@ -2170,6 +2176,7 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
 function openEditSessionModal(id) {
   const s = camp().sessions.find(x => x.id === id);
   if (!s) return;
+  window._sessionColor = s.timelineColor || null;
   document.querySelector('.modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -2182,6 +2189,10 @@ function openEditSessionModal(id) {
       <div class="form-row">
         <div class="form-group"><label>Title</label><input type="text" id="es-title" value="${esc(s.title||'')}"></div>
         <div class="form-group" style="max-width:160px"><label>Date</label><input type="date" id="es-date" value="${esc(s.date||'')}"></div>
+      </div>
+      <div class="form-group">
+        <label>Timeline Color <span class="text-dim text-xs">(optional tint)</span></label>
+        ${colorSwatchPickerHTML('_sessionColor', s.timelineColor||null, 'es-color-swatches')}
       </div>
       <div class="form-group">
         <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
@@ -2212,6 +2223,7 @@ function saveSessionEdits(id) {
   s.summary = document.getElementById('es-summary').value;
   s.keyEvents = document.getElementById('es-events').value.split('\n').map(e => e.trim()).filter(Boolean);
   s.rawTranscript = document.getElementById('es-transcript').value;
+  s.timelineColor = window._sessionColor || null;
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Session updated.', 'success');
@@ -2392,7 +2404,7 @@ function openPullFromFoundryModal() {
     <div class="modal" style="max-width:520px">
       <div class="modal-header"><h3>Pull from Foundry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${actors.length === 0
-        ? `<p class="text-sm text-dim">No unlinked Actors found in this world — everything's already imported, or your world has no Actors yet.</p>`
+        ? `<p class="text-sm text-dim">No unlinked Actors found in this world - everything's already imported, or your world has no Actors yet.</p>`
         : `<p class="text-xs text-dim" style="margin-bottom:12px">Select Actors to import as Characters. Name, portrait, and biography (if present) are copied in.</p>
            <div style="max-height:45vh;overflow-y:auto;margin-bottom:16px">
              ${actors.map(a => `
@@ -2477,7 +2489,7 @@ function charTypeOptions(sel) { return CHAR_TYPES.map(t=>`<option value="${t.val
 
 // ── Find & merge duplicate characters ──
 async function findDuplicateCharacters() {
-  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.npcs.length < 2) { toast('Need at least 2 characters to compare.', 'error'); return; }
   if (!(await confirmPaidAction(['claude'], 'Finding duplicate characters with AI'))) return;
@@ -2514,7 +2526,7 @@ async function findDuplicateCharacters() {
 Characters:
 ${charList}
 
-Return ONLY valid JSON — no markdown, no explanation. If no duplicates found, return {"merges":[]}.
+Return ONLY valid JSON - no markdown, no explanation. If no duplicates found, return {"merges":[]}.
 
 Return this structure:
 {
@@ -2543,7 +2555,7 @@ Only flag characters that are very likely the same person. Do not merge characte
     document.getElementById('merge-loading')?.remove();
 
     if (!result.merges?.length) {
-      toast('No duplicates found — all characters look distinct.', 'success');
+      toast('No duplicates found - all characters look distinct.', 'success');
       return;
     }
     showMergeReviewModal(result.merges);
@@ -2691,7 +2703,7 @@ function confirmMerges() {
 
 // ── Find & merge duplicate locations ──
 async function findDuplicateLocations() {
-  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.locations.length < 2) { toast('Need at least 2 locations to compare.', 'error'); return; }
   if (!(await confirmPaidAction(['claude'], 'Finding duplicate locations with AI'))) return;
@@ -2727,7 +2739,7 @@ async function findDuplicateLocations() {
 Locations:
 ${locList}
 
-Return ONLY valid JSON — no markdown, no explanation. If no duplicates found, return {"merges":[]}.
+Return ONLY valid JSON - no markdown, no explanation. If no duplicates found, return {"merges":[]}.
 
 Return this structure:
 {
@@ -2755,7 +2767,7 @@ Only flag locations that are very likely the same place. Do not merge locations 
     clearInterval(iv);
     document.getElementById('merge-loading')?.remove();
 
-    if (!result.merges?.length) { toast('No duplicates found — all locations look distinct.', 'success'); return; }
+    if (!result.merges?.length) { toast('No duplicates found - all locations look distinct.', 'success'); return; }
     showLocationMergeModal(result.merges);
   } catch (err) {
     clearInterval(iv);
@@ -2859,7 +2871,7 @@ function confirmLocationMerges() {
 
 // ── Find & merge duplicate factions ──
 async function findDuplicateFactions() {
-  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   const c = camp();
   if (c.factions.length < 2) { toast('Need at least 2 factions to compare.', 'error'); return; }
   if (!(await confirmPaidAction(['claude'], 'Finding duplicate factions with AI'))) return;
@@ -2895,7 +2907,7 @@ async function findDuplicateFactions() {
 Factions:
 ${facList}
 
-Return ONLY valid JSON — no markdown, no explanation. If no duplicates found, return {"merges":[]}.
+Return ONLY valid JSON - no markdown, no explanation. If no duplicates found, return {"merges":[]}.
 
 Return this structure:
 {
@@ -2923,7 +2935,7 @@ Only flag factions that are very likely the same organisation. Do not merge fact
     clearInterval(iv);
     document.getElementById('merge-loading')?.remove();
 
-    if (!result.merges?.length) { toast('No duplicates found — all factions look distinct.', 'success'); return; }
+    if (!result.merges?.length) { toast('No duplicates found - all factions look distinct.', 'success'); return; }
     showFactionMergeModal(result.merges);
   } catch (err) {
     clearInterval(iv);
@@ -3109,7 +3121,7 @@ function openNPCModal(id) {
         </div>
       </div>
       <div class="form-group"><label>Home Location</label>
-        <select id="en-location"><option value="">— None —</option>${locationOptions}</select>
+        <select id="en-location"><option value="">- None -</option>${locationOptions}</select>
       </div>
       ${c.factions.length ? (() => {
         const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
@@ -3375,7 +3387,7 @@ function toggleEventEdit(btn) {
 }
 
 async function generateVoiceDescription(npcId) {
-  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); return; }
   const c = camp();
   const n = c.npcs.find(x => x.id === npcId);
   if (!n) return;
@@ -3402,7 +3414,7 @@ async function generateVoiceDescription(npcId) {
 Character info:
 ${context}
 
-Write a single short paragraph (2-4 sentences) describing how this character SOUNDS when they speak — their accent or dialect, speech rhythm (fast/slow/halting), vocal tone (gravelly/high/smooth), characteristic phrases or verbal tics, and overall impression. Be specific and practical so the GM can immediately use this as a performance guide. Do not repeat the character's name or role back — just describe the voice.` }]
+Write a single short paragraph (2-4 sentences) describing how this character SOUNDS when they speak - their accent or dialect, speech rhythm (fast/slow/halting), vocal tone (gravelly/high/smooth), characteristic phrases or verbal tics, and overall impression. Be specific and practical so the GM can immediately use this as a performance guide. Do not repeat the character's name or role back - just describe the voice.` }]
       })
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
@@ -3486,7 +3498,7 @@ function openLocationModal(id) {
       ${scenes.length?`<div class="form-group"><label>Linked Foundry Scene <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8" style="align-items:center">
           <select id="el-scene" style="flex:1">
-            <option value="">— None —</option>
+            <option value="">- None -</option>
             ${sceneOpts}
           </select>
           ${l.sceneId?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="jumpToScene('${l.sceneId}')">Jump to Scene</button>`:''}
@@ -3558,8 +3570,95 @@ async function deleteLocation(id) {
 // TIMELINE
 // ═══════════════════════════════════════════════
 
-const TIMELINE_GAP = 140;     // px between auto-placed nodes, top to bottom
-const TIMELINE_MIN_GAP = 50;  // px minimum spacing enforced while dragging (the "stoppers")
+// Shared "no color" + FACTION_COLORS swatch row, used for a Session's
+// timelineColor and a Timeline Event's color. The selection is stashed on
+// `window[windowVar]` until the enclosing modal's Save handler reads it
+// back — same pattern the Faction modal already uses for window._factionColor.
+function colorSwatchPickerHTML(windowVar, currentColor, containerId) {
+  const clearSel = `document.querySelectorAll('#${containerId} .tl-color-swatch').forEach(s=>{s.style.outline='none';s.style.outlineOffset='0'})`;
+  const noneSwatch = `<div class="tl-color-swatch" onclick="window.${windowVar}=null;${clearSel};this.style.outline='2px solid white';this.style.outlineOffset='2px'" style="background:var(--bg-elevated);border:2px dashed var(--border);${!currentColor?'outline:2px solid white;outline-offset:2px':''}" title="No color"></div>`;
+  const swatches = FACTION_COLORS.map(col =>
+    `<div class="tl-color-swatch" onclick="window.${windowVar}='${col}';${clearSel};this.style.outline='2px solid white';this.style.outlineOffset='2px'" style="background:${col};${currentColor===col?'outline:2px solid white;outline-offset:2px':''}"></div>`
+  ).join('');
+  return `<div id="${containerId}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:6px">${noneSwatch}${swatches}</div>`;
+}
+
+// ── Timeline Event connections: link several Characters/Locations/Factions/
+// Plot Threads to a freeform entry, shown afterward as clickable chips. ──
+
+function _connectionEntityOpts() {
+  const c = camp();
+  const groups = [
+    { label: 'Characters',   items: c.npcs,        type: 'npc',      nameKey: 'name'  },
+    { label: 'Locations',    items: c.locations,   type: 'location', nameKey: 'name'  },
+    { label: 'Factions',     items: c.factions,    type: 'faction',  nameKey: 'name'  },
+    { label: 'Plot Threads', items: c.plotThreads, type: 'thread',   nameKey: 'title' },
+  ];
+  return `<option value="">Add a connection…</option>` + groups.filter(g => g.items.length).map(g =>
+    `<optgroup label="${g.label}">${g.items.map(it => `<option value="${g.type}:${it.id}">${esc(it[g.nameKey])}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+
+function _resolveConnectionEntity(type, id, c) {
+  c = c || camp();
+  if (type === 'npc')      { const n = c.npcs.find(x=>x.id===id);        return n ? { name: n.name } : null; }
+  if (type === 'location') { const l = c.locations.find(x=>x.id===id);   return l ? { name: l.name } : null; }
+  if (type === 'thread')   { const t = c.plotThreads.find(x=>x.id===id); return t ? { name: t.title } : null; }
+  if (type === 'faction')  {
+    const f = c.factions.find(x=>x.id===id);
+    return f ? { name: f.name, colorStyle: `background:${f.color}22;color:${f.color};border-color:${f.color}55` } : null;
+  }
+  return null;
+}
+
+const CONNECTION_OPEN_FN = { npc: 'openNPCModal', location: 'openLocationModal', faction: 'openFactionModal', thread: 'openEditThreadModal' };
+
+function addTimelineConnection() {
+  const sel = document.getElementById('tl-conn-select');
+  const val = sel?.value;
+  if (!val) return;
+  const [type, id] = val.split(':');
+  if (!window._tlConnections) window._tlConnections = [];
+  if (!window._tlConnections.some(x => x.type === type && x.id === id)) {
+    window._tlConnections.push({ type, id });
+  }
+  sel.value = '';
+  renderTimelineConnectionChips();
+}
+
+function removeTimelineConnection(type, id) {
+  window._tlConnections = (window._tlConnections||[]).filter(x => !(x.type===type && x.id===id));
+  renderTimelineConnectionChips();
+}
+
+function renderTimelineConnectionChips() {
+  const el = document.getElementById('tl-conn-chips');
+  if (!el) return;
+  const c = camp();
+  const conns = window._tlConnections || [];
+  if (!conns.length) { el.innerHTML = `<span class="text-xs text-dim">No connections yet.</span>`; return; }
+  el.innerHTML = conns.map(conn => {
+    const info = _resolveConnectionEntity(conn.type, conn.id, c);
+    if (!info) return '';
+    return `<span class="tl-chip tl-chip-${conn.type}" style="${info.colorStyle||''};cursor:default">${esc(info.name)}<span class="tl-chip-remove" style="cursor:pointer" onclick="removeTimelineConnection('${conn.type}','${conn.id}')">✕</span></span>`;
+  }).join('');
+}
+
+// Read-only rendering used on the Timeline page itself — each chip jumps
+// straight to that entity's own modal, unlike the editable chips above.
+function connectionChipsReadOnly(connections) {
+  if (!connections || !connections.length) return '';
+  const c = camp();
+  const chips = connections.map(conn => {
+    const info = _resolveConnectionEntity(conn.type, conn.id, c);
+    if (!info) return '';
+    const openFn = CONNECTION_OPEN_FN[conn.type];
+    return `<span class="tl-chip tl-chip-${conn.type}" style="${info.colorStyle||''}" onclick="event.stopPropagation();${openFn}('${conn.id}')">${esc(info.name)}</span>`;
+  }).join('');
+  return chips ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${chips}</div>` : '';
+}
+
+const TIMELINE_GAP = 140;     // px between auto-placed nodes, and between nodes after a reorder renumber
 
 function renderTimeline() {
   const c = camp();
@@ -3598,7 +3697,10 @@ function renderTimeline() {
   });
   if (changed) save();
 
-  nodes.forEach(n => { n.position = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position; });
+  nodes.forEach(n => {
+    n.position = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
+    n.color = (n.kind === 'session' ? n.ref.timelineColor : n.ref.color) || null;
+  });
   nodes.sort((a, b) => a.position - b.position);
 
   const trackHeight = Math.max(400, maxPos + 160);
@@ -3624,21 +3726,24 @@ function renderTimeline() {
       openFn = `openTimelineEventModal('${ev.id}')`;
       boxContent = `
         <div style="font-weight:600">${esc(ev.title)}</div>
-        ${ev.text?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.6">${esc(ev.text.slice(0,180))}${ev.text.length>180?'…':''}</div>`:''}`;
+        ${ev.text?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.6">${esc(ev.text.slice(0,180))}${ev.text.length>180?'…':''}</div>`:''}
+        ${connectionChipsReadOnly(ev.connections)}`;
     }
 
-    const connectorStyle = side === 'left' ? 'right:50%;width:calc(50% - 40px);' : 'left:50%;width:calc(50% - 40px);';
+    const connectorStyle = (side === 'left' ? 'right:50%;width:calc(50% - 40px);' : 'left:50%;width:calc(50% - 40px);') + (n.color ? `background:${n.color};` : '');
+    const nodeStyle = `top:${top-10}px;` + (n.color ? `background:${n.color};box-shadow:0 0 0 2px ${n.color};` : '');
+    const boxStyle = `top:${top-14}px;` + (n.color ? `border-left:4px solid ${n.color};` : '');
     const dataAttrs = `data-node-kind="${n.kind}" data-node-id="${n.id}"`;
 
     return `
-      <div class="${nodeClass}" style="top:${top-10}px" ${dataAttrs}></div>
+      <div class="${nodeClass}" style="${nodeStyle}" ${dataAttrs}></div>
       <div class="timeline-connector" style="top:${top-1}px;${connectorStyle}" ${dataAttrs}></div>
-      <div class="timeline-box tl-box-${side}" style="top:${top-14}px" ${dataAttrs} onclick="${openFn}">${boxContent}</div>`;
+      <div class="timeline-box tl-box-${side}" style="${boxStyle}" ${dataAttrs} onclick="${openFn}">${boxContent}</div>`;
   }).join('');
 
   return `
     <div class="page-header">
-      <div><h2>Timeline</h2><p class="subtitle">Click the spine to add an entry · drag a circle to reposition it</p></div>
+      <div><h2>Timeline</h2><p class="subtitle">Click the spine to add an entry · drag a circle to reorder — entries can move past each other</p></div>
     </div>
     <div class="timeline-track" id="timeline-track" style="height:${trackHeight}px">
       <div class="timeline-spine" id="timeline-spine" style="height:${trackHeight}px" onclick="handleTimelineSpineClick(event)"></div>
@@ -3657,6 +3762,22 @@ function handleTimelineSpineClick(e) {
 let _tlDrag = null;
 let _tlMouseMoveHandler = null;
 let _tlMouseUpHandler = null;
+
+// Applies a left/right side to one node's box + connector without touching
+// their `top` (vertical position) or color-tint styles, which are set
+// separately — used both at render time implicitly (via the classes/inline
+// styles renderTimeline() writes) and live during a drag, below.
+function applyTimelineSide(boxEl, connectorEl, side) {
+  if (boxEl) {
+    boxEl.classList.toggle('tl-box-left', side === 'left');
+    boxEl.classList.toggle('tl-box-right', side === 'right');
+  }
+  if (connectorEl) {
+    connectorEl.style.width = 'calc(50% - 40px)';
+    if (side === 'left') { connectorEl.style.right = '50%'; connectorEl.style.left = ''; }
+    else { connectorEl.style.left = '50%'; connectorEl.style.right = ''; }
+  }
+}
 
 function setupTimelineEvents() {
   const track = document.getElementById('timeline-track');
@@ -3681,7 +3802,24 @@ function setupTimelineEvents() {
       const startPos = kind === 'session' ? ref.timelinePosition : ref.position;
       const connectorEl = track.querySelector(`.timeline-connector[data-node-kind="${kind}"][data-node-id="${id}"]`);
       const boxEl = track.querySelector(`.timeline-box[data-node-kind="${kind}"][data-node-id="${id}"]`);
-      _tlDrag = { kind, id, startY: e.clientY, startPos, moved: false, nodeEl: node, connectorEl, boxEl };
+
+      // Snapshot every OTHER node's fixed position + DOM elements, sorted —
+      // used to work out where the dragged node's live position would rank
+      // it (and therefore whose side flips) without moving anyone else
+      // until the drag is actually dropped.
+      const others = [
+        ...c.sessions.map(s => ({ kind: 'session', id: s.id, position: s.timelinePosition })),
+        ...(c.timelineEvents||[]).map(x => ({ kind: 'event', id: x.id, position: x.position })),
+      ].filter(n => !(n.kind === kind && n.id === id))
+        .sort((a, b) => a.position - b.position)
+        .map(n => ({
+          ...n,
+          boxEl: track.querySelector(`.timeline-box[data-node-kind="${n.kind}"][data-node-id="${n.id}"]`),
+          connectorEl: track.querySelector(`.timeline-connector[data-node-kind="${n.kind}"][data-node-id="${n.id}"]`),
+        }));
+
+      const trackHeight = track.offsetHeight || 100000;
+      _tlDrag = { kind, id, startY: e.clientY, startPos, moved: false, nodeEl: node, connectorEl, boxEl, others, trackHeight };
     });
   });
 
@@ -3691,39 +3829,51 @@ function setupTimelineEvents() {
     if (Math.abs(dy) > 3) _tlDrag.moved = true;
     if (!_tlDrag.moved) return;
 
-    const c = camp();
-    const nodes = [
-      ...c.sessions.map(s => ({ kind:'session', id:s.id, position:s.timelinePosition })),
-      ...(c.timelineEvents||[]).map(ev => ({ kind:'event', id:ev.id, position:ev.position })),
-    ].sort((a,b) => a.position - b.position);
-    const idx = nodes.findIndex(n => n.kind === _tlDrag.kind && n.id === _tlDrag.id);
-    const prev = nodes[idx - 1];
-    const next = nodes[idx + 1];
-    const trackEl = document.getElementById('timeline-track');
-    const trackHeight = trackEl ? trackEl.offsetHeight : 100000;
-
-    const lowerBound = prev ? prev.position + TIMELINE_MIN_GAP : 20;
-    const upperBound = next ? next.position - TIMELINE_MIN_GAP : trackHeight - 20;
-    const newPos = Math.max(lowerBound, Math.min(upperBound, _tlDrag.startPos + dy));
-
+    // Free drag along the whole track — no neighbor clamping — is what
+    // actually lets an entry move past others. Bounded only by the track's
+    // own margins.
+    const newPos = Math.max(20, Math.min(_tlDrag.trackHeight - 20, _tlDrag.startPos + dy));
     _tlDrag.currentPos = newPos;
+
     if (_tlDrag.nodeEl) _tlDrag.nodeEl.style.top = (newPos - 10) + 'px';
     if (_tlDrag.connectorEl) _tlDrag.connectorEl.style.top = (newPos - 1) + 'px';
     if (_tlDrag.boxEl) _tlDrag.boxEl.style.top = (newPos - 14) + 'px';
+
+    // Live "domino" side-swap: work out where the dragged node would rank
+    // among the fixed others at this live Y, then flip left/right for every
+    // node whose rank shifts as a result. This is what makes "moving past
+    // another entry" visible while dragging, not just after dropping.
+    const draggedRank = _tlDrag.others.filter(o => o.position < newPos).length;
+    _tlDrag.others.forEach((o, idx) => {
+      const effectiveIdx = idx < draggedRank ? idx : idx + 1;
+      applyTimelineSide(o.boxEl, o.connectorEl, effectiveIdx % 2 === 0 ? 'left' : 'right');
+    });
+    applyTimelineSide(_tlDrag.boxEl, _tlDrag.connectorEl, draggedRank % 2 === 0 ? 'left' : 'right');
   };
 
   _tlMouseUpHandler = () => {
     if (!_tlDrag) return;
-    const { kind, id, moved, currentPos } = _tlDrag;
+    const { kind, id, moved, currentPos, others } = _tlDrag;
     if (moved && typeof currentPos === 'number') {
       const c = camp();
-      if (kind === 'session') {
-        const s = c.sessions.find(x=>x.id===id);
-        if (s) s.timelinePosition = currentPos;
-      } else {
-        const ev = (c.timelineEvents||[]).find(x=>x.id===id);
-        if (ev) ev.position = currentPos;
-      }
+      // Final order: insert the dragged node into the fixed `others`
+      // snapshot at whatever rank its dropped position implies, then
+      // renumber everyone evenly spaced by that new order — this is what
+      // actually commits "moved past" rather than just nudging one value,
+      // and avoids two entries ever landing squished on top of each other.
+      const draggedRank = others.filter(o => o.position < currentPos).length;
+      const finalOrder = others.slice();
+      finalOrder.splice(draggedRank, 0, { kind, id });
+      finalOrder.forEach((n, i) => {
+        const pos = (i + 1) * TIMELINE_GAP;
+        if (n.kind === 'session') {
+          const s = c.sessions.find(x=>x.id===n.id);
+          if (s) s.timelinePosition = pos;
+        } else {
+          const ev = (c.timelineEvents||[]).find(x=>x.id===n.id);
+          if (ev) ev.position = pos;
+        }
+      });
       save();
       render();
     } else if (!moved) {
@@ -3738,19 +3888,34 @@ function setupTimelineEvents() {
 
 function openAddTimelineEventModal(atPosition) {
   window._tlPendingPosition = atPosition;
+  window._tlColor = null;
+  window._tlConnections = [];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:460px">
       <div class="modal-header"><h3>Add Timeline Entry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group"><label>Title</label><input type="text" id="tl-title" placeholder="The bridge collapses…"></div>
       <div class="form-group"><label>Details <span class="text-dim text-xs">(optional)</span></label><textarea id="tl-text" rows="4" placeholder="What happened…"></textarea></div>
+      <div class="form-group">
+        <label>Color <span class="text-dim text-xs">(optional tint)</span></label>
+        ${colorSwatchPickerHTML('_tlColor', null, 'tl-color-swatches')}
+      </div>
+      <div class="form-group">
+        <label>Connections <span class="text-dim text-xs">(characters, locations, factions, threads)</span></label>
+        <div class="flex gap-8" style="margin-bottom:8px">
+          <select id="tl-conn-select" style="flex:1">${_connectionEntityOpts()}</select>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addTimelineConnection()">+ Add</button>
+        </div>
+        <div id="tl-conn-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="saveNewTimelineEvent()">Add</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  renderTimelineConnectionChips();
   setTimeout(() => document.getElementById('tl-title')?.focus(), 50);
 }
 
@@ -3760,8 +3925,10 @@ function saveNewTimelineEvent() {
   const text = document.getElementById('tl-text')?.value.trim() || '';
   const c = camp();
   if (!c.timelineEvents) c.timelineEvents = [];
-  c.timelineEvents.push({ id: uid(), title, text, position: window._tlPendingPosition || 20 });
+  c.timelineEvents.push({ id: uid(), title, text, position: window._tlPendingPosition || 20, color: window._tlColor || null, connections: window._tlConnections || [] });
   window._tlPendingPosition = null;
+  window._tlColor = null;
+  window._tlConnections = null;
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
@@ -3771,13 +3938,27 @@ function openTimelineEventModal(id) {
   const c = camp();
   const ev = (c.timelineEvents||[]).find(x => x.id === id);
   if (!ev) return;
+  window._tlColor = ev.color || null;
+  window._tlConnections = [...(ev.connections||[])];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:460px">
       <div class="modal-header"><h3>Edit Timeline Entry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group"><label>Title</label><input type="text" id="tl-title" value="${esc(ev.title)}"></div>
       <div class="form-group"><label>Details <span class="text-dim text-xs">(optional)</span></label><textarea id="tl-text" rows="4">${esc(ev.text||'')}</textarea></div>
+      <div class="form-group">
+        <label>Color <span class="text-dim text-xs">(optional tint)</span></label>
+        ${colorSwatchPickerHTML('_tlColor', ev.color||null, 'tl-color-swatches')}
+      </div>
+      <div class="form-group">
+        <label>Connections <span class="text-dim text-xs">(characters, locations, factions, threads)</span></label>
+        <div class="flex gap-8" style="margin-bottom:8px">
+          <select id="tl-conn-select" style="flex:1">${_connectionEntityOpts()}</select>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addTimelineConnection()">+ Add</button>
+        </div>
+        <div id="tl-conn-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
       <div class="flex gap-8" style="justify-content:space-between">
         <button class="btn btn-danger" onclick="deleteTimelineEvent('${ev.id}')">Delete</button>
         <div class="flex gap-8">
@@ -3787,6 +3968,7 @@ function openTimelineEventModal(id) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  renderTimelineConnectionChips();
 }
 
 function saveTimelineEventEdits(id) {
@@ -3797,6 +3979,9 @@ function saveTimelineEventEdits(id) {
   if (!title) { toast('Title is required.', 'error'); return; }
   ev.title = title;
   ev.text = document.getElementById('tl-text')?.value.trim() || '';
+  ev.color = window._tlColor || null;
+  ev.connections = window._tlConnections || [];
+  window._tlConnections = null;
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Timeline entry updated.', 'success');
@@ -3843,9 +4028,9 @@ function resolveFoundryImgSrcFallback(raw) {
 function handleMapImageError(imgEl) {
   const raw = window._currentMapRawImgPath || '';
   if (imgEl.dataset.fallbackTried || !raw) {
-    console.warn('Untangle: could not load map image. Raw Foundry path:', raw, '— last attempted src:', imgEl.src);
+    console.warn('Untangle: could not load map image. Raw Foundry path:', raw, '- last attempted src:', imgEl.src);
     const wrap = imgEl.closest('.map-wrap');
-    if (wrap) wrap.innerHTML = `<div class="empty-state"><h3>Could not load this image</h3><p>Tried: <code style="word-break:break-all">${esc(raw||imgEl.src)}</code><br>Check the browser console (F12) for the exact URL that failed — this can happen if the image format isn't served correctly by your setup, or the file has moved.</p></div>`;
+    if (wrap) wrap.innerHTML = `<div class="empty-state"><h3>Could not load this image</h3><p>Tried: <code style="word-break:break-all">${esc(raw||imgEl.src)}</code><br>Check the browser console (F12) for the exact URL that failed - this can happen if the image format isn't served correctly by your setup, or the file has moved.</p></div>`;
     return;
   }
   imgEl.dataset.fallbackTried = '1';
@@ -3898,7 +4083,7 @@ function openLinkSceneModal() {
       <div class="modal-header"><h3>Link Foundry Scene</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${scenes.length === 0
         ? `<p class="text-sm text-dim">${pgame.scenes.contents.length===0?'No Scenes found in this world yet.':'Every Scene is already linked as a map.'}</p>`
-        : `<p class="text-xs text-dim" style="margin-bottom:12px">Pick a Scene to use as a map. Its background stays live — update it in Foundry and it updates here too.</p>
+        : `<p class="text-xs text-dim" style="margin-bottom:12px">Pick a Scene to use as a map. Its background stays live - update it in Foundry and it updates here too.</p>
            <div style="max-height:45vh;overflow-y:auto">
              ${scenes.map(s => `
                <div style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer" onclick="linkScene('${s.id}')">
@@ -3968,7 +4153,7 @@ function renderMapView() {
 
   return `
     <div class="page-header">
-      <div><h2>${esc(m.name)}</h2><p class="subtitle">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}${(m.pins||[]).length===0?' — click the map to add your first pin':' — click map to add more, click a pin to edit'}</p></div>
+      <div><h2>${esc(m.name)}</h2><p class="subtitle">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}${(m.pins||[]).length===0?' - click the map to add your first pin':' - click map to add more, click a pin to edit'}</p></div>
       <div style="display:flex;gap:8px">
         ${m.sceneId&&!sceneMissing?`<button class="btn btn-ghost" onclick="jumpToScene('${m.sceneId}')">Jump to Scene</button>`:''}
         <button class="btn btn-ghost" onclick="navigate('maps')">← Maps</button>
@@ -4045,7 +4230,7 @@ function openAddPinModal(mapId, x, y) {
     <div class="modal" style="max-width:400px">
       <div class="modal-header"><h3>Add Pin</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group"><label>Link to NPC or Location</label>
-        <select id="pin-link"><option value="">— Unlinked —</option><optgroup label="NPCs">${npcOpts}</optgroup><optgroup label="Locations">${locOpts}</optgroup></select>
+        <select id="pin-link"><option value="">- Unlinked -</option><optgroup label="NPCs">${npcOpts}</optgroup><optgroup label="Locations">${locOpts}</optgroup></select>
       </div>
       <div class="form-group"><label>Label (if unlinked)</label><input type="text" id="pin-label" placeholder="Custom label…"></div>
       <div class="flex gap-8" style="justify-content:flex-end">
@@ -4172,7 +4357,7 @@ function renderTaggedNotesSection(type, id) {
   if (!notes.length) return '';
   return `<div class="form-group">
     <label>Field Notes <span class="text-dim text-xs">(tagged to this)</span></label>
-    ${notes.slice().reverse().map(n => `<div class="text-sm text-dim" style="padding:4px 0;border-bottom:1px solid var(--border)">${esc(n.text)} <span class="text-xs" style="opacity:0.7">— ${esc(n.timestamp)}</span></div>`).join('')}
+    ${notes.slice().reverse().map(n => `<div class="text-sm text-dim" style="padding:4px 0;border-bottom:1px solid var(--border)">${esc(n.text)} <span class="text-xs" style="opacity:0.7">- ${esc(n.timestamp)}</span></div>`).join('')}
   </div>`;
 }
 
@@ -4187,7 +4372,7 @@ function openQuickNoteModal() {
         ${isFeatureEnabled('voiceDictation') && speechRecognitionSupported()?`<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('qn-text', this)">Dictate</button>`:''}
       </div>
       <div class="form-group"><label>About <span class="text-dim text-xs">(optional)</span></label>
-        <select id="qn-about"><option value="">— Not tied to anything —</option>${_noteEntityOpts('','')}</select>
+        <select id="qn-about"><option value="">- Not tied to anything -</option>${_noteEntityOpts('','')}</select>
       </div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
@@ -4301,7 +4486,7 @@ function openRecapModal() {
 
   const lines = [`Previously, in ${c.name}…`];
   if (last) {
-    lines.push('', `Session ${last.number}${last.title ? ' — ' + last.title : ''} (${last.date}):`);
+    lines.push('', `Session ${last.number}${last.title ? ' - ' + last.title : ''} (${last.date}):`);
     lines.push(last.summary || '(No summary recorded.)');
     if (last.keyEvents?.length) { lines.push(''); last.keyEvents.forEach(e => lines.push('• ' + e)); }
   } else {
@@ -4309,7 +4494,7 @@ function openRecapModal() {
   }
   if (openThreads.length) {
     lines.push('', 'Open threads:');
-    openThreads.forEach(t => lines.push(`• ${t.title}${t.description ? ' — ' + t.description : ''}`));
+    openThreads.forEach(t => lines.push(`• ${t.title}${t.description ? ' - ' + t.description : ''}`));
   }
   const clocksNearFull = (c.clocks||[]).filter(ck => ck.filled > 0 && ck.filled >= ck.segments - 1);
   if (clocksNearFull.length) {
@@ -4382,7 +4567,7 @@ function renderCampaignBible() {
       </div>
       <div class="cb-page">
         <h1>${esc(c.name)}</h1>
-        <p class="cb-sub">Campaign bible — generated ${new Date().toLocaleDateString()}${playerSafe?' · Player-safe version':''}</p>
+        <p class="cb-sub">Campaign bible - generated ${new Date().toLocaleDateString()}${playerSafe?' · Player-safe version':''}</p>
 
         ${sessionsInOrder.length?`
         <h2>The Story So Far</h2>
@@ -4561,7 +4746,7 @@ function renderSettings() {
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Features</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way — flipping one back on later picks up right where you left it.</p>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way - flipping one back on later picks up right where you left it.</p>
       ${FEATURE_CATEGORIES.map(cat => `
         <div style="margin-bottom:14px">
           <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${esc(cat)}</div>
@@ -4577,9 +4762,9 @@ function renderSettings() {
       <h3 style="margin-bottom:6px">Premium Features</h3>
       <div class="flex gap-10" style="align-items:flex-start;margin-bottom:16px">
         <img src="assets/patreonlogo.png" alt="" style="height:28px;width:auto;flex-shrink:0;margin-top:2px" onerror="this.style.display='none'">
-        <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (none yet — everything above is free). Log in below and paste back the token it gives you.</p>
+        <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (none yet - everything above is free). Log in below and paste back the token it gives you.</p>
       </div>
-      <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? '<span style="color:var(--green)">Linked — active pledge</span>' : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired — log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
+      <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? '<span style="color:var(--green)">Linked - active pledge</span>' : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired - log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
       <div class="flex gap-8" style="flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-ghost" onclick="openPatreonLoginTab()">Log in with Patreon</button>
         ${getPatreonToken() ? `<button class="btn btn-ghost" onclick="unlinkPatreon()">Unlink</button>` : ''}
@@ -4595,14 +4780,14 @@ function renderSettings() {
 
     <div class="card" style="max-width:560px">
       <h3 style="margin-bottom:6px">Foundry World Backup</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Untangle mirrors your campaign data into this Foundry world's settings on every change, so a cleared browser cache or a new device doesn't lose it. This is a safety net alongside — not a replacement for — the export in Foundry Configure Settings above.</p>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Untangle mirrors your campaign data into this Foundry world's settings on every change, so a cleared browser cache or a new device doesn't lose it. This is a safety net alongside - not a replacement for - the export in Foundry Configure Settings above.</p>
       ${(() => {
         let backup = null;
         try { backup = window.parent?.game?.settings?.get('untangle', 'campaignBackup'); } catch {}
         return backup?.savedAt
           ? `<p class="text-xs text-dim" style="margin-bottom:12px">Last synced: ${new Date(backup.savedAt).toLocaleString()}</p>
              <button class="btn btn-ghost" onclick="restoreFromFoundryBackup()">Restore from world backup</button>`
-          : `<p class="text-xs text-dim">No backup synced yet — it'll appear here after your first change.</p>`;
+          : `<p class="text-xs text-dim">No backup synced yet - it'll appear here after your first change.</p>`;
       })()}
     </div>`;
 }
@@ -5153,7 +5338,7 @@ function openEditRelModal(relId) {
           <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
             <button class="btn btn-ghost btn-sm" style="padding:2px 9px;font-size:0.7rem" onclick="toggleEventEdit(this)">Edit</button>
           </div>
-          <div class="event-text-view" style="font-size:0.875rem;line-height:1.6;white-space:pre-wrap;cursor:default">${rel.notes?esc(rel.notes):'<span class="text-dim">No notes yet — click Edit to add some.</span>'}</div>
+          <div class="event-text-view" style="font-size:0.875rem;line-height:1.6;white-space:pre-wrap;cursor:default">${rel.notes?esc(rel.notes):'<span class="text-dim">No notes yet - click Edit to add some.</span>'}</div>
           <textarea class="event-text" id="rel-notes" rows="3" style="display:none;margin-top:4px" placeholder="What's the story here?">${esc(rel.notes||'')}</textarea>
         </div>
       </div>
@@ -5207,7 +5392,7 @@ function openSparkModal(presetType, presetId) {
   overlay.innerHTML = `
     <div class="modal" style="max-width:420px">
       <div class="modal-header"><h3>Spark a Connection</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <p class="text-sm text-dim" style="margin-bottom:14px">Pick two things you've already logged — Claude suggests a plausible connection between them for you to approve or discard.</p>
+      <p class="text-sm text-dim" style="margin-bottom:14px">Pick two things you've already logged - Claude suggests a plausible connection between them for you to approve or discard.</p>
       <div class="form-row">
         <div class="form-group"><label>From</label><select id="spark-from" ${presetType?'disabled':''}>${_relEntityOpts(presetId||'', presetType||'')}</select></div>
         <div class="form-group"><label>To</label><select id="spark-to">${_relEntityOpts('','')}</select></div>
@@ -5227,7 +5412,7 @@ function _sparkEntity(id, type) {
   return type === 'faction' ? c.factions.find(f => f.id === id) : c.npcs.find(n => n.id === id);
 }
 function _sparkDetail(entity, type) {
-  return type === 'faction' ? (entity.description || '') : [entity.role, entity.notes].filter(Boolean).join(' — ');
+  return type === 'faction' ? (entity.description || '') : [entity.role, entity.notes].filter(Boolean).join(' - ');
 }
 
 async function generateSparkConnection() {
@@ -5237,7 +5422,7 @@ async function generateSparkConnection() {
   const [fromType, fromId] = fromVal.split(':');
   const [toType,   toId]   = toVal.split(':');
   if (fromId === toId && fromType === toType) { toast('Choose two different entities.', 'error'); return; }
-  if (!getClaudeKey()) { toast('Claude API key required — add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
   if (!(await confirmPaidAction(['claude'], 'Generating a connection with AI'))) return;
 
   const a = _sparkEntity(fromId, fromType), b = _sparkEntity(toId, toType);
@@ -5300,7 +5485,7 @@ function showSparkReviewModal(fromType, fromId, toType, toId, result) {
       <div class="form-group"><label>Description</label><textarea id="spark-desc" rows="3">${esc(result.description||'')}</textarea></div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Discard</button>
-        <button class="btn btn-primary" onclick="approveSparkConnection()">Approve — Add to Web</button>
+        <button class="btn btn-primary" onclick="approveSparkConnection()">Approve - Add to Web</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -5422,7 +5607,7 @@ function openThreadModal(t) {
         <div class="form-group"><label>Status</label><select id="th-status">${statusOpts}</select></div>
       </div>
       <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea></div>
-      <div class="form-group"><label>GM Truth <span class="text-dim text-xs">(hidden — what's actually happening)</span></label><textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…">${esc(t?.truth||'')}</textarea></div>
+      <div class="form-group"><label>GM Truth <span class="text-dim text-xs">(hidden - what's actually happening)</span></label><textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…">${esc(t?.truth||'')}</textarea></div>
       ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).length?`
       <div class="form-group">
         <label>Linked Clocks <span class="text-dim text-xs">(managed on the Clocks page)</span></label>
@@ -5589,7 +5774,7 @@ function renderFactions() {
       </div>
     </div>
     ${c.factions.length===0
-      ? `<div class="empty-state"><h3>No factions yet</h3><p>Track guilds, noble houses, cults, and other organisations — and their attitude toward the party.</p></div>`
+      ? `<div class="empty-state"><h3>No factions yet</h3><p>Track guilds, noble houses, cults, and other organisations - and their attitude toward the party.</p></div>`
       : `<div class="card-grid">${cards}</div>`}`;
 }
 
@@ -5733,11 +5918,11 @@ function renderClocks() {
 
   return `
     <div class="page-header">
-      <div><h2>Clocks</h2><p class="subtitle">${c.clocks.length} clock${c.clocks.length!==1?'s':''} · background momentum — tick a segment whenever it advances</p></div>
+      <div><h2>Clocks</h2><p class="subtitle">${c.clocks.length} clock${c.clocks.length!==1?'s':''} · background momentum - tick a segment whenever it advances</p></div>
       <button class="btn btn-primary" onclick="openAddClockModal()">+ New Clock</button>
     </div>
     ${c.clocks.length===0
-      ? `<div class="empty-state"><h3>No clocks yet</h3><p>Track slow-building threats or plans — a ritual, a rival's patience, an approaching army. Tick a segment whenever it advances, no need to plan out what happens when it fills.</p></div>`
+      ? `<div class="empty-state"><h3>No clocks yet</h3><p>Track slow-building threats or plans - a ritual, a rival's patience, an approaching army. Tick a segment whenever it advances, no need to plan out what happens when it fills.</p></div>`
       : `<div class="card-grid">${cards}</div>`}`;
 }
 
@@ -5940,7 +6125,7 @@ function renderSessionPrep() {
 
         ${lastSessionNPCs.length?`
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin-bottom:10px">NPCs — Last Session</h3>
+          <h3 style="margin-bottom:10px">NPCs - Last Session</h3>
           <div style="display:flex;flex-wrap:wrap;gap:6px">
             ${lastSessionNPCs.map(n=>`<span class="npc-chip" onclick="openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}
           </div>
@@ -6058,11 +6243,11 @@ function maybeShowOnboarding() {
       <div class="modal-header"><h3>Welcome to Untangle</h3></div>
       <p class="text-sm" style="line-height:1.75;margin-bottom:14px">
         Untangle is a campaign tracker for GMs who discover their story at the table.
-        Log NPCs, locations, factions, sessions, and plot threads as they emerge — then
+        Log NPCs, locations, factions, sessions, and plot threads as they emerge - then
         map how they connect and walk into next session knowing exactly where things stand.
       </p>
       <ul class="text-sm text-dim" style="line-height:2;margin:0 0 18px 18px">
-        <li>Everything works with no setup — log entries manually any time.</li>
+        <li>Everything works with no setup - log entries manually any time.</li>
         <li>Paid API keys in Foundry's Configure Settings unlock session transcription (Whisper) and AI extraction (Claude), but they're optional.</li>
         <li>Quick field notes and name rolls are one click away above the macro bar, even when this window is closed.</li>
         <li>All data lives in this browser's storage, mirrored into the Foundry world as a backup. Export a backup occasionally from Foundry's Configure Settings to be extra safe.</li>

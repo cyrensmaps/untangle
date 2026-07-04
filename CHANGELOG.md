@@ -4,6 +4,16 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.8.0]
+
+### Added
+- Timeline entries (Sessions and custom events) can now have a color tint, picked from the same swatch palette as Factions and Clocks.
+- Timeline entries can now be dragged past one another to fully reorder the timeline, not just nudged between their immediate neighbors - other entries dynamically swap sides (left/right) live as you drag past them.
+- Custom Timeline entries can now be linked to several Characters, Locations, Factions, and Plot Threads at once ("Connections"), shown as clickable chips that jump straight to that entity.
+
+### Changed
+- Normalized em dashes and en dashes to plain hyphens across all user-facing text (UI copy, notifications, READMEs, the module description shown in Foundry's module browser).
+
 ## [1.7.0]
 
 ### Added
