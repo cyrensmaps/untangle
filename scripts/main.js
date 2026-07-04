@@ -92,21 +92,22 @@ function toggleQuickAccessWidget() {
   }
 }
 
-// ── Player Wiki: companion Map Viewer (GM and players alike) ──
-// The first window in this module NOT gated to game.user.isGM — the Player
-// Wiki's Journal pages are visible to players via Foundry's own permission
-// system, but the interactive map+pins experience is bespoke UI only this
-// module has, so it needs its own player-openable window. It reads the
-// playerWikiMapData world setting (registered above), never the GM's own
+// ── Player Wiki (GM and players alike) ──
+// The first window in this module NOT gated to game.user.isGM. Originally
+// just a companion map viewer (the rest of the wiki lived in a Foundry
+// Journal Entry), this now renders the whole player-safe wiki — Characters,
+// Locations, Factions, Story So Far, Rumors, and Map — since the Journal
+// Entry approach never looked or felt like part of Untangle. It reads the
+// playerWikiData world setting (registered above), never the GM's own
 // cp_v1 localStorage, since a player's browser doesn't have that at all.
 
-class PlayerWikiMapApp extends Application {
+class PlayerWikiApp extends Application {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-wiki-viewer',
-      title: 'Campaign Map',
-      width: 480,
-      height: 560,
+      title: 'Player Wiki',
+      width: 720,
+      height: 640,
       resizable: true,
       minimizable: true,
     });
@@ -124,18 +125,18 @@ class PlayerWikiMapApp extends Application {
   }
 }
 
-let _wikiMapApp = null;
+let _wikiViewerApp = null;
 
-function toggleWikiMapViewer() {
+function toggleWikiViewer() {
   try {
-    if (_wikiMapApp?.rendered) {
-      _wikiMapApp.close();
+    if (_wikiViewerApp?.rendered) {
+      _wikiViewerApp.close();
       return;
     }
-    if (!_wikiMapApp) _wikiMapApp = new PlayerWikiMapApp();
-    _wikiMapApp.render(true);
+    if (!_wikiViewerApp) _wikiViewerApp = new PlayerWikiApp();
+    _wikiViewerApp.render(true);
   } catch (err) {
-    console.error('Untangle | Failed to open Wiki Map Viewer', err);
+    console.error('Untangle | Failed to open Player Wiki', err);
   }
 }
 
@@ -376,21 +377,21 @@ Hooks.on('init', () => {
   } catch (err) { console.error('Untangle | Failed to register patreonToken setting', err); }
 
   try {
-    // Holds the filtered maps/pins snapshot the Player Wiki's "Publish"
+    // Holds the whole player-safe wiki snapshot the Player Wiki's "Publish"
     // button writes (app/index.html's publishPlayerWiki()). World-scope
     // settings are synced to and readable by every connected client,
     // players included — not just config:false's usual GM-only-config-UI
-    // meaning — which is exactly why this exists: the companion Map Viewer
-    // (PlayerWikiMapApp, below) runs in a player's own browser and has no
+    // meaning — which is exactly why this exists: the Player Wiki window
+    // (PlayerWikiApp, below) runs in a player's own browser and has no
     // access to the GM's cp_v1 localStorage at all, so this is its only
     // data source.
-    game.settings.register(MODULE_ID, 'playerWikiMapData', {
+    game.settings.register(MODULE_ID, 'playerWikiData', {
       scope: 'world',
       config: false,
       type: Object,
       default: {},
     });
-  } catch (err) { console.error('Untangle | Failed to register playerWikiMapData setting', err); }
+  } catch (err) { console.error('Untangle | Failed to register playerWikiData setting', err); }
 
   try {
     // API keys — used by the planner's AI extraction (Claude) and audio
@@ -718,8 +719,9 @@ function _wikiButtonShouldShow() {
   try {
     const toggles = game.settings.get(MODULE_ID, 'featureToggles') || {};
     if (toggles.playerWiki === false) return false;
-    const mapData = game.settings.get(MODULE_ID, 'playerWikiMapData') || {};
-    return Object.keys(mapData).length > 0;
+    const data = game.settings.get(MODULE_ID, 'playerWikiData') || {};
+    return !!(data.characters?.length || data.locations?.length || data.factions?.length ||
+      data.sessions?.length || data.rumors?.length || Object.keys(data.maps || {}).length);
   } catch { return false; }
 }
 
@@ -737,9 +739,9 @@ function renderWikiButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'untangle-wiki-btn';
-    btn.title = 'Campaign Map';
-    btn.innerHTML = '<i class="fas fa-map"></i>';
-    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleWikiMapViewer(); });
+    btn.title = 'Player Wiki';
+    btn.innerHTML = '<i class="fas fa-book-open"></i>';
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleWikiViewer(); });
     bar.appendChild(btn);
   }
 }

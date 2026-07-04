@@ -4,6 +4,12 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.0]
+
+### Changed
+- **Player Wiki no longer publishes a Foundry Journal Entry.** It now lives entirely in its own tabbed Player Wiki window (Characters, Locations, Factions, The Story So Far, Rumors & Open Questions, and Map), matching Untangle's own look instead of Foundry's journal sheet styling. Every entry that mentions another one (a Character's Location and Faction, a Location's residents, a Faction's members, a Session's featured Characters/Locations, a Rumor's related Characters/Locations) is a clickable link that jumps straight to it. Publishing now also deletes any Journal Entry a previous version created for you.
+- The player-facing hotbar button is now labeled "Player Wiki" (was "Campaign Map") and opens the full wiki, not just the map.
+
 ## [1.9.2]
 
 ### Changed

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Untangle - Campaign Map</title>
+  <title>Untangle - Player Wiki</title>
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="components.css">
   <style>
@@ -11,6 +11,20 @@
 
     .wv-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
     .wv-header h2 { font-size: 1rem; }
+
+    .wv-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    .wv-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
+    .wv-tab.active { color: var(--accent); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
+
+    .wv-card { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+    .wv-entry { padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+    .wv-portrait { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+    .wv-section-title { padding: 12px 16px 2px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+    .wv-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; margin-right: 8px; }
+    .wv-chip { color: var(--accent); cursor: pointer; }
+    .wv-chip:hover { text-decoration: underline; }
+    .wv-highlight { background: rgba(var(--accent-rgb), 0.18); }
+
     .wv-map-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
     .wv-map-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
     .wv-map-tab.active { color: var(--accent); border-color: var(--accent); }
@@ -28,48 +42,187 @@
 </head>
 <body>
 
-<div class="wv-header"><h2 id="wv-title">Campaign Map</h2></div>
+<div class="wv-header"><h2 id="wv-title">Player Wiki</h2></div>
+<div class="wv-tabs" id="wv-tabs"></div>
 <div id="wv-body"></div>
 
 <script src="state.js"></script>
 <script>
-let wvMapData = {};
+const WV_TABS = [
+  { key: 'characters', label: 'Characters' },
+  { key: 'locations',  label: 'Locations' },
+  { key: 'factions',   label: 'Factions' },
+  { key: 'sessions',   label: 'The Story So Far' },
+  { key: 'rumors',     label: 'Rumors & Open Questions' },
+  { key: 'maps',       label: 'Map' },
+];
+
+let wvData = {};
+let wvActiveTab = 'characters';
 let wvActiveMapId = null;
 
 async function wvInit() {
   await verifyPatreonToken();
-  try { wvMapData = window.parent?.game?.settings?.get('untangle', 'playerWikiMapData') || {}; }
-  catch { wvMapData = {}; }
-  wvRender();
+  try { wvData = window.parent?.game?.settings?.get('untangle', 'playerWikiData') || {}; }
+  catch { wvData = {}; }
+
+  document.getElementById('wv-title').textContent = wvData.campaignName ? `${wvData.campaignName} — Player Wiki` : 'Player Wiki';
+
+  if (!isFeatureEnabled('playerWiki')) {
+    document.getElementById('wv-tabs').innerHTML = '';
+    document.getElementById('wv-body').innerHTML = wvEmpty("This feature isn't currently active.");
+    return;
+  }
+  const hasAnything = !!(wvData.characters?.length || wvData.locations?.length || wvData.factions?.length ||
+    wvData.sessions?.length || wvData.rumors?.length || Object.keys(wvData.maps || {}).length);
+  if (!hasAnything) {
+    document.getElementById('wv-tabs').innerHTML = '';
+    document.getElementById('wv-body').innerHTML = wvEmpty('Nothing published yet. Ask your GM to publish the Player Wiki.');
+    return;
+  }
+
+  wvRenderTabs();
+  wvRenderBody();
 }
 
-function wvRender() {
-  const body = document.getElementById('wv-body');
-  if (!isFeatureEnabled('playerWiki')) {
-    body.innerHTML = `<div class="wv-empty">This feature isn't currently active.</div>`;
-    return;
-  }
+function wvRenderTabs() {
+  document.getElementById('wv-tabs').innerHTML = WV_TABS.map(t =>
+    `<button class="wv-tab${t.key === wvActiveTab ? ' active' : ''}" onclick="wvSwitchTab('${t.key}')">${t.label}</button>`
+  ).join('');
+}
 
-  const maps = Object.values(wvMapData);
-  if (!maps.length) {
-    body.innerHTML = `<div class="wv-empty">Nothing published yet. Ask your GM to publish the Player Wiki.</div>`;
-    return;
+function wvSwitchTab(key) {
+  wvActiveTab = key;
+  wvRenderTabs();
+  wvRenderBody();
+}
+
+function wvRenderBody() {
+  const renderers = {
+    characters: wvSectionCharacters, locations: wvSectionLocations, factions: wvSectionFactions,
+    sessions: wvSectionSessions, rumors: wvSectionRumors, maps: wvSectionMap,
+  };
+  document.getElementById('wv-body').innerHTML = (renderers[wvActiveTab] || wvSectionCharacters)();
+}
+
+// Cross-tab navigation — this is what makes "Faction: The Red Hand" or
+// "Featuring: Ravenhold" feel like a real wiki link instead of static text.
+function wvGoTo(type, id) {
+  if (!type || !id) return;
+  wvActiveTab = type;
+  wvRenderTabs();
+  wvRenderBody();
+  const el = document.getElementById(`wv-item-${type}-${id}`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('wv-highlight');
+    setTimeout(() => el.classList.remove('wv-highlight'), 1200);
   }
-  if (!wvActiveMapId || !wvMapData[wvActiveMapId]) wvActiveMapId = maps[0].id;
+}
+
+function wvChip(ref) {
+  if (!ref?.id) return '';
+  return `<span class="wv-chip" onclick="wvGoTo('${ref.type}','${ref.id}')">${esc(ref.name)}</span>`;
+}
+
+function wvBadge(text, color) {
+  return `<span class="wv-badge" style="background:${color}22;color:${color};border:1px solid ${color}55">${esc(text)}</span>`;
+}
+
+function wvEmpty(msg) {
+  return `<div class="wv-empty">${esc(msg)}</div>`;
+}
+
+function wvSectionCharacters() {
+  const chars = wvData.characters || [];
+  if (!chars.length) return wvEmpty('No characters published yet.');
+
+  const card = n => `
+    <div class="wv-card" id="wv-item-characters-${n.id}">
+      ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="">` : ''}
+      <div style="flex:1">
+        <div style="font-weight:600">${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">— ${esc(n.role)}</span>` : ''}</div>
+        <div style="margin:4px 0 6px;font-size:0.8rem;color:var(--text-dim)">
+          ${n.status && n.status !== 'alive' ? wvBadge(n.statusLabel || n.status, '#cc4444') : ''}
+          ${n.locationName ? `<span style="margin-right:10px">Found in: ${wvChip({ type: 'locations', id: n.locationId, name: n.locationName })}</span>` : ''}
+          ${n.factionName ? `<span>Faction: ${wvChip({ type: 'factions', id: n.factionId, name: n.factionName })}</span>` : ''}
+        </div>
+        ${n.notes ? `<div style="font-size:0.85rem">${esc(n.notes)}</div>` : ''}
+      </div>
+    </div>`;
+
+  const pcs = chars.filter(n => n.type === 'pc');
+  const npcs = chars.filter(n => n.type !== 'pc');
+  return [
+    pcs.length ? `<div class="wv-section-title">Player Characters</div>${pcs.map(card).join('')}` : '',
+    npcs.length ? `<div class="wv-section-title">NPCs</div>${npcs.map(card).join('')}` : '',
+  ].join('');
+}
+
+function wvSectionLocations() {
+  const locs = wvData.locations || [];
+  if (!locs.length) return wvEmpty('No locations published yet.');
+  return locs.map(l => `
+    <div class="wv-entry" id="wv-item-locations-${l.id}">
+      <div style="font-weight:600">${esc(l.name)}</div>
+      ${l.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(l.description)}</div>` : ''}
+      ${l.residents?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Notable residents: ${l.residents.map(wvChip).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function wvSectionFactions() {
+  const facs = wvData.factions || [];
+  if (!facs.length) return wvEmpty('No factions published yet.');
+  return facs.map(f => `
+    <div class="wv-entry" id="wv-item-factions-${f.id}">
+      <div style="font-weight:600">${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
+      ${f.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(f.description)}</div>` : ''}
+      ${f.members?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Known members: ${f.members.map(wvChip).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function wvSectionSessions() {
+  const sess = wvData.sessions || [];
+  if (!sess.length) return wvEmpty('No sessions published yet.');
+  return sess.map(s => `
+    <div class="wv-entry" id="wv-item-sessions-${s.id}">
+      <div style="font-weight:600">Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
+      ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
+      ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
+      ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function wvSectionRumors() {
+  const rumors = wvData.rumors || [];
+  if (!rumors.length) return wvEmpty('No rumors published yet.');
+  return rumors.map(t => `
+    <div class="wv-entry" id="wv-item-rumors-${t.id}">
+      <div style="font-weight:600">${esc(t.title)}</div>
+      ${t.description ? `<div style="font-size:0.85rem;margin-top:6px">${esc(t.description)}</div>` : ''}
+      ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${esc(cl)}</li>`).join('')}</ul>` : ''}
+      ${t.related?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Related: ${t.related.map(wvChip).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function wvSectionMap() {
+  const maps = Object.values(wvData.maps || {});
+  if (!maps.length) return wvEmpty('No maps published yet.');
+  if (!wvActiveMapId || !wvData.maps[wvActiveMapId]) wvActiveMapId = maps[0].id;
 
   const tabs = maps.length > 1
-    ? `<div class="wv-map-tabs">${maps.map(m => `<button class="wv-map-tab${m.id===wvActiveMapId?' active':''}" onclick="wvSwitchMap('${m.id}')">${esc(m.name)}</button>`).join('')}</div>`
+    ? `<div class="wv-map-tabs">${maps.map(m => `<button class="wv-map-tab${m.id === wvActiveMapId ? ' active' : ''}" onclick="wvSwitchMap('${m.id}')">${esc(m.name)}</button>`).join('')}</div>`
     : '';
 
-  const map = wvMapData[wvActiveMapId];
-  const pinsHtml = (map.pins||[]).map(p => `
+  const map = wvData.maps[wvActiveMapId];
+  const pinsHtml = (map.pins || []).map(p => `
     <div class="wv-pin" style="left:${p.x}%;top:${p.y}%" onclick="wvShowPin('${p.id}')">
       <div class="wv-pin-dot"></div>
       ${p.label ? `<div class="wv-pin-label">${esc(p.label)}</div>` : ''}
     </div>`
   ).join('');
 
-  body.innerHTML = `
+  return `
     ${tabs}
     <div class="wv-map-wrap">
       <div class="wv-map-inner">
@@ -82,12 +235,11 @@ function wvRender() {
 
 function wvSwitchMap(id) {
   wvActiveMapId = id;
-  document.getElementById('wv-pin-info').innerHTML = '';
-  wvRender();
+  wvRenderBody();
 }
 
 function wvShowPin(pinId) {
-  const map = wvMapData[wvActiveMapId];
+  const map = wvData.maps?.[wvActiveMapId];
   const pin = map?.pins.find(p => p.id === pinId);
   const el = document.getElementById('wv-pin-info');
   if (!pin || !el) return;
@@ -95,7 +247,7 @@ function wvShowPin(pinId) {
     <div class="wv-pin-info">
       <div style="font-weight:600;margin-bottom:6px">${esc(pin.label || 'Unlabeled')}</div>
       ${pin.npcsHere?.length
-        ? `<div class="text-xs text-dim" style="margin-bottom:4px">Who's here:</div>${pin.npcsHere.map(n => `<div class="text-sm">${esc(n)}</div>`).join('')}`
+        ? `<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:4px">Who's here:</div>${pin.npcsHere.map(n => `<div style="font-size:0.85rem">${esc(n)}</div>`).join('')}`
         : ''}
     </div>`;
 }
