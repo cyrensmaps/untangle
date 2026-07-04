@@ -528,6 +528,8 @@ const NAV_LINKS = [
   { id: 'clocks',     feature: 'clocks',          html: `<button class="nav-btn" onclick="navigate('clocks')" id="nav-clocks">Clocks</button>` },
   { id: 'web',        feature: 'relationshipWeb', html: `<button class="nav-btn" onclick="navigate('web')" id="nav-web">Relationships</button>` },
   { id: 'fieldnotes', feature: 'fieldNotes',      html: `<button class="nav-btn" onclick="navigate('fieldnotes')" id="nav-fieldnotes">Field Notes</button>` },
+  { section: 'Sharing' },
+  { id: 'playerwiki', feature: 'playerWiki',      html: `<button class="nav-btn" onclick="navigate('playerwiki')" id="nav-playerwiki">Player Wiki</button>` },
 ];
 
 function renderNavLinks() {
@@ -543,7 +545,7 @@ function renderNavLinks() {
 // If a view was navigated to (or left active from before a feature was
 // toggled off) while its feature is now disabled, fall back to the dashboard
 // rather than rendering a page whose nav entry no longer exists.
-const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes' };
+const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes', playerwiki: 'playerWiki' };
 
 function navigate(v) {
   if (VIEW_FEATURE[v] && !isFeatureEnabled(VIEW_FEATURE[v])) v = 'dashboard';
@@ -556,7 +558,7 @@ function navigate(v) {
 function render() {
   const main = document.getElementById('main-content');
   document.getElementById('nav-campaign-name').textContent = camp().name;
-  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings };
+  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings, playerwiki: renderPlayerWiki };
   if (VIEW_FEATURE[view] && !isFeatureEnabled(VIEW_FEATURE[view])) { view = 'dashboard'; renderNavLinks(); }
   if (view === 'prep') {
     window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes || []));
@@ -1759,6 +1761,7 @@ ${condensed}`;
     rawTranscript: transcript,
     summary: extracted.summary || '',
     keyEvents: extracted.keyEvents || [],
+    playerVisible: false,
   };
 
   // When re-analysing, use the AI suggested title only if user hasn't set one already
@@ -1786,7 +1789,7 @@ function saveManual() {
   const date = document.getElementById('s-date')?.value;
   const inWorldDate = document.getElementById('s-inworld-date')?.value?.trim() || '';
   const transcript = document.getElementById('s-transcript')?.value?.trim() || '';
-  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, inWorldDate, rawTranscript: transcript, summary: '', keyEvents: [] });
+  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, inWorldDate, rawTranscript: transcript, summary: '', keyEvents: [], playerVisible: false });
   cleanupSessionPrep(c);
   save();
   toast('Session saved.', 'success');
@@ -2171,6 +2174,225 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
     await table.update(toFoundryPlain({ name: tableName, formula: `1d${n}` }));
   }
   return table.id;
+}
+
+// ═══════════════════════════════════════════════
+// PLAYER WIKI
+// ═══════════════════════════════════════════════
+// Publishes a player-safe, opt-in view of the campaign into a real Foundry
+// JournalEntry (so players use the Journal tab they already have — no new
+// site, no new login), plus a filtered maps/pins snapshot a separate
+// non-GM-gated companion window reads (see scripts/main.js). Nothing here
+// is visible to players until the GM explicitly checks it AND clicks
+// Publish — this is opt-in, not the Campaign Bible's opt-out "hide only the
+// known-secret fields" model, since a continuously-live wiki has much
+// higher spoiler risk than a one-off PDF printed at a deliberate moment.
+
+function renderPlayerWiki() {
+  const c = camp();
+  const rows = (items, type, nameKey) => items.length
+    ? items.map(it => `
+        <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
+          <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${it.playerVisible?'checked':''} onchange="toggleEntityVisible('${type}','${it.id}',this.checked)">
+          <span>${esc(it[nameKey])}</span>
+        </label>`).join('')
+    : `<p class="text-xs text-dim">None yet.</p>`;
+
+  const mapsRows = c.maps.length ? c.maps.map(m => `
+    <div style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer;font-weight:600">
+        <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${m.playerVisible?'checked':''} onchange="toggleEntityVisible('map','${m.id}',this.checked)">
+        <span>${esc(m.name)}</span>
+      </label>
+      ${(m.pins||[]).length ? `<div style="margin-left:30px">${m.pins.map(p => `
+        <label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem;color:var(--text-dim);cursor:pointer">
+          <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${p.playerVisible?'checked':''} onchange="togglePinVisible('${m.id}','${p.id}',this.checked)">
+          <span>${esc(p.label || 'Unlabeled pin')}</span>
+        </label>`).join('')}</div>` : ''}
+    </div>`).join('') : `<p class="text-xs text-dim">None yet.</p>`;
+
+  const lastPublished = c.playerWikiLastPublished ? new Date(c.playerWikiLastPublished).toLocaleString() : null;
+
+  return `
+    <div class="page-header">
+      <div><h2>Player Wiki</h2><p class="subtitle">Check what's safe to share, then publish — nothing reaches players until you do</p></div>
+      <button class="btn btn-primary" onclick="publishPlayerWiki()">Publish / Refresh Player Wiki</button>
+    </div>
+    <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing writes a "Player Wiki" Journal Entry (visible to players) and updates the interactive map viewer.</p>
+
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <h3 style="margin-bottom:10px">Characters</h3>
+      ${rows(c.npcs, 'npc', 'name')}
+    </div>
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <h3 style="margin-bottom:10px">Locations</h3>
+      ${rows(c.locations, 'location', 'name')}
+    </div>
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <h3 style="margin-bottom:10px">Factions</h3>
+      ${rows(c.factions, 'faction', 'name')}
+    </div>
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <h3 style="margin-bottom:10px">Sessions <span class="text-xs text-dim">(shown as "The Story So Far")</span></h3>
+      ${rows(c.sessions, 'session', 'title')}
+    </div>
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" — GM Truth is never included)</span></h3>
+      ${rows(c.plotThreads, 'thread', 'title')}
+    </div>
+    <div class="card" style="max-width:640px">
+      <h3 style="margin-bottom:10px">Maps <span class="text-xs text-dim">(and individual pins)</span></h3>
+      ${mapsRows}
+    </div>`;
+}
+
+function toggleEntityVisible(type, id, checked) {
+  const c = camp();
+  const finder = { npc: c.npcs, location: c.locations, faction: c.factions, session: c.sessions, thread: c.plotThreads, map: c.maps }[type];
+  const entity = finder?.find(x => x.id === id);
+  if (entity) { entity.playerVisible = checked; save(); }
+}
+
+function togglePinVisible(mapId, pinId, checked) {
+  const map = camp().maps.find(m => m.id === mapId);
+  const pin = map?.pins.find(p => p.id === pinId);
+  if (pin) { pin.playerVisible = checked; save(); }
+}
+
+// Field exclusions below mirror renderCampaignBible()'s player-safe mode
+// exactly (GM Truth, Faction Goals, NPC motivations, session Key Events) —
+// except here that exclusion is unconditional, layered underneath the
+// opt-in `playerVisible` whitelist rather than behind a toggle.
+
+function buildWikiCharactersHTML(c) {
+  const visible = c.npcs.filter(n => n.playerVisible);
+  if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
+  return visible.map(n => [
+    `<h2>${esc(n.name)}${n.role ? ` — ${esc(n.role)}` : ''}</h2>`,
+    n.image ? `<p><img src="${esc(resolveFoundryImgSrc(n.image))}" style="max-width:120px;border-radius:8px" alt=""></p>` : '',
+    n.notes ? `<p>${esc(n.notes)}</p>` : '',
+  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+}
+
+function buildWikiLocationsHTML(c) {
+  const visible = c.locations.filter(l => l.playerVisible);
+  if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
+  return visible.map(l => [
+    `<h2>${esc(l.name)}</h2>`,
+    l.description ? `<p>${esc(l.description)}</p>` : '',
+  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+}
+
+function buildWikiFactionsHTML(c) {
+  const visible = c.factions.filter(f => f.playerVisible);
+  if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
+  return visible.map(f => [
+    `<h2>${esc(f.name)}</h2>`,
+    f.description ? `<p>${esc(f.description)}</p>` : '',
+  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+}
+
+function buildWikiStoryHTML(c) {
+  const visible = [...c.sessions].filter(s => s.playerVisible).sort((a,b) => (a.number||0) - (b.number||0));
+  if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
+  return visible.map(s => [
+    `<h2>Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</h2>`,
+    s.date ? `<p><em>${esc(s.date)}</em></p>` : '',
+    s.summary ? `<p>${esc(s.summary)}</p>` : '',
+  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+}
+
+function buildWikiRumorsHTML(c) {
+  const visible = c.plotThreads.filter(t => t.playerVisible);
+  if (!visible.length) return '<p><em>Nothing published yet.</em></p>';
+  return visible.map(t => [
+    `<h2>${esc(t.title)}</h2>`,
+    t.description ? `<p>${esc(t.description)}</p>` : '',
+    t.clues?.length ? `<ul>${t.clues.map(cl => `<li>${esc(cl.text)}</li>`).join('')}</ul>` : '',
+  ].filter(Boolean).join('\n')).join('\n<hr>\n');
+}
+
+// Everything the companion Map Viewer (app/wiki-viewer.html) will ever see —
+// resolved to plain strings/numbers at publish time, since that window has
+// no access to c.npcs/c.locations/game.scenes at all, only this snapshot.
+function buildPlayerWikiMapSnapshot(c) {
+  const snapshot = {};
+  c.maps.filter(m => m.playerVisible).forEach(m => {
+    let imageUrl = m.imageDataUrl || '';
+    if (!imageUrl && m.sceneId) {
+      try {
+        const scene = window.parent?.game?.scenes?.get(m.sceneId);
+        imageUrl = resolveFoundryImgSrc(scene?.background?.src || '');
+      } catch { /* scene not reachable, leave blank */ }
+    }
+    const pins = (m.pins||[]).filter(p => p.playerVisible).map(p => {
+      let label = p.label || '';
+      let npcsHere = [];
+      if (p.linkedType === 'location') {
+        npcsHere = c.npcs.filter(n => n.locationId === p.linkedId && n.playerVisible === true).map(n => n.name);
+        if (!label) label = c.locations.find(l => l.id === p.linkedId)?.name || '';
+      } else if (p.linkedType === 'npc' && !label) {
+        label = c.npcs.find(n => n.id === p.linkedId)?.name || '';
+      }
+      return { id: p.id, x: p.x, y: p.y, label, npcsHere };
+    });
+    snapshot[m.id] = { id: m.id, name: m.name, imageUrl, pins };
+  });
+  return snapshot;
+}
+
+async function publishPlayerWiki() {
+  const pgame = window.parent?.game;
+  if (!pgame?.journal) { toast('Not running inside Foundry.', 'error'); return; }
+  if (!pgame.user?.isGM) { toast('Only the GM can publish.', 'error'); return; }
+  const c = camp();
+
+  try {
+    const journalName = `Player Wiki - ${c.name}`;
+    let journal = c.playerWikiJournalId ? pgame.journal.get(c.playerWikiJournalId) : null;
+    if (!journal) journal = pgame.journal.find(j => j.name === journalName);
+    if (!journal) journal = await pgame.journal.documentClass.create(toFoundryPlain({ name: journalName }));
+    c.playerWikiJournalId = journal.id;
+
+    // Grant players view access automatically — the one manual step
+    // postSessionToJournal still leaves to the GM, automated here since a
+    // wiki that stays invisible until someone remembers to flip permissions
+    // defeats the point.
+    const OBSERVER = window.parent.CONST?.DOCUMENT_OWNERSHIP_LEVELS?.OBSERVER ?? 2;
+    if ((journal.ownership?.default ?? 0) < OBSERVER) {
+      await journal.update(toFoundryPlain({ ownership: { default: OBSERVER } }));
+    }
+
+    const pages = [
+      { key: 'characters', name: 'Characters', html: buildWikiCharactersHTML(c) },
+      { key: 'locations',  name: 'Locations',   html: buildWikiLocationsHTML(c) },
+      { key: 'factions',   name: 'Factions',    html: buildWikiFactionsHTML(c) },
+      { key: 'story',      name: 'The Story So Far', html: buildWikiStoryHTML(c) },
+      { key: 'rumors',     name: 'Rumors & Open Questions', html: buildWikiRumorsHTML(c) },
+    ];
+    if (!c.playerWikiPageIds) c.playerWikiPageIds = {};
+    for (const p of pages) {
+      let page = c.playerWikiPageIds[p.key] ? journal.pages.get(c.playerWikiPageIds[p.key]) : null;
+      if (page) {
+        await page.update(toFoundryPlain({ name: p.name, text: { content: p.html, format: 1 }, ownership: { default: OBSERVER } }));
+      } else {
+        const [created] = await journal.createEmbeddedDocuments('JournalEntryPage', toFoundryPlain([
+          { name: p.name, type: 'text', text: { content: p.html, format: 1 }, ownership: { default: OBSERVER } },
+        ]));
+        c.playerWikiPageIds[p.key] = created.id;
+      }
+    }
+
+    const mapSnapshot = buildPlayerWikiMapSnapshot(c);
+    await pgame.settings.set('untangle', 'playerWikiMapData', toFoundryPlain(mapSnapshot));
+
+    c.playerWikiLastPublished = Date.now();
+    save();
+    render();
+    toast('Player Wiki published.', 'success');
+  } catch (err) {
+    toast('Error publishing Player Wiki: ' + (err.message || String(err)), 'error');
+  }
 }
 
 function openEditSessionModal(id) {
@@ -3257,7 +3479,7 @@ function saveNPC(id) {
 function addNPC() {
   const name = document.getElementById('an-name').value.trim();
   if (!name) { toast('Name is required.', 'error'); return; }
-  camp().npcs.push({ id: uid(), name, role: document.getElementById('an-role').value, motivation: document.getElementById('an-motivation').value, notes: document.getElementById('an-notes').value, secrets: document.getElementById('an-secrets').value, locationId: null, status: 'alive', type: document.getElementById('an-type').value || 'npc', voiceDescription: '', sessions: [], events: [], image: window._npcImageData || null, imageOffsetX: window._npcImageOffsetX ?? 50, imageOffsetY: window._npcImageOffsetY ?? 50 });
+  camp().npcs.push({ id: uid(), name, role: document.getElementById('an-role').value, motivation: document.getElementById('an-motivation').value, notes: document.getElementById('an-notes').value, secrets: document.getElementById('an-secrets').value, locationId: null, status: 'alive', type: document.getElementById('an-type').value || 'npc', voiceDescription: '', sessions: [], events: [], image: window._npcImageData || null, imageOffsetX: window._npcImageOffsetX ?? 50, imageOffsetY: window._npcImageOffsetY ?? 50, playerVisible: false });
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Character added.', 'success');
@@ -3549,7 +3771,7 @@ function saveLocation(id) {
 function addLocation() {
   const name = document.getElementById('al-name').value.trim();
   if (!name) { toast('Name is required.', 'error'); return; }
-  camp().locations.push({ id: uid(), name, description: document.getElementById('al-desc').value, notes: document.getElementById('al-notes').value, sessionIds: [] });
+  camp().locations.push({ id: uid(), name, description: document.getElementById('al-desc').value, notes: document.getElementById('al-notes').value, sessionIds: [], playerVisible: false });
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Location added.', 'success');
@@ -3659,6 +3881,7 @@ function connectionChipsReadOnly(connections) {
 }
 
 const TIMELINE_GAP = 140;     // px between auto-placed nodes, and between nodes after a reorder renumber
+const TIMELINE_BASE = 20;     // px position of the very first node — matches the track's own top margin
 
 function renderTimeline() {
   const c = camp();
@@ -3680,17 +3903,19 @@ function renderTimeline() {
   // Auto-assign a position to anything that doesn't have one yet (new
   // sessions, freshly-added freeform entries) — it lands at the bottom,
   // the natural place for "the newest thing" — then persists immediately
-  // so the position is sticky from then on.
-  let maxPos = 0;
+  // so the position is sticky from then on. `maxPos` starts `null` (not 0)
+  // so the very first node ever placed lands at TIMELINE_BASE, right near
+  // the track's own top margin, instead of a full TIMELINE_GAP below it.
+  let maxPos = null;
   nodes.forEach(n => {
     const pos = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
-    if (typeof pos === 'number' && pos > maxPos) maxPos = pos;
+    if (typeof pos === 'number' && (maxPos === null || pos > maxPos)) maxPos = pos;
   });
   let changed = false;
   nodes.forEach(n => {
     const hasPos = typeof (n.kind === 'session' ? n.ref.timelinePosition : n.ref.position) === 'number';
     if (!hasPos) {
-      maxPos += TIMELINE_GAP;
+      maxPos = maxPos === null ? TIMELINE_BASE : maxPos + TIMELINE_GAP;
       if (n.kind === 'session') n.ref.timelinePosition = maxPos; else n.ref.position = maxPos;
       changed = true;
     }
@@ -3755,7 +3980,7 @@ function handleTimelineSpineClick(e) {
   const track = document.getElementById('timeline-track');
   if (!track) return;
   const rect = track.getBoundingClientRect();
-  const y = Math.max(20, e.clientY - rect.top);
+  const y = Math.max(TIMELINE_BASE, e.clientY - rect.top);
   openAddTimelineEventModal(y);
 }
 
@@ -3832,7 +4057,7 @@ function setupTimelineEvents() {
     // Free drag along the whole track — no neighbor clamping — is what
     // actually lets an entry move past others. Bounded only by the track's
     // own margins.
-    const newPos = Math.max(20, Math.min(_tlDrag.trackHeight - 20, _tlDrag.startPos + dy));
+    const newPos = Math.max(TIMELINE_BASE, Math.min(_tlDrag.trackHeight - TIMELINE_BASE, _tlDrag.startPos + dy));
     _tlDrag.currentPos = newPos;
 
     if (_tlDrag.nodeEl) _tlDrag.nodeEl.style.top = (newPos - 10) + 'px';
@@ -3865,7 +4090,7 @@ function setupTimelineEvents() {
       const finalOrder = others.slice();
       finalOrder.splice(draggedRank, 0, { kind, id });
       finalOrder.forEach((n, i) => {
-        const pos = (i + 1) * TIMELINE_GAP;
+        const pos = TIMELINE_BASE + i * TIMELINE_GAP;
         if (n.kind === 'session') {
           const s = c.sessions.find(x=>x.id===n.id);
           if (s) s.timelinePosition = pos;
@@ -4103,7 +4328,7 @@ function linkScene(sceneId) {
   if (!scene) return;
   const c = camp();
   if (!c.maps) c.maps = [];
-  c.maps.push({ id: uid(), name: scene.name, sceneId: scene.id, pins: [] });
+  c.maps.push({ id: uid(), name: scene.name, sceneId: scene.id, pins: [], playerVisible: false });
   save();
   document.getElementById('link-scene-overlay')?.remove();
   toast('Scene linked.', 'success');
@@ -4181,7 +4406,7 @@ async function addMap(input) {
     const dataUrl = await resizeImage(file, 2400);
     const rawName = file.name.replace(/\.[^.]+$/, '');
     const name = prompt('Name this map:', rawName) || rawName;
-    const m = { id: uid(), name, imageDataUrl: dataUrl, pins: [] };
+    const m = { id: uid(), name, imageDataUrl: dataUrl, pins: [], playerVisible: false };
     c.maps.push(m);
     save();
     toast('Map added.', 'success');
@@ -4250,7 +4475,7 @@ function addPin(mapId, x, y) {
   let linkedType = null, linkedId = null;
   if (linkVal) { [linkedType, linkedId] = linkVal.split(':'); }
   if (!m.pins) m.pins = [];
-  m.pins.push({ id: uid(), x, y, linkedType, linkedId, label });
+  m.pins.push({ id: uid(), x, y, linkedType, linkedId, label, playerVisible: false });
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
@@ -5698,7 +5923,7 @@ function saveThread(id) {
     const t = c.plotThreads.find(x => x.id === id);
     if (t) Object.assign(t, data);
   } else {
-    c.plotThreads.push({ id: uid(), ...data });
+    c.plotThreads.push({ id: uid(), ...data, playerVisible: false });
   }
   save();
   document.querySelector('.modal-overlay')?.remove();
@@ -5874,7 +6099,7 @@ function saveFaction(id) {
     const f = c.factions.find(x => x.id === id);
     if (f) Object.assign(f, data);
   } else {
-    c.factions.push({ id: uid(), ...data });
+    c.factions.push({ id: uid(), ...data, playerVisible: false });
   }
   save();
   document.querySelector('.modal-overlay')?.remove();

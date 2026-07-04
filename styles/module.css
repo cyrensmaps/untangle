@@ -82,6 +82,38 @@
   border-color: rgba(255, 255, 255, 0.45);
 }
 
+/* Player Wiki map button — visible to every connected client, not just the
+   GM, so it's anchored to the hotbar's own right edge rather than centered
+   like #untangle-quickbar, avoiding any collision with that bar's
+   (GM-configurable) offset. */
+#untangle-wiki-btn-bar {
+  position: absolute;
+  right: 10px;
+  top: 0;
+  padding-bottom: 8px;
+  z-index: 25;
+}
+
+.untangle-wiki-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #eee;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.untangle-wiki-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 /* Hover-a-token tooltip */
 #untangle-token-tooltip {
   position: fixed;

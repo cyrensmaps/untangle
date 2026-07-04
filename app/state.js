@@ -322,6 +322,7 @@ const FEATURE_REGISTRY = [
   { key: 'campaignBible',     label: 'Printable Campaign Bible',  category: 'Tools',               premium: true  },
   { key: 'rollTableSync',     label: 'Roll Table Sync',           category: 'Tools',               premium: true  },
   { key: 'postToJournal',     label: 'Post to Journal',           category: 'Tools',               premium: true  },
+  { key: 'playerWiki',        label: 'Player Wiki',               category: 'Tools',               premium: true  },
   { key: 'pullFromFoundry',   label: 'Pull from Foundry',         category: 'Tools',               premium: false },
   { key: 'hoverTokenTooltip', label: 'Hover Token Tooltip',       category: 'Foundry Integration', premium: false },
   { key: 'hotbarMacros',      label: 'Drag-to-Hotbar Macros',     category: 'Foundry Integration', premium: true  },

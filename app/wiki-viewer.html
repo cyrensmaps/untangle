@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Untangle - Campaign Map</title>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="components.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); height: 100vh; overflow-y: auto; }
+
+    .wv-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .wv-header h2 { font-size: 1rem; }
+    .wv-map-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    .wv-map-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
+    .wv-map-tab.active { color: var(--accent); border-color: var(--accent); }
+    .wv-map-wrap { padding: 16px; }
+    .wv-map-inner { position: relative; display: inline-block; max-width: 100%; }
+    .wv-map-img { max-width: 100%; display: block; border-radius: 8px; }
+    .wv-pin { position: absolute; width: 18px; height: 18px; margin-left: -9px; margin-top: -9px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 2px var(--accent); cursor: pointer; }
+    .wv-pin-info { margin: 0 16px 16px; padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+    .wv-empty { padding: 60px 24px; text-align: center; color: var(--text-dim); font-size: 0.9rem; line-height: 1.7; }
+  </style>
+</head>
+<body>
+
+<div class="wv-header"><h2 id="wv-title">Campaign Map</h2></div>
+<div id="wv-body"></div>
+
+<script src="state.js"></script>
+<script>
+let wvMapData = {};
+let wvActiveMapId = null;
+
+async function wvInit() {
+  await verifyPatreonToken();
+  try { wvMapData = window.parent?.game?.settings?.get('untangle', 'playerWikiMapData') || {}; }
+  catch { wvMapData = {}; }
+  wvRender();
+}
+
+function wvRender() {
+  const body = document.getElementById('wv-body');
+  if (!isFeatureEnabled('playerWiki')) {
+    body.innerHTML = `<div class="wv-empty">This feature isn't currently active.</div>`;
+    return;
+  }
+
+  const maps = Object.values(wvMapData);
+  if (!maps.length) {
+    body.innerHTML = `<div class="wv-empty">Nothing published yet. Ask your GM to publish the Player Wiki.</div>`;
+    return;
+  }
+  if (!wvActiveMapId || !wvMapData[wvActiveMapId]) wvActiveMapId = maps[0].id;
+
+  const tabs = maps.length > 1
+    ? `<div class="wv-map-tabs">${maps.map(m => `<button class="wv-map-tab${m.id===wvActiveMapId?' active':''}" onclick="wvSwitchMap('${m.id}')">${esc(m.name)}</button>`).join('')}</div>`
+    : '';
+
+  const map = wvMapData[wvActiveMapId];
+  const pinsHtml = (map.pins||[]).map(p =>
+    `<div class="wv-pin" style="left:${p.x}%;top:${p.y}%" title="${esc(p.label||'')}" onclick="wvShowPin('${p.id}')"></div>`
+  ).join('');
+
+  body.innerHTML = `
+    ${tabs}
+    <div class="wv-map-wrap">
+      <div class="wv-map-inner">
+        ${map.imageUrl ? `<img class="wv-map-img" src="${esc(map.imageUrl)}" alt="">` : ''}
+        ${pinsHtml}
+      </div>
+    </div>
+    <div id="wv-pin-info"></div>`;
+}
+
+function wvSwitchMap(id) {
+  wvActiveMapId = id;
+  document.getElementById('wv-pin-info').innerHTML = '';
+  wvRender();
+}
+
+function wvShowPin(pinId) {
+  const map = wvMapData[wvActiveMapId];
+  const pin = map?.pins.find(p => p.id === pinId);
+  const el = document.getElementById('wv-pin-info');
+  if (!pin || !el) return;
+  el.innerHTML = `
+    <div class="wv-pin-info">
+      <div style="font-weight:600;margin-bottom:6px">${esc(pin.label || 'Unlabeled')}</div>
+      ${pin.npcsHere?.length
+        ? `<div class="text-xs text-dim" style="margin-bottom:4px">Who's here:</div>${pin.npcsHere.map(n => `<div class="text-sm">${esc(n)}</div>`).join('')}`
+        : ''}
+    </div>`;
+}
+
+wvInit();
+</script>
+</body>
+</html>

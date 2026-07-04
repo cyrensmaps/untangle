@@ -4,6 +4,12 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.9.0]
+
+### Added
+- **Player Wiki (premium)**: publish an opt-in, player-safe view of your campaign directly into a Foundry Journal Entry - Characters, Locations, Factions, "The Story So Far" (session recaps), and "Rumors & Open Questions" (from Plot Threads' public descriptions and clues, never GM Truth). Nothing is visible to players until you explicitly check it on the new Player Wiki page and click Publish; player viewing permission is granted automatically.
+- **Interactive Campaign Map for players**: a new map button next to the macro bar (visible to everyone, not just the GM) opens a companion window showing your published maps and pins, including the "who's here" roster for location pins - filtered to only the Characters, Maps, and Pins you've marked visible.
+
 ## [1.8.0]
 
 ### Added

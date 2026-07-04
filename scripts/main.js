@@ -92,6 +92,53 @@ function toggleQuickAccessWidget() {
   }
 }
 
+// ── Player Wiki: companion Map Viewer (GM and players alike) ──
+// The first window in this module NOT gated to game.user.isGM — the Player
+// Wiki's Journal pages are visible to players via Foundry's own permission
+// system, but the interactive map+pins experience is bespoke UI only this
+// module has, so it needs its own player-openable window. It reads the
+// playerWikiMapData world setting (registered above), never the GM's own
+// cp_v1 localStorage, since a player's browser doesn't have that at all.
+
+class PlayerWikiMapApp extends Application {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: 'untangle-wiki-viewer',
+      title: 'Campaign Map',
+      width: 480,
+      height: 560,
+      resizable: true,
+      minimizable: true,
+    });
+  }
+
+  async _renderInner(_data) {
+    const url = `modules/${MODULE_ID}/app/wiki-viewer.html`;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
+    const iframe = document.createElement('iframe');
+    iframe.src = url;
+    iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    wrap.appendChild(iframe);
+    return $(wrap);
+  }
+}
+
+let _wikiMapApp = null;
+
+function toggleWikiMapViewer() {
+  try {
+    if (_wikiMapApp?.rendered) {
+      _wikiMapApp.close();
+      return;
+    }
+    if (!_wikiMapApp) _wikiMapApp = new PlayerWikiMapApp();
+    _wikiMapApp.render(true);
+  } catch (err) {
+    console.error('Untangle | Failed to open Wiki Map Viewer', err);
+  }
+}
+
 // ── Campaign data: export / import / clear ────────────────
 // Operates directly on this browser's localStorage — the same store
 // app/index.html reads/writes (key 'cp_v1') — so it works even without
@@ -327,6 +374,23 @@ Hooks.on('init', () => {
       default: '',
     });
   } catch (err) { console.error('Untangle | Failed to register patreonToken setting', err); }
+
+  try {
+    // Holds the filtered maps/pins snapshot the Player Wiki's "Publish"
+    // button writes (app/index.html's publishPlayerWiki()). World-scope
+    // settings are synced to and readable by every connected client,
+    // players included — not just config:false's usual GM-only-config-UI
+    // meaning — which is exactly why this exists: the companion Map Viewer
+    // (PlayerWikiMapApp, below) runs in a player's own browser and has no
+    // access to the GM's cp_v1 localStorage at all, so this is its only
+    // data source.
+    game.settings.register(MODULE_ID, 'playerWikiMapData', {
+      scope: 'world',
+      config: false,
+      type: Object,
+      default: {},
+    });
+  } catch (err) { console.error('Untangle | Failed to register playerWikiMapData setting', err); }
 
   try {
     // API keys — used by the planner's AI extraction (Claude) and audio
@@ -642,6 +706,46 @@ function renderQuickbar() {
 
 Hooks.on('renderHotbar', renderQuickbar);
 Hooks.once('ready', renderQuickbar);
+
+// ── Player Wiki map button — visible to EVERY connected client, not just
+// the GM. Deliberately does NOT check Patreon entitlement here: a player's
+// browser has no local entitlement cache to read (that's populated by the
+// GM's own iframe), so the real check happens inside wiki-viewer.html once
+// opened. This button only decides "is there anything to look at" (has the
+// GM published, and hasn't manually turned the feature off) — not "are you
+// allowed to," which the viewer itself resolves.
+function _wikiButtonShouldShow() {
+  try {
+    const toggles = game.settings.get(MODULE_ID, 'featureToggles') || {};
+    if (toggles.playerWiki === false) return false;
+    const mapData = game.settings.get(MODULE_ID, 'playerWikiMapData') || {};
+    return Object.keys(mapData).length > 0;
+  } catch { return false; }
+}
+
+function renderWikiButton() {
+  const hotbar = document.getElementById('hotbar');
+  if (!hotbar) return;
+
+  let bar = document.getElementById('untangle-wiki-btn-bar');
+  if (!_wikiButtonShouldShow()) { bar?.remove(); return; }
+
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'untangle-wiki-btn-bar';
+    hotbar.appendChild(bar);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'untangle-wiki-btn';
+    btn.title = 'Campaign Map';
+    btn.innerHTML = '<i class="fas fa-map"></i>';
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleWikiMapViewer(); });
+    bar.appendChild(btn);
+  }
+}
+
+Hooks.on('renderHotbar', renderWikiButton);
+Hooks.once('ready', renderWikiButton);
 
 Hooks.on('ready', () => {
   console.log('Untangle | Loaded. Press Ctrl+Shift+P, click the button in the Journal tab, or use the quick bar above the macro bar to open.');
