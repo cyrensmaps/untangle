@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.5]
+
+### Fixed
+- Actually fixed the Player Wiki button floating above the macro row instead of overlapping it. The previous attempt targeted the wrong mechanism - the GM quickbar was always floating correctly because of a JS transform (translateY(-100%)) applied in renderQuickbar(), not the CSS properties that were changed last time. The Player Wiki button never had that transform applied at all; it now does.
+
 ## [1.10.4]
 
 ### Fixed

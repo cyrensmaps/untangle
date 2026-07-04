@@ -759,6 +759,11 @@ function renderWikiButton() {
   // the quickbar itself uses.
   const quickbar = document.getElementById('untangle-quickbar');
   bar.style.left = quickbar ? `${quickbar.offsetLeft + quickbar.offsetWidth + 6}px` : '50%';
+  // Same vertical lift renderQuickbar() applies via its own transform (that's
+  // what actually floats it clear of the macro row - top:0/padding-bottom
+  // alone do not). No horizontal component needed here since `left` above is
+  // already the exact pixel for this bar's left edge, not a 50%-based value.
+  bar.style.transform = 'translateY(-100%)';
 }
 
 Hooks.on('renderHotbar', renderWikiButton);
