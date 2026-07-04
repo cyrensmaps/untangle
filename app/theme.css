@@ -43,3 +43,69 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.22);
 }
+
+/* Fantasy — illuminated manuscript by candlelight: leather-brown page,
+   gilt-gold ink, deep forest and dried-wax-seal accents. Blocky corners and
+   a serif face instead of the default's rounded, modern-UI feel. */
+[data-theme="fantasy"] {
+  --bg: #1a140c;
+  --bg-card: #241b10;
+  --bg-elevated: #2e2214;
+  --accent: #c9a227;
+  --accent-dim: #96791d;
+  --accent-rgb: 201, 162, 39;
+  --text: #e8dcc0;
+  --text-dim: #a08e68;
+  --red: #8b2e2e;
+  --red-rgb: 139, 46, 46;
+  --green: #5c7a3d;
+  --green-rgb: 92, 122, 61;
+  --border: rgba(201, 162, 39, 0.18);
+  --border-hover: rgba(201, 162, 39, 0.45);
+  --radius: 4px;
+  --font: Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+}
+
+/* Sci-Fi — a ship's console readout: near-black with a cold blue tint,
+   electric-cyan HUD accent, sharp corners, monospace throughout for a
+   terminal/display feel. */
+[data-theme="scifi"] {
+  --bg: #05080d;
+  --bg-card: #0b121a;
+  --bg-elevated: #121b26;
+  --accent: #3ee6e0;
+  --accent-dim: #24a8a4;
+  --accent-rgb: 62, 230, 224;
+  --text: #cfe8ec;
+  --text-dim: #5f8a90;
+  --red: #ff4d5e;
+  --red-rgb: 255, 77, 94;
+  --green: #4fd67a;
+  --green-rgb: 79, 214, 122;
+  --border: rgba(62, 230, 224, 0.16);
+  --border-hover: rgba(62, 230, 224, 0.5);
+  --radius: 2px;
+  --font: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+}
+
+/* Horror — an oppressive, desaturated near-black with a dark blood-red
+   accent instead of anything warm or inviting; "success" green is muted and
+   sickly rather than cheerful. Old-novel serif typesetting. */
+[data-theme="horror"] {
+  --bg: #0c0a0a;
+  --bg-card: #161212;
+  --bg-elevated: #1f1919;
+  --accent: #8a1f1f;
+  --accent-dim: #5e1414;
+  --accent-rgb: 138, 31, 31;
+  --text: #c9bdb5;
+  --text-dim: #6e5f5a;
+  --red: #b31f1f;
+  --red-rgb: 179, 31, 31;
+  --green: #4a5c46;
+  --green-rgb: 74, 92, 70;
+  --border: rgba(138, 31, 31, 0.2);
+  --border-hover: rgba(138, 31, 31, 0.55);
+  --radius: 3px;
+  --font: Georgia, 'Times New Roman', 'Book Antiqua', serif;
+}

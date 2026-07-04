@@ -4,6 +4,17 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.11.0]
+
+### Added
+- **Thread Branches (premium)**: a Plot Thread can now hold up to 3 competing "truths" instead of committing to one. Tag clues against whichever truth(s) they're actually consistent with and watch a live supporting/contradicting tally per truth as you play. When you lock in which truth is real, any clue that only supports a truth you didn't choose is flagged for review, so you can retcon it or mark it an acknowledged red herring. GM Truth (single or branched) still never reaches Player Companion.
+- Three new themes: **Fantasy** (candlelit parchment, gilt-gold accent, serif type), **Sci-Fi** (cold-blue console readout, electric-cyan accent, monospace type), and **Horror** (oppressive near-black, blood-red accent, old-novel serif type). Applies everywhere Untangle shows up, same as the existing themes.
+
+### Fixed
+- The Player Companion hotbar button now correctly hides if the GM isn't an active Patreon member, instead of dead-ending players at an "unavailable" screen.
+- The Player Companion button now respects the quickbar's Horizontal/Vertical Offset settings and always sits flush beside it, instead of occasionally drifting out of alignment.
+- Selecting a theme that wasn't "Foundry Basic" or "Grey" used to silently fall back to Foundry Basic - a latent bug that would have swallowed all three new themes above.
+
 ## [1.10.6]
 
 ### Changed

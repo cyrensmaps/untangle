@@ -4898,10 +4898,13 @@ document.addEventListener('keydown', e => {
 const THEMES = [
   { value: 'foundry-basic', label: 'Foundry Basic' },
   { value: 'grey',          label: 'Grey' },
+  { value: 'fantasy',       label: 'Fantasy' },
+  { value: 'scifi',         label: 'Sci-Fi' },
+  { value: 'horror',        label: 'Horror' },
 ];
 
 function renderSettings() {
-  const currentTheme = state.settings.theme === 'grey' ? 'grey' : 'foundry-basic';
+  const currentTheme = THEMES.some(t => t.value === state.settings.theme) ? state.settings.theme : 'foundry-basic';
   return `
     <div class="page-header">
       <div><h2>Settings</h2><p class="subtitle">Campaign management</p></div>
@@ -4909,7 +4912,7 @@ function renderSettings() {
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Theme</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget.</p>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget and Player Companion.</p>
       <div class="form-group" style="margin-bottom:0;max-width:240px">
         <select id="theme-select" onchange="setTheme(this.value)">
           ${THEMES.map(t => `<option value="${t.value}" ${t.value===currentTheme?'selected':''}>${t.label}</option>`).join('')}
@@ -5748,6 +5751,7 @@ function renderPlotThreads() {
           <span style="background:${si.color}22;color:${si.color};border:1px solid ${si.color}44;border-radius:4px;padding:2px 8px;font-size:0.72rem;font-weight:600;white-space:nowrap">${si.label}</span>
         </div>
         ${(t.clues||[]).length?`<div class="text-xs text-dim" style="margin-top:8px">${t.clues.length} clue${t.clues.length!==1?'s':''}</div>`:''}
+        ${(t.truths||[]).length?`<div class="text-xs" style="margin-top:4px;color:var(--accent)">${t.resolvedTruthId?'Resolved':`${t.truths.length} truths live`}</div>`:''}
         ${avatars?`<div style="display:flex;gap:4px;margin-top:10px;align-items:center">${avatars}${involvedNpcs.length>5?`<span class="text-xs text-dim">+${involvedNpcs.length-5}</span>`:''}</div>`:''}
       </div>`;
   }).join('');
@@ -5765,6 +5769,10 @@ function renderPlotThreads() {
 
 function openAddThreadModal() {
   window._threadClues = [];
+  window._threadTruths = [];
+  window._threadResolvedId = null;
+  window._threadSingleTruth = '';
+  window._threadBranchUIOn = false;
   openThreadModal(null);
 }
 
@@ -5772,6 +5780,10 @@ function openEditThreadModal(id) {
   const t = camp().plotThreads.find(x => x.id === id);
   if (!t) return;
   window._threadClues = JSON.parse(JSON.stringify(t.clues || []));
+  window._threadTruths = JSON.parse(JSON.stringify(t.truths || []));
+  window._threadResolvedId = t.resolvedTruthId || null;
+  window._threadSingleTruth = t.truth || '';
+  window._threadBranchUIOn = (t.truths || []).length > 0;
   openThreadModal(t);
 }
 
@@ -5808,7 +5820,7 @@ function openThreadModal(t) {
         <div class="form-group"><label>Status</label><select id="th-status">${statusOpts}</select></div>
       </div>
       <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea></div>
-      <div class="form-group"><label>GM Truth <span class="text-dim text-xs">(hidden - what's actually happening)</span></label><textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…">${esc(t?.truth||'')}</textarea></div>
+      <div class="form-group" id="thread-truth-block">${buildTruthBlockHTML()}</div>
       ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).length?`
       <div class="form-group">
         <label>Linked Clocks <span class="text-dim text-xs">(managed on the Clocks page)</span></label>
@@ -5826,13 +5838,7 @@ function openThreadModal(t) {
           <label style="margin:0">Player clues gathered</label>
           <button class="btn btn-ghost btn-sm" onclick="addThreadClue()">+ Add clue</button>
         </div>
-        <div id="thread-clues-list">
-          ${(window._threadClues||[]).map((cl,i) => `
-            <div style="display:flex;gap:8px;margin-bottom:8px" data-clue-idx="${i}">
-              <textarea rows="2" placeholder="Clue text…" oninput="window._threadClues[${i}].text=this.value" style="flex:1;resize:vertical">${esc(cl.text)}</textarea>
-              <button class="btn btn-danger btn-sm" style="flex-shrink:0;align-self:flex-start" onclick="removeThreadClue(${i})">✕</button>
-            </div>`).join('')}
-        </div>
+        <div id="thread-clues-list">${clueListHTML()}</div>
       </div>
       ${isEdit?renderTaggedNotesSection('thread', t.id):''}
       <div class="flex gap-8" style="justify-content:space-between">
@@ -5846,30 +5852,192 @@ function openThreadModal(t) {
   document.body.appendChild(overlay);
 }
 
+// Renders the clue textarea list. When Thread Branches is in use, each clue
+// row also gets one toggle chip per current truth (A/B/C…) so the GM can tag
+// which truth(s) that clue is actually consistent with - untagged stays
+// neutral and never counts as contradicting anything.
+function clueListHTML() {
+  const truths = (window._threadBranchUIOn && window._threadTruths) || [];
+  return (window._threadClues||[]).map((cl,i) => `
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start" data-clue-idx="${i}">
+      <textarea rows="2" placeholder="Clue text…" oninput="window._threadClues[${i}].text=this.value" style="flex:1;resize:vertical">${esc(cl.text)}</textarea>
+      ${truths.length ? `<div style="display:flex;gap:4px;flex-shrink:0;padding-top:4px">${truths.map((tr,ti) => `
+        <button type="button" class="btn btn-sm ${(cl.branchIds||[]).includes(tr.id)?'btn-primary':'btn-ghost'}" style="padding:2px 8px" title="${esc(tr.label||('Truth '+truthLetter(ti)))}" onclick="toggleClueBranch(${i},'${tr.id}')">${truthLetter(ti)}</button>`).join('')}</div>` : ''}
+      <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removeThreadClue(${i})">✕</button>
+    </div>`).join('');
+}
+
 function addThreadClue() {
   if (!window._threadClues) window._threadClues = [];
-  const idx = window._threadClues.length;
-  window._threadClues.push({ id: uid(), text: '' });
+  window._threadClues.push({ id: uid(), text: '', branchIds: [] });
   const list = document.getElementById('thread-clues-list');
-  if (!list) return;
-  const div = document.createElement('div');
-  div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
-  div.dataset.clueIdx = idx;
-  div.innerHTML = `<textarea rows="2" placeholder="Clue text…" oninput="window._threadClues[${idx}].text=this.value" style="flex:1;resize:vertical"></textarea><button class="btn btn-danger btn-sm" style="flex-shrink:0;align-self:flex-start" onclick="removeThreadClue(${idx})">✕</button>`;
-  list.appendChild(div);
-  div.querySelector('input')?.focus();
+  if (list) {
+    list.innerHTML = clueListHTML();
+    list.querySelector(`[data-clue-idx="${window._threadClues.length-1}"] textarea`)?.focus();
+  }
 }
 
 function removeThreadClue(idx) {
   window._threadClues.splice(idx, 1);
-  // Re-render clues list
   const list = document.getElementById('thread-clues-list');
-  if (!list) return;
-  list.innerHTML = (window._threadClues||[]).map((cl,i) => `
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <textarea rows="2" placeholder="Clue text…" oninput="window._threadClues[${i}].text=this.value" style="flex:1;resize:vertical">${esc(cl.text)}</textarea>
-      <button class="btn btn-danger btn-sm" style="flex-shrink:0;align-self:flex-start" onclick="removeThreadClue(${i})">✕</button>
+  if (list) list.innerHTML = clueListHTML();
+  refreshTruthBlock(); // a removed clue might have been the only one flagged as contradicting
+}
+
+function truthLetter(idx) { return String.fromCharCode(65 + idx); } // A, B, C…
+
+function computeBranchTally(truths, clues) {
+  return truths.map(tr => ({
+    ...tr,
+    supporting: clues.filter(cl => (cl.branchIds||[]).includes(tr.id)).length,
+    contradicting: clues.filter(cl => (cl.branchIds||[]).length && !cl.branchIds.includes(tr.id)).length,
+  }));
+}
+
+function findBranchContradictions(clues, resolvedTruthId) {
+  if (!resolvedTruthId) return [];
+  return clues.filter(cl => (cl.branchIds||[]).length && !cl.branchIds.includes(resolvedTruthId) && !cl.ackRedHerring);
+}
+
+// Rebuilds the whole GM Truth area (single-truth textarea or the branch UI)
+// from current staging state - called after every mutation so the mode
+// toggle, truth list, live tally, and resolve/contradiction UI all stay in
+// sync without needing separate render paths for each.
+function buildTruthBlockHTML() {
+  const canBranch = isFeatureEnabled('threadBranches');
+  const branchOn = canBranch && window._threadBranchUIOn;
+  const toggleBtn = canBranch
+    ? `<button class="btn btn-ghost btn-sm" onclick="toggleThreadBranchMode()">${branchOn ? 'Switch to single truth' : 'Use multiple possible truths'}</button>`
+    : '';
+
+  if (!branchOn) {
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0">GM Truth <span class="text-dim text-xs">(hidden - what's actually happening)</span></label>
+        ${toggleBtn}
+      </div>
+      <textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…" oninput="window._threadSingleTruth=this.value">${esc(window._threadSingleTruth||'')}</textarea>`;
+  }
+
+  const truths = window._threadTruths || [];
+  const clues = window._threadClues || [];
+  const resolvedId = window._threadResolvedId || null;
+  const tally = computeBranchTally(truths, clues);
+  const resolved = truths.find(tr => tr.id === resolvedId);
+  const contradictions = findBranchContradictions(clues, resolvedId);
+
+  const truthRows = truths.map((tr, i) => `
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start">
+      <div style="width:26px;height:26px;border-radius:50%;background:rgba(var(--accent-rgb),0.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0;margin-top:2px">${truthLetter(i)}</div>
+      <div style="flex:1">
+        <input type="text" placeholder="Short label (e.g. It's the Duke)…" value="${esc(tr.label||'')}" oninput="window._threadTruths[${i}].label=this.value" style="margin-bottom:6px">
+        <textarea rows="2" placeholder="What's actually going on under this truth…" oninput="window._threadTruths[${i}].text=this.value">${esc(tr.text||'')}</textarea>
+      </div>
+      <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removeThreadTruth(${i})">✕</button>
     </div>`).join('');
+
+  const tallyLine = tally.length
+    ? `<p class="text-xs text-dim" style="margin:8px 0">${tally.map((tr,i) => `${truthLetter(i)}: ${tr.supporting} supporting, ${tr.contradicting} contradicting`).join(' · ')}</p>`
+    : '';
+
+  let resolveUI = '';
+  if (truths.length) {
+    if (resolved) {
+      resolveUI = `
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+          <span class="badge" style="background:rgba(var(--accent-rgb),0.15);color:var(--accent)">Resolved: ${esc(resolved.label || `Truth ${truthLetter(truths.indexOf(resolved))}`)}</span>
+          <button class="btn btn-ghost btn-sm" onclick="unresolveThreadBranch()">Un-resolve</button>
+        </div>
+        ${contradictions.length ? `
+          <div style="margin-top:10px;padding:10px;border:1px solid rgba(var(--red-rgb),0.35);border-radius:6px">
+            <p class="text-xs" style="color:var(--red);margin-bottom:6px">${contradictions.length} clue${contradictions.length!==1?'s':''} only support${contradictions.length===1?'s':''} a truth you didn't choose:</p>
+            ${contradictions.map(cl => `
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:0.82rem">
+                <span>${esc(cl.text || '(empty clue)')}</span>
+                <button class="btn btn-ghost btn-sm" onclick="ackClueRedHerring('${cl.id}')">Acknowledge as red herring</button>
+              </div>`).join('')}
+          </div>` : ''}`;
+    } else {
+      resolveUI = `
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <select id="th-resolve-pick" style="flex:1">${truths.map((tr,i) => `<option value="${tr.id}">${truthLetter(i)}: ${esc(tr.label || '(untitled)')}</option>`).join('')}</select>
+          <button class="btn btn-ghost btn-sm" onclick="resolveThreadBranch(document.getElementById('th-resolve-pick').value)">Lock in this truth</button>
+        </div>`;
+    }
+  }
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <label style="margin:0">GM Truths <span class="text-dim text-xs">(hidden - up to 3 possible truths)</span></label>
+      ${toggleBtn}
+    </div>
+    ${truthRows}
+    ${truths.length < 3 ? `<button class="btn btn-ghost btn-sm" onclick="addThreadTruth()">+ Add truth</button>` : ''}
+    ${tallyLine}
+    ${resolveUI}`;
+}
+
+function refreshTruthBlock() {
+  const block = document.getElementById('thread-truth-block');
+  if (block) block.innerHTML = buildTruthBlockHTML();
+}
+
+function refreshClueList() {
+  const list = document.getElementById('thread-clues-list');
+  if (list) list.innerHTML = clueListHTML();
+}
+
+function toggleThreadBranchMode() {
+  window._threadBranchUIOn = !window._threadBranchUIOn;
+  refreshTruthBlock();
+  refreshClueList(); // clue rows show/hide their branch chips depending on mode
+}
+
+function addThreadTruth() {
+  if (!window._threadTruths) window._threadTruths = [];
+  if (window._threadTruths.length >= 3) return;
+  window._threadTruths.push({ id: uid(), label: '', text: '' });
+  refreshTruthBlock();
+  refreshClueList(); // a new truth adds a chip to every clue row
+}
+
+function removeThreadTruth(idx) {
+  const [removed] = window._threadTruths.splice(idx, 1);
+  if (!removed) return;
+  // Untag this truth from every clue so no stale id lingers in branchIds.
+  (window._threadClues||[]).forEach(cl => {
+    if (cl.branchIds) cl.branchIds = cl.branchIds.filter(id => id !== removed.id);
+  });
+  if (window._threadResolvedId === removed.id) window._threadResolvedId = null;
+  refreshTruthBlock();
+  refreshClueList();
+}
+
+function toggleClueBranch(clueIdx, truthId) {
+  const cl = window._threadClues[clueIdx];
+  if (!cl) return;
+  if (!cl.branchIds) cl.branchIds = [];
+  const pos = cl.branchIds.indexOf(truthId);
+  if (pos === -1) cl.branchIds.push(truthId); else cl.branchIds.splice(pos, 1);
+  refreshClueList();
+  refreshTruthBlock(); // tally/contradictions depend on clue tagging
+}
+
+function resolveThreadBranch(truthId) {
+  if (!truthId) return;
+  window._threadResolvedId = truthId;
+  refreshTruthBlock();
+}
+
+function unresolveThreadBranch() {
+  window._threadResolvedId = null;
+  refreshTruthBlock();
+}
+
+function ackClueRedHerring(clueId) {
+  const cl = (window._threadClues||[]).find(c => c.id === clueId);
+  if (cl) cl.ackRedHerring = true;
+  refreshTruthBlock();
 }
 
 function saveThread(id) {
@@ -5889,11 +6057,15 @@ function saveThread(id) {
     title,
     status: document.getElementById('th-status')?.value || 'active',
     description: document.getElementById('th-desc')?.value || '',
-    truth: document.getElementById('th-truth')?.value || '',
+    // Read from staged state, not the DOM element directly - #th-truth
+    // doesn't exist while the branch-mode UI is what's currently showing.
+    truth: window._threadSingleTruth || '',
     npcIds: checkedNpcIds,
     locationIds: checkedLocIds,
     hookIds: checkedHookIds,
     clues: (window._threadClues||[]).filter(cl => cl.text.trim()),
+    truths: (window._threadTruths||[]).filter(tr => tr.text.trim()),
+    resolvedTruthId: window._threadResolvedId || null,
   };
   if (id) {
     const t = c.plotThreads.find(x => x.id === id);

@@ -40,7 +40,14 @@ if (!state) {
   if (!state.campaigns) state.campaigns = [];
 }
 
-document.documentElement.setAttribute('data-theme', state.settings.theme === 'grey' ? 'grey' : 'foundry-basic');
+// Single source of truth for which theme keys are real - both here and in
+// setTheme() below, an unrecognized/stale value falls back to the default
+// rather than silently rendering with no matching [data-theme="..."] CSS
+// block at all (unstyled). app/index.html's THEMES array (labels for the
+// Settings dropdown) should stay in sync with this list.
+const VALID_THEME_KEYS = ['foundry-basic', 'grey', 'fantasy', 'scifi', 'horror'];
+
+document.documentElement.setAttribute('data-theme', VALID_THEME_KEYS.includes(state.settings.theme) ? state.settings.theme : 'foundry-basic');
 
 if (!state.campaigns.length) {
   const first = blankCampaign('My Campaign');
@@ -103,7 +110,7 @@ window.addEventListener('storage', (e) => {
 });
 
 function setTheme(theme) {
-  state.settings.theme = theme === 'grey' ? 'grey' : 'foundry-basic';
+  state.settings.theme = VALID_THEME_KEYS.includes(theme) ? theme : 'foundry-basic';
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   save();
 }
@@ -316,6 +323,7 @@ const FEATURE_REGISTRY = [
   { key: 'clocks',            label: 'Clocks',                    category: 'Story',               premium: false },
   { key: 'relationshipWeb',   label: 'Relationships & Spark',     category: 'Story',               premium: false },
   { key: 'fieldNotes',        label: 'Field Notes',                category: 'Story',               premium: false },
+  { key: 'threadBranches',    label: 'Thread Branches',           category: 'Story',               premium: true  },
   { key: 'globalSearch',      label: 'Search',                    category: 'Tools',               premium: false },
   { key: 'nameGenerator',     label: 'Name Generator',            category: 'Tools',               premium: false },
   { key: 'voiceDictation',    label: 'Voice Dictation',           category: 'Tools',               premium: false },
@@ -405,6 +413,13 @@ function base64urlToUint8Array(b64url) {
 async function verifyPatreonToken() {
   const result = await _verifyPatreonTokenInner();
   try { localStorage.setItem('cp_patreon_entitled', result ? '1' : '0'); } catch { /* ignore */ }
+  // Also mirror into a world-scope setting so scripts/main.js (separate JS
+  // scope from this iframe, can't call this function directly) can gate the
+  // Player Companion hotbar button for EVERY connected client, not just
+  // this browser. Only the GM can actually write a world-scope setting in
+  // Foundry, so this silently no-ops for players - which is correct, since
+  // entitlement is fundamentally about the GM's own Patreon account.
+  try { await window.parent?.game?.settings?.set('untangle', 'patreonEntitledCache', result); } catch { /* not GM, or not in Foundry - ignore */ }
   return result;
 }
 

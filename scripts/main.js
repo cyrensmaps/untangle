@@ -377,6 +377,25 @@ Hooks.on('init', () => {
   } catch (err) { console.error('Untangle | Failed to register patreonToken setting', err); }
 
   try {
+    // Mirrors app/state.js's verifyPatreonToken() result into a world-scope
+    // setting (that function also writes localStorage, but that's per-
+    // browser and this module runs outside the iframe it lives in, so it
+    // can't read that directly for anyone but the exact same browser tab).
+    // Only the GM's own client can actually verify+write this (Foundry only
+    // lets GMs write world-scope settings), which is correct - entitlement
+    // is fundamentally about the GM's Patreon account, not any one viewer's.
+    // onChange re-evaluates the Player Companion button for every connected
+    // client the moment the GM's browser (re-)verifies its token.
+    game.settings.register(MODULE_ID, 'patreonEntitledCache', {
+      scope: 'world',
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: () => renderWikiButton(),
+    });
+  } catch (err) { console.error('Untangle | Failed to register patreonEntitledCache setting', err); }
+
+  try {
     // Holds the whole player-safe wiki snapshot the Player Wiki's "Publish"
     // button writes (app/index.html's publishPlayerWiki()). World-scope
     // settings are synced to and readable by every connected client,
@@ -714,17 +733,21 @@ function renderQuickbar() {
 Hooks.on('renderHotbar', renderQuickbar);
 Hooks.once('ready', renderQuickbar);
 
-// ── Player Wiki map button — visible to EVERY connected client, not just
-// the GM. Deliberately does NOT check Patreon entitlement here: a player's
-// browser has no local entitlement cache to read (that's populated by the
-// GM's own iframe), so the real check happens inside wiki-viewer.html once
-// opened. This button only decides "is there anything to look at" (has the
-// GM published, and hasn't manually turned the feature off) — not "are you
-// allowed to," which the viewer itself resolves.
+// ── Player Companion map button — visible to EVERY connected client, not
+// just the GM. Uses the patreonEntitledCache world setting (mirrored by
+// app/state.js's verifyPatreonToken(), see its registration above) rather
+// than a local entitlement check, since a player's browser has no way to
+// verify the GM's own Patreon link itself — the cache is only ever written
+// by the GM's client, which is exactly who this entitlement is actually
+// about. wiki-viewer.html still does its own independent check once opened
+// as defense in depth, but the button itself now correctly hides for
+// everyone the moment the GM isn't entitled, instead of dead-ending players
+// at an "unavailable" screen.
 function _wikiButtonShouldShow() {
   try {
     const toggles = game.settings.get(MODULE_ID, 'featureToggles') || {};
     if (toggles.playerWiki === false) return false;
+    if (!game.settings.get(MODULE_ID, 'patreonEntitledCache')) return false;
     const data = game.settings.get(MODULE_ID, 'playerWikiData') || {};
     return !!(data.characters?.length || data.locations?.length || data.factions?.length ||
       data.sessions?.length || data.rumors?.length || Object.keys(data.maps || {}).length);
@@ -751,19 +774,31 @@ function renderWikiButton() {
     bar.appendChild(btn);
   }
 
-  // Sit directly beside the GM quickbar instead of off at the hotbar's right
-  // edge, so all of Untangle's buttons read as one group. renderQuickbar()
-  // is hooked before this function (registration order below), so its bar
-  // has already been created/removed by the time this runs. Players never
-  // see the quickbar, so this falls back to the same centered start position
-  // the quickbar itself uses.
+  // Sit directly beside the GM quickbar (same row, immediately to its
+  // right) instead of off at the hotbar's right edge, so all of Untangle's
+  // buttons read as one group and move together if the GM drags the
+  // quickbar's position around via its Horizontal/Vertical Offset settings.
+  // renderQuickbar() is hooked before this function (registration order
+  // below), so its bar has already been created/positioned by the time this
+  // runs. getBoundingClientRect() (not offsetLeft/offsetTop) is used because
+  // it reflects the quickbar's actual on-screen box AFTER its own
+  // offset-driven transform is applied - offsetLeft/offsetTop would only
+  // give the untransformed layout position and silently ignore any offset
+  // the GM has configured. Players never see the quickbar at all, so this
+  // falls back to the same centered/lifted position the quickbar itself
+  // uses by default.
+  const hotbarRect = hotbar.getBoundingClientRect();
   const quickbar = document.getElementById('untangle-quickbar');
-  bar.style.left = quickbar ? `${quickbar.offsetLeft + quickbar.offsetWidth + 6}px` : '50%';
-  // Same vertical lift renderQuickbar() applies via its own transform (that's
-  // what actually floats it clear of the macro row - top:0/padding-bottom
-  // alone do not). No horizontal component needed here since `left` above is
-  // already the exact pixel for this bar's left edge, not a 50%-based value.
-  bar.style.transform = 'translateY(-100%)';
+  const quickbarRect = quickbar && quickbar.style.display !== 'none' ? quickbar.getBoundingClientRect() : null;
+  if (quickbarRect) {
+    bar.style.left = `${quickbarRect.right - hotbarRect.left + 6}px`;
+    bar.style.top = `${quickbarRect.top - hotbarRect.top}px`;
+    bar.style.transform = 'none';
+  } else {
+    bar.style.left = '50%';
+    bar.style.top = '0';
+    bar.style.transform = 'translateY(-100%)';
+  }
 }
 
 Hooks.on('renderHotbar', renderWikiButton);
