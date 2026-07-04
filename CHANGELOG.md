@@ -4,6 +4,11 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.10.1]
+
+### Changed
+- The Player Wiki button now sits directly beside Untangle's other hotbar buttons instead of off at the far right edge.
+
 ## [1.10.0]
 
 ### Changed

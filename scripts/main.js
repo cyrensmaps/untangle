@@ -744,6 +744,15 @@ function renderWikiButton() {
     btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleWikiViewer(); });
     bar.appendChild(btn);
   }
+
+  // Sit directly beside the GM quickbar instead of off at the hotbar's right
+  // edge, so all of Untangle's buttons read as one group. renderQuickbar()
+  // is hooked before this function (registration order below), so its bar
+  // has already been created/removed by the time this runs. Players never
+  // see the quickbar, so this falls back to the same centered start position
+  // the quickbar itself uses.
+  const quickbar = document.getElementById('untangle-quickbar');
+  bar.style.left = quickbar ? `${quickbar.offsetLeft + quickbar.offsetWidth + 6}px` : '50%';
 }
 
 Hooks.on('renderHotbar', renderWikiButton);

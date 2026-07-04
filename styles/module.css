@@ -109,13 +109,14 @@
   border-color: rgba(255, 255, 255, 0.45);
 }
 
-/* Player Wiki map button — visible to every connected client, not just the
-   GM, so it's anchored to the hotbar's own right edge rather than centered
-   like #untangle-quickbar, avoiding any collision with that bar's
-   (GM-configurable) offset. */
+/* Player Wiki button — visible to every connected client, not just the GM.
+   `left` is recalculated in JS (renderWikiButton, main.js) to sit directly
+   beside #untangle-quickbar so all of Untangle's buttons read as one group;
+   this left:50% is only the fallback for the instant before that JS runs
+   (and the real position for players, who never see the quickbar at all). */
 #untangle-wiki-btn-bar {
   position: absolute;
-  right: 10px;
+  left: 50%;
   top: 0;
   padding-bottom: 8px;
   z-index: 25;
