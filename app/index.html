@@ -2172,22 +2172,6 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
 // known-secret fields" model, since a continuously-live wiki has much
 // higher spoiler risk than a one-off PDF printed at a deliberate moment.
 
-// Aggregates the lightweight rumor reactions players leave in Player
-// Companion. Each player's reaction lives on their own User document (flags
-// scope 'untangle', key 'rumorReaction.<threadId>') since players can't
-// write world-scope settings — this just reads across all connected users,
-// same mechanism regardless of which client (GM or player) calls it.
-function gmReactionTally(rumorId) {
-  const tally = {};
-  try {
-    (window.parent?.game?.users?.contents || []).forEach(u => {
-      const emoji = u.getFlag?.('untangle', 'rumorReaction')?.[rumorId];
-      if (emoji) tally[emoji] = (tally[emoji] || 0) + 1;
-    });
-  } catch { /* not in Foundry */ }
-  return tally;
-}
-
 function renderPlayerWiki() {
   const c = camp();
   const rows = (items, type, nameKey) => items.length
@@ -2197,17 +2181,6 @@ function renderPlayerWiki() {
           <span>${esc(it[nameKey])}</span>
         </label>`).join('')
     : `<p class="text-xs text-dim">None yet.</p>`;
-
-  const threadRows = c.plotThreads.length ? c.plotThreads.map(t => {
-    const tally = gmReactionTally(t.id);
-    const tallyStr = Object.entries(tally).map(([emoji, n]) => `${emoji} ${n}`).join(' ');
-    return `
-      <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
-        <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${t.playerVisible?'checked':''} onchange="toggleEntityVisible('thread','${t.id}',this.checked)">
-        <span>${esc(t.title)}</span>
-        ${tallyStr ? `<span class="text-xs text-dim" style="margin-left:auto">${tallyStr}</span>` : ''}
-      </label>`;
-  }).join('') : `<p class="text-xs text-dim">None yet.</p>`;
 
   const mapsRows = c.maps.length ? c.maps.map(m => `
     <div style="margin-bottom:10px">
@@ -2248,18 +2221,22 @@ function renderPlayerWiki() {
       ${rows(c.sessions, 'session', 'title')}
     </div>
     <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" - GM Truth is never included; reaction emoji show how players are responding)</span></h3>
-      ${threadRows}
+      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" - GM Truth is never included)</span></h3>
+      ${rows(c.plotThreads, 'thread', 'title')}
     </div>
-    <div class="card" style="max-width:640px">
+    <div class="card" style="max-width:640px;margin-bottom:16px">
       <h3 style="margin-bottom:10px">Maps <span class="text-xs text-dim">(and individual pins)</span></h3>
       ${mapsRows}
+    </div>
+    <div class="card" style="max-width:640px">
+      <h3 style="margin-bottom:10px">Clocks <span class="text-xs text-dim">(shown on the Home tab if close to filling)</span></h3>
+      ${rows(c.clocks, 'clock', 'label')}
     </div>`;
 }
 
 function toggleEntityVisible(type, id, checked) {
   const c = camp();
-  const finder = { npc: c.npcs, location: c.locations, faction: c.factions, session: c.sessions, thread: c.plotThreads, map: c.maps }[type];
+  const finder = { npc: c.npcs, location: c.locations, faction: c.factions, session: c.sessions, thread: c.plotThreads, map: c.maps, clock: c.clocks }[type];
   const entity = finder?.find(x => x.id === id);
   if (!entity) return;
   entity.playerVisible = checked;
@@ -2363,12 +2340,22 @@ function buildPlayerWikiSnapshot(c) {
   }));
 
   const rumors = c.plotThreads.filter(t => t.playerVisible).map(t => ({
-    id: t.id, title: t.title, description: t.description || '', clues: (t.clues||[]).map(cl => cl.text),
+    id: t.id, title: t.title, description: t.description || '', status: t.status || 'active',
+    clues: (t.clues||[]).map(cl => cl.text),
     related: [
       ...c.npcs.filter(n => t.npcIds?.includes(n.id) && n.playerVisible).map(npcRef),
       ...c.locations.filter(l => t.locationIds?.includes(l.id) && l.playerVisible).map(locRef),
     ],
     revealedAt: t.revealedAt || null,
+  }));
+
+  // Clocks are a Home-tab "ticking countdown" widget only (no dedicated
+  // tab) - just enough fields for a fill-percentage gauge, same reasoning
+  // as everything else here: resolved plain data, this window never reads
+  // c.clocks directly.
+  const clocks = c.clocks.filter(ck => ck.playerVisible).map(ck => ({
+    id: ck.id, label: ck.label, segments: ck.segments, filled: ck.filled, color: ck.color || '',
+    revealedAt: ck.revealedAt || null,
   }));
 
   const maps = {};
@@ -2394,7 +2381,7 @@ function buildPlayerWikiSnapshot(c) {
     maps[m.id] = { id: m.id, name: m.name, imageUrl, pins };
   });
 
-  return { campaignId: c.id, campaignName: c.name, characters, locations, factions, sessions, rumors, maps };
+  return { campaignId: c.id, campaignName: c.name, characters, locations, factions, sessions, rumors, maps, clocks };
 }
 
 async function publishPlayerWiki() {
@@ -6480,7 +6467,7 @@ function saveClock(id) {
     const ck = c.clocks.find(x => x.id === id);
     if (ck) { Object.assign(ck, data); ck.filled = Math.min(ck.filled, segments); }
   } else {
-    c.clocks.push({ id: uid(), filled: 0, ...data });
+    c.clocks.push({ id: uid(), filled: 0, playerVisible: false, ...data });
   }
   save();
   document.querySelector('.modal-overlay')?.remove();

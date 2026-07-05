@@ -4,6 +4,19 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [0.14.0]
+
+### Added
+- **Player Companion is now a real communal document.** Rumor reactions are gone, replaced with fully shared notes: any player (or the GM) can add, edit, or delete any note on a Character, Location, Faction, or Rumor - everyone sees the same list, with the author's name and timestamp on each.
+- **Home tab search-adjacent additions:**
+  - A search bar spanning Characters, Locations, Factions, Rumors, and Sessions - jump straight to a match instead of hunting through tabs.
+  - Personal favorites: star any Character/Location/Faction/Rumor for a private "My Favorites" shortcut on the Home tab - only ever visible to the player who set it, never shared.
+  - Clocks can now be marked visible to players and show up on the Home tab once they're close to filling.
+- **"The Story So Far" is now a static visual timeline** - a vertical spine with newest session at the top, instead of a flat list of cards.
+
+### Changed
+- The Home tab is a proper dashboard now: a featured "Previously On" recap, a grid of small widgets (Favorites, Where We Left Off, Active Threads, Faction Pulse, Clocks Ticking), and a horizontally-scrolling "Recently Revealed" row - instead of one long stacked list.
+
 ## [0.13.0]
 
 ### Added

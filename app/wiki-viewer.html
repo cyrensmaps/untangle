@@ -16,8 +16,19 @@
     .wv-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
     .wv-tab.active { color: var(--accent); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 
-    .wv-card { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
-    .wv-entry { padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+    .wv-search-wrap { position: relative; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+    .wv-search-wrap input { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--font); font-size: 0.85rem; padding: 7px 12px; }
+    .wv-search-wrap input:focus { outline: none; border-color: var(--accent-dim); }
+    #wv-search-results { display: none; position: absolute; left: 16px; right: 16px; top: 100%; background: var(--bg-card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; z-index: 20; max-height: 260px; overflow-y: auto; box-shadow: 0 8px 20px rgba(0,0,0,0.35); }
+    .wv-search-result { padding: 8px 12px; font-size: 0.85rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .wv-search-result:hover { background: rgba(var(--accent-rgb), 0.08); }
+    .wv-search-result-tab { font-size: 0.66rem; color: var(--text-dim); flex-shrink: 0; }
+
+    .wv-card { position: relative; display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+    .wv-entry { position: relative; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+    .wv-star { position: absolute; top: 12px; right: 14px; font-size: 1.15rem; cursor: pointer; color: var(--text-dim); line-height: 1; }
+    .wv-star.active { color: var(--accent); }
+    .wv-star:hover { color: var(--accent); }
     .wv-portrait { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
     .wv-loc-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
     .wv-banner { height: 8px; border-radius: 4px; margin-bottom: 10px; }
@@ -31,9 +42,31 @@
     .wv-gauge-track { width: 100%; max-width: 180px; height: 6px; border-radius: 3px; background: var(--bg-elevated); overflow: hidden; margin-top: 5px; }
     .wv-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
 
-    .wv-reaction-btn { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: 0.85rem; cursor: pointer; color: var(--text); font-family: var(--font); }
-    .wv-reaction-btn.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.15); }
-    .wv-reaction-btn:hover { border-color: var(--border-hover); }
+    .wv-home-hero { margin: 16px; padding: 18px; background: linear-gradient(135deg, rgba(var(--accent-rgb),0.12), transparent); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; }
+    .wv-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 0 16px 16px; }
+    .wv-home-widget { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .wv-home-widget h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 10px; }
+    .wv-digest-row { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px 16px; }
+    .wv-digest-chip { flex-shrink: 0; display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 0.8rem; white-space: nowrap; cursor: pointer; }
+    .wv-digest-chip:hover { border-color: var(--accent); }
+
+    .wv-timeline { padding: 16px; }
+    .wv-timeline-item { display: flex; gap: 14px; }
+    .wv-timeline-rail { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 14px; }
+    .wv-timeline-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 5px; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15); }
+    .wv-timeline-line { flex: 1; width: 2px; background: var(--border); margin-top: 4px; min-height: 20px; }
+    .wv-timeline-content { flex: 1; padding-bottom: 22px; }
+
+    .wv-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+    .wv-modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; }
+    .wv-modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+    .wv-modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1rem; flex-shrink: 0; }
+    .wv-note-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .wv-note-item textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--font); font-size: 0.85rem; padding: 8px; resize: vertical; }
+    .wv-note-save, .wv-note-del { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; cursor: pointer; color: var(--text); font-family: var(--font); }
+    .wv-note-save:hover { border-color: var(--accent); color: var(--accent); }
+    .wv-note-del { color: var(--red); border-color: rgba(var(--red-rgb), 0.3); }
+    .wv-note-del:hover { border-color: var(--red); }
 
     .wv-map-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
     .wv-map-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
@@ -54,6 +87,10 @@
 
 <div class="wv-header"><h2 id="wv-title">Player Companion</h2></div>
 <div class="wv-tabs" id="wv-tabs"></div>
+<div class="wv-search-wrap">
+  <input type="text" id="wv-search-input" placeholder="Search everything…" oninput="wvSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';wvSearch('');this.blur();}" onblur="setTimeout(() => { const r = document.getElementById('wv-search-results'); if (r) r.style.display = 'none'; }, 150)">
+  <div id="wv-search-results"></div>
+</div>
 <div id="wv-body"></div>
 
 <script src="state.js"></script>
@@ -76,23 +113,23 @@ const WV_TABS = [
 const WV_ATTITUDE_GAUGE = { hostile: 10, wary: 30, neutral: 50, allied: 90 };
 const WV_REL_GAUGE = { enemy: 10, rival: 30, unknown: 50, neutral: 50, minion: 60, member: 65, family: 80, romantic: 85, ally: 90 };
 
-// Lightweight, no-mechanical-weight rumor reactions. Players can't write
-// world-scope settings, so each player's reaction is stored as a flag on
-// their OWN Foundry User document (always permitted) rather than relayed
-// live over a socket - this means it works even if the GM is offline when a
-// player reacts, at the cost of not being instantly pushed to other open
-// Player Companion windows (a tab switch/re-render picks up the latest).
-const WV_REACTIONS = ['🔥', '🤔', '❓', '💡'];
+// See wvGetNotes()/wvWriteNotes() below for the shared rumor-notes design
+// (a real communal document everyone reads and edits, relayed through the
+// GM's client since only the GM can write world-scope settings).
 
 let wvData = {};
 let wvActiveTab = 'home';
 let wvActiveMapId = null;
 let wvLastVisit = 0;
+let wvFavorites = []; // [{type, id}] - personal, client-side only, never shared
 
 async function wvInit() {
   await verifyPatreonToken();
   try { wvData = window.parent?.game?.settings?.get('untangle', 'playerWikiData') || {}; }
   catch { wvData = {}; }
+
+  try { wvFavorites = JSON.parse(localStorage.getItem('wv_favorites_' + (wvData.campaignId || 'default')) || '[]'); }
+  catch { wvFavorites = []; }
 
   document.getElementById('wv-title').textContent = wvData.campaignName ? `${wvData.campaignName} - Player Companion` : 'Player Companion';
 
@@ -102,7 +139,7 @@ async function wvInit() {
     return;
   }
   const hasAnything = !!(wvData.characters?.length || wvData.locations?.length || wvData.factions?.length ||
-    wvData.sessions?.length || wvData.rumors?.length || Object.keys(wvData.maps || {}).length);
+    wvData.sessions?.length || wvData.rumors?.length || wvData.clocks?.length || Object.keys(wvData.maps || {}).length);
   if (!hasAnything) {
     document.getElementById('wv-tabs').innerHTML = '';
     document.getElementById('wv-body').innerHTML = wvEmpty('Nothing published yet. Ask your GM to publish the Player Companion.');
@@ -161,6 +198,59 @@ function wvGoTo(type, id) {
   }
 }
 
+// Cross-category search - a single box spanning every tab instead of having
+// to know which tab something lives in first. Sessions are included as
+// destinations even though they don't get their own card-level match target
+// anywhere else, since "which session was that in again?" is exactly the
+// kind of question this is for.
+function wvSearch(query) {
+  const results = document.getElementById('wv-search-results');
+  const q = query.trim().toLowerCase();
+  if (!q) { results.style.display = 'none'; results.innerHTML = ''; return; }
+  const pools = [
+    ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name })),
+    ...(wvData.locations||[]).map(x => ({ type: 'locations', id: x.id, name: x.name })),
+    ...(wvData.factions||[]).map(x => ({ type: 'factions', id: x.id, name: x.name })),
+    ...(wvData.rumors||[]).map(x => ({ type: 'rumors', id: x.id, name: x.title })),
+    ...(wvData.sessions||[]).map(x => ({ type: 'sessions', id: x.id, name: `Session ${x.number}${x.title ? ': ' + x.title : ''}` })),
+  ];
+  const matches = pools.filter(p => p.name?.toLowerCase().includes(q)).slice(0, 8);
+  results.style.display = matches.length ? 'block' : 'none';
+  results.innerHTML = matches.map(m => `
+    <div class="wv-search-result" onclick="wvSearchGoTo('${m.type}','${m.id}')">
+      <span>${esc(m.name)}</span>
+      <span class="wv-search-result-tab">${esc(WV_TABS.find(t => t.key === m.type)?.label || m.type)}</span>
+    </div>`).join('');
+}
+
+function wvSearchGoTo(type, id) {
+  const input = document.getElementById('wv-search-input');
+  input.value = '';
+  document.getElementById('wv-search-results').style.display = 'none';
+  wvGoTo(type, id);
+}
+
+// Personal favorites - client-side only (localStorage), deliberately never
+// synced or shared, so each player's shortlist is their own. Home tab shows
+// them in a widget explicitly labeled as personal so nobody mistakes it for
+// a party-wide feature the way the (now fully shared) Rumor notes are.
+function wvIsFavorite(type, id) {
+  return wvFavorites.some(f => f.type === type && f.id === id);
+}
+
+function wvToggleFavorite(type, id, event) {
+  event?.stopPropagation();
+  const idx = wvFavorites.findIndex(f => f.type === type && f.id === id);
+  if (idx === -1) wvFavorites.push({ type, id }); else wvFavorites.splice(idx, 1);
+  try { localStorage.setItem('wv_favorites_' + (wvData.campaignId || 'default'), JSON.stringify(wvFavorites)); } catch { /* ignore */ }
+  wvRenderBody();
+}
+
+function wvFavoriteStarHTML(type, id) {
+  const active = wvIsFavorite(type, id);
+  return `<span class="wv-star${active ? ' active' : ''}" onclick="wvToggleFavorite('${type}','${id}',event)" title="${active ? 'Remove from' : 'Add to'} my favorites (only visible to you)">${active ? '★' : '☆'}</span>`;
+}
+
 function wvChip(ref) {
   if (!ref?.id) return '';
   return `<span class="wv-chip" onclick="wvGoTo('${ref.type}','${ref.id}')">${esc(ref.name)}</span>`;
@@ -183,17 +273,65 @@ function wvEmpty(msg) {
   return `<div class="wv-empty">${esc(msg)}</div>`;
 }
 
+// A dashboard, not a flat list: one "hero" recap up top, a grid of small
+// widget cards below it (only the ones with something to show), then a
+// horizontally-scrolling row of recently-revealed chips at the bottom -
+// deliberately varied layout instead of stacking everything the same way.
 function wvSectionHome() {
   const sessions = wvData.sessions || [];
   const latest = sessions[sessions.length - 1];
 
-  const recap = latest ? `
-    <div class="wv-entry">
-      <div class="wv-section-title" style="padding-left:0">Previously On…</div>
-      <div style="font-weight:600;margin-top:4px">Session ${latest.number}${latest.title ? `: ${esc(latest.title)}` : ''}</div>
-      ${latest.summary ? `<div style="font-size:0.9rem;margin-top:6px;line-height:1.5">${esc(latest.summary)}</div>` : ''}
-      <div style="margin-top:10px">${wvChip({ type: 'sessions', id: latest.id, name: 'Read the full Story So Far →' })}</div>
-    </div>` : '';
+  const hero = latest ? `
+    <div class="wv-home-hero">
+      <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent);margin-bottom:6px">Previously On…</div>
+      <div style="font-weight:700;font-size:1.05rem">Session ${latest.number}${latest.title ? `: ${esc(latest.title)}` : ''}</div>
+      ${latest.summary ? `<div style="font-size:0.9rem;margin-top:8px;line-height:1.5">${esc(latest.summary)}</div>` : ''}
+      <div style="margin-top:12px">${wvChip({ type: 'sessions', id: latest.id, name: 'Read the full Story So Far →' })}</div>
+    </div>` : `
+    <div class="wv-home-hero">
+      <div style="font-weight:600">Nothing revealed yet</div>
+      <div style="font-size:0.85rem;color:var(--text-dim);margin-top:6px">Check back after your GM publishes the next update.</div>
+    </div>`;
+
+  // "Where We Left Off" reuses locations already resolved onto the latest
+  // session's "featuring" list (Story So Far) rather than tracking a
+  // separate "current location" concept that doesn't otherwise exist.
+  const lastLocations = latest ? (latest.featuring || []).filter(f => f.type === 'locations') : [];
+  const activeThreads = (wvData.rumors || []).filter(t => t.status === 'active' || t.status === 'dormant');
+  const hotFactions = (wvData.factions || []).filter(f => f.attitude === 'hostile' || f.attitude === 'allied');
+  const tickingClocks = (wvData.clocks || []).filter(ck => ck.segments && (ck.filled / ck.segments) >= 0.6);
+
+  const widget = (title, bodyHtml) => bodyHtml ? `<div class="wv-home-widget"><h4>${esc(title)}</h4>${bodyHtml}</div>` : '';
+
+  // Personal, client-side-only favorites - explicitly labeled as such so
+  // nobody mistakes this for a party-wide feature the way the (now fully
+  // shared) Rumor/entity notes are.
+  const favoriteItems = wvFavorites.map(f => {
+    const name = wvEntityName(f.type, f.id);
+    return name ? { type: f.type, id: f.id, name } : null;
+  }).filter(Boolean);
+
+  const grid = [
+    widget('⭐ My Favorites', favoriteItems.length ? `
+      <div style="font-size:0.68rem;color:var(--text-dim);margin:-6px 0 8px">Only visible to you</div>
+      ${favoriteItems.map(i => `<div style="margin-bottom:4px;font-size:0.85rem">${wvChip(i)}</div>`).join('')}` : ''),
+    widget('Where We Left Off', lastLocations.length
+      ? lastLocations.map(l => `<div style="margin-bottom:4px;font-size:0.88rem">${wvChip(l)}</div>`).join('') : ''),
+    widget('Active Threads', activeThreads.length
+      ? activeThreads.slice(0, 5).map(t => `<div style="margin-bottom:6px;font-size:0.85rem">${wvChip({ type: 'rumors', id: t.id, name: t.title })}</div>`).join('') : ''),
+    widget('Faction Pulse', hotFactions.length
+      ? hotFactions.slice(0, 5).map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:0.85rem">
+          ${wvChip({ type: 'factions', id: f.id, name: f.name })}
+          ${wvBadge(f.attitudeLabel, f.attitudeColor || '#888')}
+        </div>`).join('') : ''),
+    widget('Clocks Ticking', tickingClocks.length
+      ? tickingClocks.map(ck => `
+        <div style="margin-bottom:8px">
+          <div style="font-size:0.85rem;margin-bottom:4px">${esc(ck.label)}</div>
+          ${wvGaugeHTML(Math.round((ck.filled / ck.segments) * 100), ck.color || 'var(--accent)')}
+        </div>`).join('') : ''),
+  ].filter(Boolean).join('');
 
   const allItems = [
     ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name, revealedAt: x.revealedAt })),
@@ -205,10 +343,9 @@ function wvSectionHome() {
 
   const digest = recent.length ? `
     <div class="wv-section-title">Recently Revealed</div>
-    ${recent.map(x => `<div class="wv-entry" style="padding:10px 16px">${wvNewBadge(x.revealedAt)}${wvChip(x)}</div>`).join('')}
-  ` : '';
+    <div class="wv-digest-row">${recent.map(x => `<div class="wv-digest-chip" onclick="wvGoTo('${x.type}','${x.id}')">${wvNewBadge(x.revealedAt)}${esc(x.name)}</div>`).join('')}</div>` : '';
 
-  return (recap + digest) || wvEmpty('Nothing to show yet.');
+  return hero + (grid ? `<div class="wv-home-grid">${grid}</div>` : '') + digest;
 }
 
 function wvReputationHTML(reputation) {
@@ -227,9 +364,10 @@ function wvSectionCharacters() {
 
   const card = n => `
     <div class="wv-card" id="wv-item-characters-${n.id}">
+      ${wvFavoriteStarHTML('characters', n.id)}
       ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="">` : ''}
       <div style="flex:1">
-        <div style="font-weight:600">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
+        <div style="font-weight:600;padding-right:20px">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
         <div style="margin:4px 0 6px;font-size:0.8rem;color:var(--text-dim)">
           ${n.status && n.status !== 'alive' ? wvBadge(n.statusLabel || n.status, '#cc4444') : ''}
           ${n.locationName ? `<span style="margin-right:10px">Found in: ${wvChip({ type: 'locations', id: n.locationId, name: n.locationName })}</span>` : ''}
@@ -237,6 +375,7 @@ function wvSectionCharacters() {
         </div>
         ${n.notes ? `<div style="font-size:0.85rem">${esc(n.notes)}</div>` : ''}
         ${wvReputationHTML(n.reputation)}
+        ${wvNotesButtonHTML('characters', n.id)}
       </div>
     </div>`;
 
@@ -253,10 +392,12 @@ function wvSectionLocations() {
   if (!locs.length) return wvEmpty('No locations published yet.');
   return locs.map(l => `
     <div class="wv-entry" id="wv-item-locations-${l.id}">
+      ${wvFavoriteStarHTML('locations', l.id)}
       ${l.image ? `<img class="wv-loc-image" src="${esc(l.image)}" alt="">` : ''}
-      <div style="font-weight:600;margin-top:${l.image?'10px':'0'}">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
+      <div style="font-weight:600;margin-top:${l.image?'10px':'0'};padding-right:20px">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
       ${l.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(l.description)}</div>` : ''}
       ${l.residents?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Notable residents: ${l.residents.map(wvChip).join(', ')}</div>` : ''}
+      ${wvNotesButtonHTML('locations', l.id)}
     </div>`).join('');
 }
 
@@ -267,25 +408,39 @@ function wvSectionFactions() {
     const gaugePct = WV_ATTITUDE_GAUGE[f.attitude];
     return `
     <div class="wv-entry" id="wv-item-factions-${f.id}">
+      ${wvFavoriteStarHTML('factions', f.id)}
       ${f.color ? `<div class="wv-banner" style="background:${f.color}"></div>` : ''}
-      <div style="font-weight:600">${wvNewBadge(f.revealedAt)}${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
+      <div style="font-weight:600;padding-right:20px">${wvNewBadge(f.revealedAt)}${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
       ${gaugePct !== undefined ? wvGaugeHTML(gaugePct, f.attitudeColor || '#888') : ''}
       ${f.description ? `<div style="font-size:0.85rem;margin-top:8px">${esc(f.description)}</div>` : ''}
       ${f.members?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Known members: ${f.members.map(wvChip).join(', ')}</div>` : ''}
+      ${wvNotesButtonHTML('factions', f.id)}
     </div>`;
   }).join('');
 }
 
+// A static, read-only visual timeline (a vertical spine + node per session,
+// newest at top) instead of a flat stack of cards - purely presentational,
+// nothing here is draggable/editable the way the GM's own Timeline feature
+// is. Displayed newest-first for reading, but built from a *copy* of
+// wvData.sessions (which stays oldest-first) since the Home tab's "latest
+// session" logic relies on that original ascending order.
 function wvSectionSessions() {
-  const sess = wvData.sessions || [];
+  const sess = [...(wvData.sessions || [])].reverse();
   if (!sess.length) return wvEmpty('No sessions published yet.');
-  return sess.map(s => `
-    <div class="wv-entry" id="wv-item-sessions-${s.id}">
-      <div style="font-weight:600">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
-      ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
-      ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
-      ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
-    </div>`).join('');
+  return `<div class="wv-timeline">${sess.map((s, i) => `
+    <div class="wv-timeline-item" id="wv-item-sessions-${s.id}">
+      <div class="wv-timeline-rail">
+        <div class="wv-timeline-dot"></div>
+        ${i < sess.length - 1 ? '<div class="wv-timeline-line"></div>' : ''}
+      </div>
+      <div class="wv-timeline-content">
+        <div style="font-weight:600">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
+        ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
+        ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
+        ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
 }
 
 function wvSectionRumors() {
@@ -293,46 +448,126 @@ function wvSectionRumors() {
   if (!rumors.length) return wvEmpty('No rumors published yet.');
   return rumors.map(t => `
     <div class="wv-entry" id="wv-item-rumors-${t.id}">
-      <div style="font-weight:600">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
+      ${wvFavoriteStarHTML('rumors', t.id)}
+      <div style="font-weight:600;padding-right:20px">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
       ${t.description ? `<div style="font-size:0.85rem;margin-top:6px">${esc(t.description)}</div>` : ''}
       ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${esc(cl)}</li>`).join('')}</ul>` : ''}
       ${t.related?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Related: ${t.related.map(wvChip).join(', ')}</div>` : ''}
-      ${wvReactionRowHTML(t.id)}
+      ${wvNotesButtonHTML('rumors', t.id)}
     </div>`).join('');
 }
 
-function wvReactionTally(rumorId) {
-  const tally = {};
+// Fully shared/collaborative: any player or the GM can add, edit, or delete
+// ANY note on ANY entity - Characters, Locations, Factions, or Rumors - a
+// real communal document, not a private per-person list. Keyed by
+// "type:id" in one shared settings object rather than a separate setting
+// per entity type. World-scope settings can only be written by the GM, so
+// a non-GM client can't call game.settings.set() directly; instead it emits
+// over Foundry's socket and scripts/main.js (always running in the GM's own
+// browser whenever their session is open, independent of any Untangle
+// window being open) applies the write on their behalf. If the GM isn't
+// currently connected, a relayed edit is optimistically shown locally but
+// never actually persists - an accepted tradeoff in exchange for genuinely
+// shared editing instead of everyone only managing their own private notes.
+function wvNoteKey(type, id) { return `${type}:${id}`; }
+
+function wvEntityName(type, id) {
+  const pool = { characters: wvData.characters, locations: wvData.locations, factions: wvData.factions, rumors: wvData.rumors }[type] || [];
+  const item = pool.find(x => x.id === id);
+  return item ? (item.title || item.name) : null;
+}
+
+function wvGetNotes(type, id) {
+  try { return window.parent?.game?.settings?.get('untangle', 'sharedNotes')?.[wvNoteKey(type, id)] || []; }
+  catch { return []; }
+}
+
+async function wvWriteNotes(type, id, notes) {
+  const pgame = window.parent?.game;
+  if (!pgame) return;
+  const key = wvNoteKey(type, id);
   try {
-    (window.parent?.game?.users?.contents || []).forEach(u => {
-      const emoji = u.getFlag?.('untangle', 'rumorReaction')?.[rumorId];
-      if (emoji) tally[emoji] = (tally[emoji] || 0) + 1;
-    });
-  } catch { /* not in Foundry */ }
-  return tally;
+    if (pgame.user?.isGM) {
+      const all = pgame.settings.get('untangle', 'sharedNotes') || {};
+      await pgame.settings.set('untangle', 'sharedNotes', toFoundryPlain({ ...all, [key]: notes }));
+    } else {
+      pgame.socket?.emit('module.untangle', { type: 'sharedNotesWrite', key, notes });
+    }
+  } catch { /* not in Foundry, or write failed */ }
 }
 
-function wvMyReaction(rumorId) {
-  try { return window.parent?.game?.user?.getFlag?.('untangle', 'rumorReaction')?.[rumorId] || null; }
-  catch { return null; }
+function wvNotesButtonHTML(type, id) {
+  const count = wvGetNotes(type, id).length;
+  return `<button type="button" class="btn btn-ghost" style="margin-top:10px;font-size:0.8rem;padding:5px 12px" onclick="wvOpenNotesModal('${type}','${id}')">Notes${count ? ` (${count})` : ''}</button>`;
 }
 
-async function wvSetReaction(rumorId, emoji) {
-  try {
-    const user = window.parent?.game?.user;
-    if (!user) return;
-    if (wvMyReaction(rumorId) === emoji) await user.unsetFlag('untangle', `rumorReaction.${rumorId}`);
-    else await user.setFlag('untangle', `rumorReaction.${rumorId}`, emoji);
-  } catch { /* not in Foundry, or permission denied */ }
-  wvRenderBody();
+function wvOpenNotesModal(type, id) {
+  const overlay = document.createElement('div');
+  overlay.className = 'wv-modal-overlay';
+  overlay.id = 'wv-notes-overlay';
+  overlay.innerHTML = `
+    <div class="wv-modal">
+      <div class="wv-modal-header">
+        <div>
+          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim)">Shared notes on</div>
+          <div style="font-weight:600">${esc(wvEntityName(type, id) || 'this entry')}</div>
+        </div>
+        <button type="button" class="wv-modal-close" onclick="document.getElementById('wv-notes-overlay').remove()">✕</button>
+      </div>
+      <div id="wv-notes-list" data-type="${type}" data-id="${id}"></div>
+      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:6px" onclick="wvAddNote('${type}','${id}')">+ Add a note</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  wvRenderNotesList(type, id);
 }
 
-function wvReactionRowHTML(rumorId) {
-  const tally = wvReactionTally(rumorId);
-  const mine = wvMyReaction(rumorId);
-  return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${WV_REACTIONS.map(e =>
-    `<button type="button" class="wv-reaction-btn${mine===e?' active':''}" onclick="wvSetReaction('${rumorId}','${e}')">${e}${tally[e]?` ${tally[e]}`:''}</button>`
-  ).join('')}</div>`;
+// notesOverride lets add/edit/delete render the just-computed local array
+// immediately (optimistic feedback) instead of re-reading the setting right
+// after firing a write that - for a relayed non-GM write - hasn't actually
+// landed yet.
+function wvRenderNotesList(type, id, notesOverride) {
+  const list = document.getElementById('wv-notes-list');
+  if (!list) return;
+  const notes = notesOverride || wvGetNotes(type, id);
+  list.innerHTML = notes.length ? notes.map((n, i) => `
+    <div class="wv-note-item">
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px">${esc(n.authorName || 'Someone')} · ${new Date(n.updatedAt).toLocaleString()}</div>
+      <textarea rows="2">${esc(n.text)}</textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px">
+        <button type="button" class="wv-note-save" onclick="wvSaveNoteEdit('${type}','${id}', ${i})">Save</button>
+        <button type="button" class="wv-note-del" onclick="wvDeleteNote('${type}','${id}', ${i})">Delete</button>
+      </div>
+    </div>`).join('') : `<p style="color:var(--text-dim);font-size:0.85rem;padding:10px 0">No notes yet - add one below.</p>`;
+}
+
+function wvAddNote(type, id) {
+  const notes = wvGetNotes(type, id);
+  const me = window.parent?.game?.user;
+  notes.push({ id: uid(), authorId: me?.id || '', authorName: me?.name || 'Someone', text: '', updatedAt: Date.now() });
+  wvRenderNotesList(type, id, notes);
+  wvWriteNotes(type, id, notes);
+  const tas = document.querySelectorAll('#wv-notes-list textarea');
+  tas[tas.length - 1]?.focus();
+}
+
+function wvSaveNoteEdit(type, id, idx) {
+  const ta = document.querySelectorAll('#wv-notes-list textarea')[idx];
+  const notes = wvGetNotes(type, id);
+  if (!ta || !notes[idx]) return;
+  const me = window.parent?.game?.user;
+  notes[idx].text = ta.value;
+  notes[idx].authorName = me?.name || notes[idx].authorName || 'Someone'; // reflects whoever last touched it
+  notes[idx].updatedAt = Date.now();
+  wvRenderNotesList(type, id, notes);
+  wvWriteNotes(type, id, notes);
+}
+
+function wvDeleteNote(type, id, idx) {
+  const notes = wvGetNotes(type, id);
+  notes.splice(idx, 1);
+  wvRenderNotesList(type, id, notes);
+  wvWriteNotes(type, id, notes);
 }
 
 function wvSectionMap() {

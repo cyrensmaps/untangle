@@ -419,6 +419,23 @@ Hooks.on('init', () => {
   } catch (err) { console.error('Untangle | Failed to register playerWikiData setting', err); }
 
   try {
+    // Fully shared/collaborative notes in Player Companion, on Characters,
+    // Locations, Factions, or Rumors alike - any player or the GM can
+    // add/edit/delete ANY note, a real communal document rather than each
+    // person's own private list. Keyed by "type:id" (e.g. "rumors:abc123")
+    // in one object rather than a separate setting per entity type.
+    // World-scope settings can only be written by the GM, so a non-GM
+    // client can't call this directly; see the 'module.untangle' socket
+    // listener below, which applies a player's edit on the GM's behalf.
+    game.settings.register(MODULE_ID, 'sharedNotes', {
+      scope: 'world',
+      config: false,
+      type: Object,
+      default: {},
+    });
+  } catch (err) { console.error('Untangle | Failed to register sharedNotes setting', err); }
+
+  try {
     // API keys — used by the planner's AI extraction (Claude) and audio
     // transcription (Whisper) features. Read directly from these settings by
     // app/index.html via window.parent.game.settings.get(...). config:false
@@ -773,7 +790,7 @@ function _wikiButtonShouldShow() {
     if (!game.settings.get(MODULE_ID, 'patreonEntitledCache')) return false;
     const data = game.settings.get(MODULE_ID, 'playerWikiData') || {};
     return !!(data.characters?.length || data.locations?.length || data.factions?.length ||
-      data.sessions?.length || data.rumors?.length || Object.keys(data.maps || {}).length);
+      data.sessions?.length || data.rumors?.length || data.clocks?.length || Object.keys(data.maps || {}).length);
   } catch { return false; }
 }
 
@@ -829,4 +846,22 @@ Hooks.once('ready', renderWikiButton);
 
 Hooks.on('ready', () => {
   console.log('Untangle | Loaded. Press Ctrl+Shift+P, click the button in the Journal tab, or use the quick bar above the macro bar to open.');
+});
+
+// Relays a non-GM client's shared-note edit (Characters, Locations,
+// Factions, or Rumors) into the world-scope sharedNotes setting (see its
+// registration above) - every connected client receives this broadcast, but
+// only the GM's own client should ever act on it, both because only a GM
+// can write a world setting at all and because otherwise every client would
+// try to apply the same write. Always active whenever the GM's own browser
+// session is open, independent of whether any Untangle window happens to be
+// open at the time.
+Hooks.once('ready', () => {
+  game.socket.on('module.untangle', (data) => {
+    if (!game.user.isGM || data?.type !== 'sharedNotesWrite') return;
+    try {
+      const all = game.settings.get(MODULE_ID, 'sharedNotes') || {};
+      game.settings.set(MODULE_ID, 'sharedNotes', { ...all, [data.key]: data.notes });
+    } catch (err) { console.error('Untangle | Failed to relay a shared note write', err); }
+  });
 });
