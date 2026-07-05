@@ -4,7 +4,7 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
-## [1.13.0]
+## [0.13.0]
 
 ### Added
 - **Player Companion is significantly richer:**
@@ -18,7 +18,7 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Changed
 - Added a small hint under the "Map speakers" button clarifying it only works with diarization-enabled transcription.
 
-## [1.12.0]
+## [0.12.0]
 
 ### Added
 - **NPC Voice Coach (free)**: the "Voice Description" field is now "Voice Coach" - the same AI-generate button now produces a full cheat card for playing the character at the table: a verbal tic, a sample line of in-character dialogue, a physical mannerism, and a random quirk (a habit, belief, superstition, or anything else memorable). Still free, still just needs your own Claude API key, same as before.
@@ -33,7 +33,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - Consolidated several duplicated UI-builder functions (checkbox pickers, Session Prep row rendering) that had already started to drift from each other into shared implementations.
 - Removed leftover debug logging from the audio transcription pipeline.
 
-## [1.11.0]
+## [0.11.0]
 
 ### Added
 - **Thread Branches (premium)**: a Plot Thread can now hold up to 3 competing "truths" instead of committing to one. Tag clues against whichever truth(s) they're actually consistent with and watch a live supporting/contradicting tally per truth as you play. When you lock in which truth is real, any clue that only supports a truth you didn't choose is flagged for review, so you can retcon it or mark it an acknowledged red herring. GM Truth (single or branched) still never reaches Player Companion.
@@ -44,44 +44,44 @@ All notable changes to this module are documented here. Format loosely follows [
 - The Player Companion button now respects the quickbar's Horizontal/Vertical Offset settings and always sits flush beside it, instead of occasionally drifting out of alignment.
 - Selecting a theme that wasn't "Foundry Basic" or "Grey" used to silently fall back to Foundry Basic - a latent bug that would have swallowed all three new themes above.
 
-## [1.10.6]
+## [0.10.6]
 
 ### Changed
 - Renamed "Player Wiki" to "Player Companion" everywhere it's shown (nav link, window title, hotbar button, publish page, toast messages) - a more honest name for what it actually is.
 - The Quick Access and Player Companion windows now use the same themed scrollbar as the main Untangle window, instead of the browser's default.
 
-## [1.10.5]
+## [0.10.5]
 
 ### Fixed
 - Actually fixed the Player Wiki button floating above the macro row instead of overlapping it. The previous attempt targeted the wrong mechanism - the GM quickbar was always floating correctly because of a JS transform (translateY(-100%)) applied in renderQuickbar(), not the CSS properties that were changed last time. The Player Wiki button never had that transform applied at all; it now does.
 
-## [1.10.4]
+## [0.10.4]
 
 ### Fixed
 - The sidebar navigation menu could silently cut off its bottom entries (e.g. Player Wiki, Settings) with no way to reach them, if the window wasn't tall enough to fit the whole list - it's now scrollable. Also bumped the main Untangle window's default height slightly so the full menu fits without scrolling on most screens.
 
-## [1.10.3]
+## [0.10.3]
 
 ### Fixed
 - Fixed the Untangle hotbar buttons (Open Untangle / Quick Access / Player Wiki) rendering on top of the macro bar instead of floating above it. They were anchored via `top:0` plus internal padding, which only clears the macro row if the hotbar's own container has empty space above it - not guaranteed for every player/GM hotbar configuration. Now anchored to the hotbar's bottom edge instead, which floats them clear regardless.
 
-## [1.10.2]
+## [0.10.2]
 
 ### Fixed
 - The Player Wiki hotbar button now appears immediately when the GM publishes/refreshes the wiki, instead of only after reloading Foundry. Publishing happens from inside the campaign planner's iframe, and nothing was telling the main Foundry window to re-check whether the button should show.
 
-## [1.10.1]
+## [0.10.1]
 
 ### Changed
 - The Player Wiki button now sits directly beside Untangle's other hotbar buttons instead of off at the far right edge.
 
-## [1.10.0]
+## [0.10.0]
 
 ### Changed
 - **Player Wiki no longer publishes a Foundry Journal Entry.** It now lives entirely in its own tabbed Player Wiki window (Characters, Locations, Factions, The Story So Far, Rumors & Open Questions, and Map), matching Untangle's own look instead of Foundry's journal sheet styling. Every entry that mentions another one (a Character's Location and Faction, a Location's residents, a Faction's members, a Session's featured Characters/Locations, a Rumor's related Characters/Locations) is a clickable link that jumps straight to it. Publishing now also deletes any Journal Entry a previous version created for you.
 - The player-facing hotbar button is now labeled "Player Wiki" (was "Campaign Map") and opens the full wiki, not just the map.
 
-## [1.9.2]
+## [0.9.2]
 
 ### Changed
 - Player Wiki pages are far more wiki-like: Characters split into "Player Characters" and "NPCs", and every page now cross-links to related pages (a Character's Location and Faction, a Location's notable residents, a Faction's known members, a Session's featured Characters/Locations, a Rumor's related Characters/Locations).
@@ -92,18 +92,18 @@ All notable changes to this module are documented here. Format loosely follows [
 - Removed a pale border that showed around the Quick Access and Player Wiki Map companion windows.
 - Player Wiki map pins now show their name on hover, matching the GM's own map view, instead of requiring a click.
 
-## [1.9.1]
+## [0.9.1]
 
 ### Changed
 - Timeline is now a premium feature, requiring an active Patreon pledge linked in Untangle Settings.
 
-## [1.9.0]
+## [0.9.0]
 
 ### Added
 - **Player Wiki (premium)**: publish an opt-in, player-safe view of your campaign directly into a Foundry Journal Entry - Characters, Locations, Factions, "The Story So Far" (session recaps), and "Rumors & Open Questions" (from Plot Threads' public descriptions and clues, never GM Truth). Nothing is visible to players until you explicitly check it on the new Player Wiki page and click Publish; player viewing permission is granted automatically.
 - **Interactive Campaign Map for players**: a new map button next to the macro bar (visible to everyone, not just the GM) opens a companion window showing your published maps and pins, including the "who's here" roster for location pins - filtered to only the Characters, Maps, and Pins you've marked visible.
 
-## [1.8.0]
+## [0.8.0]
 
 ### Added
 - Timeline entries (Sessions and custom events) can now have a color tint, picked from the same swatch palette as Factions and Clocks.
@@ -113,7 +113,7 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Changed
 - Normalized em dashes and en dashes to plain hyphens across all user-facing text (UI copy, notifications, READMEs, the module description shown in Foundry's module browser).
 
-## [1.7.0]
+## [0.7.0]
 
 ### Added
 - **First Patreon-gated premium features**: Printable Campaign Bible, Roll Table Sync, Post to Journal, and Drag-to-Hotbar Macros now require an active Patreon pledge linked in Untangle Settings. Everything else stays free — including Hover Token Tooltip and Simple Calendar, and any future integration with another Foundry module, by standing policy.
@@ -129,7 +129,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - The Patreon entitlement check for the three features gated from `scripts/main.js` (only Drag-to-Hotbar Macros currently) only ever checked the manual on/off toggle, never actual Patreon entitlement, since it was written before any feature was premium. Non-entitled GMs would have kept getting a working feature. Fixed via a small cross-context entitlement cache.
 - The drag-to-hotbar handles themselves are now hidden for non-entitled GMs, rather than left draggable-looking while silently doing nothing on drop.
 
-## [1.6.1]
+## [0.6.1]
 
 ### Fixed
 - Feature toggle checkboxes on Settings looked broken (scattered, uneven spacing) — they were inheriting form-field padding meant for text inputs, which bloats a checkbox's layout box far beyond its visible size. Now styled consistently with every other checkbox in the app.
@@ -139,7 +139,7 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Added
 - Patreon logo next to the Premium Features description on the Settings page.
 
-## [1.6.0]
+## [0.6.0]
 
 ### Added
 - **Redesigned Timeline** — a vertical spine with sessions and custom events as circular nodes, connected to alternating left/right summary boxes. Click anywhere on the spine to add a new entry at that point; drag a node to reorder it along the timeline (with stoppers so order can't invert); the track grows automatically as entries are added.
@@ -152,7 +152,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - Foundry v13 verified compatible.
 - The old dedicated "Show Token Hover Tooltip" Foundry setting was folded into the new unified Features toggle system (Settings → Features → Hover Token Tooltip), so there's one place to control it instead of two.
 
-## [1.5.0]
+## [0.5.0]
 
 ### Added
 - **Hover-a-token tooltip** — hovering a token linked to an Untangle Character shows their role, voice description, and key notes right on the canvas, no window-switching needed.
@@ -172,7 +172,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - "Add to Untangle" on an Actor sheet now flips to "Open in Untangle" immediately after adding, instead of requiring the sheet to be reopened.
 - **Post to Journal / Roll Table sync threw "incorrectly constructed with a Unknown instead of an object"** — the iframe is same-origin but still a separate JS realm, so a plain object built inside it has a different identity than one built in the parent window; Foundry's document-creation validation rejected it. Objects are now round-tripped through the parent window's own JSON before being handed to any Foundry document API. Also applied to the Foundry world-backup mirror, which may have been silently failing the same way without ever surfacing an error.
 
-## [1.4.1]
+## [0.4.1]
 
 ### Fixed
 - **Cross-window data loss** — the Quick Access widget, main planner, and the "Add to Untangle" Actor-sheet button are separate windows writing the same data; if the main planner was left open, it could silently overwrite what another window had just saved (most visibly: "Add to Untangle" reporting success but the character never actually appearing). Every window now picks up changes made by the others instead of clobbering them.
@@ -180,7 +180,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - Faction attitude trend wasn't showing after a single attitude change — it only displayed once there were 2+ recorded changes. The change a faction is moving *from* is now seeded alongside the new one, so the trend appears immediately.
 - Hardened Scene-linked map image loading: passes through `data:`/`http` URLs unchanged, automatically retries with an alternate path-resolution strategy if the first attempt fails to load, and shows a clear on-page message (plus a console-logged URL for debugging) instead of a silently broken image if both attempts fail.
 
-## [1.4.0]
+## [0.4.0]
 
 ### Added
 - **Linked Foundry Scenes** — Maps can now link a real Foundry Scene instead of uploading an image; the background stays live, and a "Jump to Scene" button appears wherever a Map or Location is scene-linked. Locations gained their own optional Scene link independent of Maps.
@@ -199,7 +199,7 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Fixed
 - Saving a Field Note now refreshes the page immediately instead of requiring a navigation to show up.
 
-## [1.3.0]
+## [0.3.0]
 
 ### Added
 - **Find Contradictions** — AI session processing now flags when a new transcript conflicts with something already logged (a restated name, role, or detail), shown as informational callouts in the review modal with a direct link to fix the entry.
@@ -212,14 +212,14 @@ All notable changes to this module are documented here. Format loosely follows [
 - "Save without AI" on the Log New Session page moved next to the Back button instead of being repeated under each input mode.
 - Quick Access widget's tab strip is now a scrollable row instead of a fixed grid, so future tabs don't require another layout rework.
 
-## [1.2.0]
+## [0.2.0]
 
 ### Added
 - **Clocks** — Blades-in-the-Dark style progress clocks (4/6/8/12 segments), optionally linked to a Faction or Plot Thread, tickable from a new Clocks page or from the Quick Access widget.
 - **Stale Callbacks** — automatic surfacing of NPCs, Locations, Plot Threads, and Factions that haven't come up in the last few sessions, shown on the Session Prep page and in a new Quick Access widget tab.
 - Changelog: this repo now maintains CHANGELOG.md, and GitHub Releases pull their notes straight from it.
 
-## [1.1.3]
+## [0.1.3]
 
 ### Added
 - Confirmation modal before any action that spends your Claude/OpenAI balance (transcribe & process, process with AI, re-analyse, find duplicates, generate voice description), linking to the relevant provider's billing page.
@@ -228,13 +228,13 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Changed
 - Removed the descriptive paragraph under "API keys & data" in Settings, leaving just the button through to Foundry's Configure Settings.
 
-## [1.1.2]
+## [0.1.2]
 
 ### Fixed
 - API Keys and Manage Data settings menus disappearing entirely — caused by `game.settings.registerMenu()` requiring a `FormApplication` subclass; both menu classes were plain `Application` and failed silently during registration.
 - Settings/keybinding registrations are now wrapped individually in `try/catch` so one failure can no longer cascade and silently disable the others.
 
-## [1.1.1]
+## [0.1.1]
 
 ### Added
 - Theme system with two options: "Foundry Basic" (new default, amber/parchment palette) and "Grey" (the previous palette, preserved).
@@ -244,7 +244,7 @@ All notable changes to this module are documented here. Format loosely follows [
 - Extracted CSS/JS genuinely duplicated between `app/index.html` and `app/widget.html` into shared `theme.css` and `components.css`.
 - Removed the floating Note/Names buttons from the main window (redundant with the macro-bar buttons and covered content).
 
-## [1.1.0]
+## [0.1.0]
 
 ### Added
 - Persistent quick-access button bar above Foundry's macro bar, extensible for future buttons.
@@ -254,19 +254,19 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Changed
 - Full visual redesign: new color scheme, all emoji icons removed in favor of plain text.
 
-## [1.0.2]
+## [0.0.2]
 
 ### Fixed
 - Scene control buttons not responding to clicks — Foundry's `tool.onClick` dispatch was unreliable across versions; replaced with direct DOM event binding.
 
-## [1.0.1]
+## [0.0.1]
 
 ### Added
 - GM-only access gating across every entry point (the module holds GM secrets and previously had no check).
 - Global search, onboarding modal, "Previously on…" recap generator, "Post to Journal," "Pull from Foundry" (Actor → Character import), and a Foundry-native world-setting backup mirror.
 - Quick Access widget (Field Notes + Name Generator tabs).
 
-## [1.0.0]
+## [0.0.0]
 
 ### Added
 - Initial release: campaign tracker with Sessions, NPCs, Locations, Plot Threads, Factions, Relationship Web, Maps, and session editing.
