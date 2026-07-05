@@ -4,6 +4,20 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [1.13.0]
+
+### Added
+- **Player Companion is significantly richer:**
+  - A new **Home** tab (opens by default) shows a "Previously On" recap of the latest session plus a "Recently Revealed" digest of anything newly published.
+  - "New" badges appear on anything revealed since a player's last visit, tracked per-player so everyone sees their own unread state.
+  - **Reputation gauges**: Factions show a gauge for their attitude toward the party; Characters show a gauge for how they relate to each player character, both built from data you already track for free.
+  - **Location images**: Locations can now have an uploaded image, shown in Player Companion.
+  - **Faction banners**: Factions display a colored banner using their existing color.
+  - **Rumor reactions**: players can drop a quick 🔥🤔❓💡 reaction on any Rumor - you can see the tally right on the Player Companion management page.
+
+### Changed
+- Added a small hint under the "Map speakers" button clarifying it only works with diarization-enabled transcription.
+
 ## [1.12.0]
 
 ### Added

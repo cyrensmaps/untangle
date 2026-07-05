@@ -143,6 +143,9 @@
     .npc-img-drag-circle { width: 100px; height: 100px; border-radius: 50%; overflow: hidden; cursor: grab; user-select: none; border: 2px solid var(--accent-dim); flex-shrink: 0; touch-action: none; }
     .npc-img-drag-circle.dragging { cursor: grabbing; }
     .npc-img-drag-circle img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block; }
+    .loc-img-upload { width: 100%; height: 110px; border-radius: var(--radius); background: rgba(var(--accent-rgb),0.08); border: 2px dashed rgba(var(--accent-rgb),0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-dim); overflow: hidden; transition: border-color 0.15s; }
+    .loc-img-upload:hover { border-color: var(--accent); }
+    .loc-img-upload img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
     /* ── SESSION LIST ── */
     .session-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; display: flex; justify-content: space-between; align-items: center; }
@@ -830,8 +833,11 @@ The AI will extract:
 • Plot hooks and unresolved threads
 • A session summary"></textarea>
         </div>
-        <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
-          <button class="btn btn-ghost btn-sm" onclick="openSpeakerMappingManual()" title="Map speaker labels to real names">Map speakers</button>
+        <div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+            <button class="btn btn-ghost btn-sm" onclick="openSpeakerMappingManual()" title="Map speaker labels to real names">Map speakers</button>
+            <div class="text-xs text-dim" style="text-align:center;line-height:1.3;max-width:130px">Only works with diarization-enabled transcription</div>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">Process with AI</button>
           </div>
@@ -2166,6 +2172,22 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
 // known-secret fields" model, since a continuously-live wiki has much
 // higher spoiler risk than a one-off PDF printed at a deliberate moment.
 
+// Aggregates the lightweight rumor reactions players leave in Player
+// Companion. Each player's reaction lives on their own User document (flags
+// scope 'untangle', key 'rumorReaction.<threadId>') since players can't
+// write world-scope settings — this just reads across all connected users,
+// same mechanism regardless of which client (GM or player) calls it.
+function gmReactionTally(rumorId) {
+  const tally = {};
+  try {
+    (window.parent?.game?.users?.contents || []).forEach(u => {
+      const emoji = u.getFlag?.('untangle', 'rumorReaction')?.[rumorId];
+      if (emoji) tally[emoji] = (tally[emoji] || 0) + 1;
+    });
+  } catch { /* not in Foundry */ }
+  return tally;
+}
+
 function renderPlayerWiki() {
   const c = camp();
   const rows = (items, type, nameKey) => items.length
@@ -2175,6 +2197,17 @@ function renderPlayerWiki() {
           <span>${esc(it[nameKey])}</span>
         </label>`).join('')
     : `<p class="text-xs text-dim">None yet.</p>`;
+
+  const threadRows = c.plotThreads.length ? c.plotThreads.map(t => {
+    const tally = gmReactionTally(t.id);
+    const tallyStr = Object.entries(tally).map(([emoji, n]) => `${emoji} ${n}`).join(' ');
+    return `
+      <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
+        <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${t.playerVisible?'checked':''} onchange="toggleEntityVisible('thread','${t.id}',this.checked)">
+        <span>${esc(t.title)}</span>
+        ${tallyStr ? `<span class="text-xs text-dim" style="margin-left:auto">${tallyStr}</span>` : ''}
+      </label>`;
+  }).join('') : `<p class="text-xs text-dim">None yet.</p>`;
 
   const mapsRows = c.maps.length ? c.maps.map(m => `
     <div style="margin-bottom:10px">
@@ -2215,8 +2248,8 @@ function renderPlayerWiki() {
       ${rows(c.sessions, 'session', 'title')}
     </div>
     <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" — GM Truth is never included)</span></h3>
-      ${rows(c.plotThreads, 'thread', 'title')}
+      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" - GM Truth is never included; reaction emoji show how players are responding)</span></h3>
+      ${threadRows}
     </div>
     <div class="card" style="max-width:640px">
       <h3 style="margin-bottom:10px">Maps <span class="text-xs text-dim">(and individual pins)</span></h3>
@@ -2228,13 +2261,23 @@ function toggleEntityVisible(type, id, checked) {
   const c = camp();
   const finder = { npc: c.npcs, location: c.locations, faction: c.factions, session: c.sessions, thread: c.plotThreads, map: c.maps }[type];
   const entity = finder?.find(x => x.id === id);
-  if (entity) { entity.playerVisible = checked; save(); }
+  if (!entity) return;
+  entity.playerVisible = checked;
+  // Timestamp the reveal moment (not content edits) - this is what drives
+  // the Player Companion "New" badges/Home digest. Only stamped going
+  // forward on check, never cleared on uncheck, so re-hiding then
+  // re-revealing later still reads as freshly new at that later point.
+  if (checked) entity.revealedAt = Date.now();
+  save();
 }
 
 function togglePinVisible(mapId, pinId, checked) {
   const map = camp().maps.find(m => m.id === mapId);
   const pin = map?.pins.find(p => p.id === pinId);
-  if (pin) { pin.playerVisible = checked; save(); }
+  if (!pin) return;
+  pin.playerVisible = checked;
+  if (checked) pin.revealedAt = Date.now();
+  save();
 }
 
 // Field exclusions below mirror renderCampaignBible()'s player-safe mode
@@ -2251,6 +2294,28 @@ const WIKI_NPC_STATUS_LABELS = { alive: 'Alive', dead: 'Dead', unknown: 'Unknown
 // viewer can build real cross-tab navigation (switch tab + scroll-to +
 // highlight) instead of static text — this replaced Foundry's @UUID journal
 // links, which only ever pointed at a whole page, not a specific entry.
+// NPC-to-PC "reputation": reuses the free Relationship Web rather than a new
+// numeric field - relationships are categorical only (Ally/Enemy/Rival/etc,
+// no strength value), so this surfaces the existing label per PC rather than
+// a score that drifts continuously. Never computed for a PC-type character
+// (a PC has no "reputation toward the party" - they're part of it).
+function npcReputationToward(c, npc) {
+  if (npc.type === 'pc') return [];
+  const pcs = c.npcs.filter(n => n.type === 'pc');
+  const reps = [];
+  (c.relationships||[]).forEach(rel => {
+    let otherId = null;
+    if (rel.fromType === 'npc' && rel.fromId === npc.id && rel.toType === 'npc') otherId = rel.toId;
+    else if (rel.toType === 'npc' && rel.toId === npc.id && rel.fromType === 'npc') otherId = rel.fromId;
+    if (!otherId) return;
+    const pc = pcs.find(p => p.id === otherId);
+    if (!pc) return;
+    const rt = relTypeInfo(rel.type);
+    reps.push({ pcName: pc.name, relType: rel.type || 'neutral', relLabel: rel.label || rt.label, relColor: rt.color });
+  });
+  return reps;
+}
+
 function buildPlayerWikiSnapshot(c) {
   const npcRef  = n => ({ type: 'characters', id: n.id, name: n.name });
   const locRef  = l => ({ type: 'locations',  id: l.id, name: l.name });
@@ -2265,12 +2330,16 @@ function buildPlayerWikiSnapshot(c) {
       notes: n.notes || '',
       locationId: loc?.playerVisible ? loc.id : null, locationName: loc?.playerVisible ? loc.name : '',
       factionId: faction?.playerVisible ? faction.id : null, factionName: faction?.playerVisible ? faction.name : '',
+      reputation: npcReputationToward(c, n),
+      revealedAt: n.revealedAt || null,
     };
   });
 
   const locations = c.locations.filter(l => l.playerVisible).map(l => ({
     id: l.id, name: l.name, description: l.description || '',
+    image: l.image ? resolveFoundryImgSrc(l.image) : '',
     residents: c.npcs.filter(n => n.locationId === l.id && n.playerVisible).map(npcRef),
+    revealedAt: l.revealedAt || null,
   }));
 
   const factions = c.factions.filter(f => f.playerVisible).map(f => {
@@ -2278,7 +2347,9 @@ function buildPlayerWikiSnapshot(c) {
     return {
       id: f.id, name: f.name, description: f.description || '',
       attitude: f.attitude || '', attitudeLabel: att?.label || '', attitudeColor: att?.color || '',
+      color: f.color || '',
       members: c.npcs.filter(n => f.memberIds?.includes(n.id) && n.playerVisible).map(npcRef),
+      revealedAt: f.revealedAt || null,
     };
   });
 
@@ -2288,6 +2359,7 @@ function buildPlayerWikiSnapshot(c) {
       ...c.npcs.filter(n => n.sessions?.includes(s.id) && n.playerVisible).map(npcRef),
       ...c.locations.filter(l => l.sessionIds?.includes(s.id) && l.playerVisible).map(locRef),
     ],
+    revealedAt: s.revealedAt || null,
   }));
 
   const rumors = c.plotThreads.filter(t => t.playerVisible).map(t => ({
@@ -2296,6 +2368,7 @@ function buildPlayerWikiSnapshot(c) {
       ...c.npcs.filter(n => t.npcIds?.includes(n.id) && n.playerVisible).map(npcRef),
       ...c.locations.filter(l => t.locationIds?.includes(l.id) && l.playerVisible).map(locRef),
     ],
+    revealedAt: t.revealedAt || null,
   }));
 
   const maps = {};
@@ -2321,7 +2394,7 @@ function buildPlayerWikiSnapshot(c) {
     maps[m.id] = { id: m.id, name: m.name, imageUrl, pins };
   });
 
-  return { campaignName: c.name, characters, locations, factions, sessions, rumors, maps };
+  return { campaignId: c.id, campaignName: c.name, characters, locations, factions, sessions, rumors, maps };
 }
 
 async function publishPlayerWiki() {
@@ -3680,11 +3753,19 @@ function openLocationModal(id) {
   const scenes = pgame?.scenes?.contents ? [...pgame.scenes.contents].sort((a,b)=>a.name.localeCompare(b.name)) : [];
   const sceneOpts = scenes.map(s => `<option value="${s.id}" ${l.sceneId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 
+  window._locationImageData = undefined; // undefined = no change; null = removed; string = new image
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-header"><h3>Edit Location</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group">
+        <label>Image <span class="text-dim text-xs">(optional - shown in Player Companion)</span></label>
+        <div class="loc-img-upload" id="loc-img-preview" onclick="document.getElementById('loc-img-input').click()" title="Upload image">${l.image?`<img src="${l.image}" alt="location image">`:'Click to add an image'}</div>
+        <input type="file" id="loc-img-input" accept="image/*" style="display:none" onchange="onLocationImageSelected(this)">
+        <button type="button" class="btn btn-ghost btn-sm" id="loc-img-remove" style="margin-top:6px;${l.image?'':'display:none'}" onclick="removeLocationImage()">Remove image</button>
+      </div>
       <div class="form-group"><label>Name</label><input type="text" id="el-name" value="${esc(l.name)}"></div>
       <div class="form-group"><label>Description</label><textarea id="el-desc" rows="4">${esc(l.description||'')}</textarea></div>
       <div class="form-group"><label>Notes / Secrets</label><textarea id="el-notes" rows="3">${esc(l.notes||'')}</textarea></div>
@@ -3725,12 +3806,49 @@ function openAddLocation() {
   document.body.appendChild(overlay);
 }
 
+function onLocationImageSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = e => {
+    img.onload = () => {
+      // Resize to max 500px on the longest side - locations are typically
+      // landscape/scenery shots shown as a wide thumbnail, not a small
+      // circular portrait, so a bit more resolution than the NPC one.
+      const MAX = 500;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      window._locationImageData = dataUrl;
+      const preview = document.getElementById('loc-img-preview');
+      if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="location image">`;
+      const removeBtn = document.getElementById('loc-img-remove');
+      if (removeBtn) removeBtn.style.display = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLocationImage() {
+  window._locationImageData = null;
+  const preview = document.getElementById('loc-img-preview');
+  if (preview) preview.innerHTML = 'Click to add an image';
+  const removeBtn = document.getElementById('loc-img-remove');
+  if (removeBtn) removeBtn.style.display = 'none';
+}
+
 function saveLocation(id) {
   const l = camp().locations.find(x => x.id === id);
   if (!l) return;
   l.name = document.getElementById('el-name').value || l.name;
   l.description = document.getElementById('el-desc').value;
   l.notes = document.getElementById('el-notes').value;
+  if (window._locationImageData !== undefined) l.image = window._locationImageData;
   const sceneSel = document.getElementById('el-scene');
   if (sceneSel) l.sceneId = sceneSel.value || null;
   save();

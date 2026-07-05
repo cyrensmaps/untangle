@@ -19,11 +19,21 @@
     .wv-card { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
     .wv-entry { padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
     .wv-portrait { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+    .wv-loc-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
+    .wv-banner { height: 8px; border-radius: 4px; margin-bottom: 10px; }
     .wv-section-title { padding: 12px 16px 2px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
     .wv-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; margin-right: 8px; }
+    .wv-new-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: var(--accent); color: var(--bg); margin-right: 8px; vertical-align: middle; }
     .wv-chip { color: var(--accent); cursor: pointer; }
     .wv-chip:hover { text-decoration: underline; }
     .wv-highlight { background: rgba(var(--accent-rgb), 0.18); }
+
+    .wv-gauge-track { width: 100%; max-width: 180px; height: 6px; border-radius: 3px; background: var(--bg-elevated); overflow: hidden; margin-top: 5px; }
+    .wv-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    .wv-reaction-btn { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: 0.85rem; cursor: pointer; color: var(--text); font-family: var(--font); }
+    .wv-reaction-btn.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.15); }
+    .wv-reaction-btn:hover { border-color: var(--border-hover); }
 
     .wv-map-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
     .wv-map-tab { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; font-family: var(--font); }
@@ -49,6 +59,7 @@
 <script src="state.js"></script>
 <script>
 const WV_TABS = [
+  { key: 'home',       label: 'Home' },
   { key: 'characters', label: 'Characters' },
   { key: 'locations',  label: 'Locations' },
   { key: 'factions',   label: 'Factions' },
@@ -57,9 +68,26 @@ const WV_TABS = [
   { key: 'maps',       label: 'Map' },
 ];
 
+// Faction attitude / NPC relationship-type -> a fixed gauge position (0-100).
+// Relationships are categorical only (no numeric strength field), so this is
+// a fixed position per category rather than a value that drifts continuously
+// - "Unknown" attitude has no meaningful spot on a hostile<->allied spectrum
+// and is intentionally left out (badge only, no gauge).
+const WV_ATTITUDE_GAUGE = { hostile: 10, wary: 30, neutral: 50, allied: 90 };
+const WV_REL_GAUGE = { enemy: 10, rival: 30, unknown: 50, neutral: 50, minion: 60, member: 65, family: 80, romantic: 85, ally: 90 };
+
+// Lightweight, no-mechanical-weight rumor reactions. Players can't write
+// world-scope settings, so each player's reaction is stored as a flag on
+// their OWN Foundry User document (always permitted) rather than relayed
+// live over a socket - this means it works even if the GM is offline when a
+// player reacts, at the cost of not being instantly pushed to other open
+// Player Companion windows (a tab switch/re-render picks up the latest).
+const WV_REACTIONS = ['🔥', '🤔', '❓', '💡'];
+
 let wvData = {};
-let wvActiveTab = 'characters';
+let wvActiveTab = 'home';
 let wvActiveMapId = null;
+let wvLastVisit = 0;
 
 async function wvInit() {
   await verifyPatreonToken();
@@ -81,8 +109,21 @@ async function wvInit() {
     return;
   }
 
+  // Read the last-visit stamp BEFORE rendering (so this visit's badges are
+  // computed against the previous visit), then stamp "now" for next time -
+  // same idea as an unread-messages badge that clears once you've looked.
+  try {
+    const key = 'wv_last_visit_' + (wvData.campaignId || 'default');
+    wvLastVisit = parseInt(localStorage.getItem(key) || '0', 10);
+    localStorage.setItem(key, String(Date.now()));
+  } catch { wvLastVisit = 0; }
+
   wvRenderTabs();
   wvRenderBody();
+}
+
+function wvIsNew(revealedAt) {
+  return !!(revealedAt && revealedAt > wvLastVisit);
 }
 
 function wvRenderTabs() {
@@ -99,10 +140,10 @@ function wvSwitchTab(key) {
 
 function wvRenderBody() {
   const renderers = {
-    characters: wvSectionCharacters, locations: wvSectionLocations, factions: wvSectionFactions,
+    home: wvSectionHome, characters: wvSectionCharacters, locations: wvSectionLocations, factions: wvSectionFactions,
     sessions: wvSectionSessions, rumors: wvSectionRumors, maps: wvSectionMap,
   };
-  document.getElementById('wv-body').innerHTML = (renderers[wvActiveTab] || wvSectionCharacters)();
+  document.getElementById('wv-body').innerHTML = (renderers[wvActiveTab] || wvSectionHome)();
 }
 
 // Cross-tab navigation — this is what makes "Faction: The Red Hand" or
@@ -129,8 +170,55 @@ function wvBadge(text, color) {
   return `<span class="wv-badge" style="background:${color}22;color:${color};border:1px solid ${color}55">${esc(text)}</span>`;
 }
 
+function wvNewBadge(revealedAt) {
+  return wvIsNew(revealedAt) ? '<span class="wv-new-badge">New</span>' : '';
+}
+
+function wvGaugeHTML(percent, color) {
+  if (percent === undefined || percent === null) return '';
+  return `<div class="wv-gauge-track"><div class="wv-gauge-fill" style="width:${percent}%;background:${color}"></div></div>`;
+}
+
 function wvEmpty(msg) {
   return `<div class="wv-empty">${esc(msg)}</div>`;
+}
+
+function wvSectionHome() {
+  const sessions = wvData.sessions || [];
+  const latest = sessions[sessions.length - 1];
+
+  const recap = latest ? `
+    <div class="wv-entry">
+      <div class="wv-section-title" style="padding-left:0">Previously On…</div>
+      <div style="font-weight:600;margin-top:4px">Session ${latest.number}${latest.title ? `: ${esc(latest.title)}` : ''}</div>
+      ${latest.summary ? `<div style="font-size:0.9rem;margin-top:6px;line-height:1.5">${esc(latest.summary)}</div>` : ''}
+      <div style="margin-top:10px">${wvChip({ type: 'sessions', id: latest.id, name: 'Read the full Story So Far →' })}</div>
+    </div>` : '';
+
+  const allItems = [
+    ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name, revealedAt: x.revealedAt })),
+    ...(wvData.locations||[]).map(x => ({ type: 'locations', id: x.id, name: x.name, revealedAt: x.revealedAt })),
+    ...(wvData.factions||[]).map(x => ({ type: 'factions', id: x.id, name: x.name, revealedAt: x.revealedAt })),
+    ...(wvData.rumors||[]).map(x => ({ type: 'rumors', id: x.id, name: x.title, revealedAt: x.revealedAt })),
+  ];
+  const recent = allItems.filter(x => wvIsNew(x.revealedAt)).sort((a,b) => (b.revealedAt||0) - (a.revealedAt||0));
+
+  const digest = recent.length ? `
+    <div class="wv-section-title">Recently Revealed</div>
+    ${recent.map(x => `<div class="wv-entry" style="padding:10px 16px">${wvNewBadge(x.revealedAt)}${wvChip(x)}</div>`).join('')}
+  ` : '';
+
+  return (recap + digest) || wvEmpty('Nothing to show yet.');
+}
+
+function wvReputationHTML(reputation) {
+  if (!reputation?.length) return '';
+  return `<div style="margin-top:10px">${reputation.map(r => `
+    <div style="font-size:0.78rem;margin-bottom:6px">
+      <span style="color:var(--text-dim)">Toward ${esc(r.pcName)}:</span>
+      <span style="font-weight:600;color:${r.relColor};margin-left:4px">${esc(r.relLabel)}</span>
+      ${wvGaugeHTML(WV_REL_GAUGE[r.relType] ?? 50, r.relColor)}
+    </div>`).join('')}</div>`;
 }
 
 function wvSectionCharacters() {
@@ -141,13 +229,14 @@ function wvSectionCharacters() {
     <div class="wv-card" id="wv-item-characters-${n.id}">
       ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="">` : ''}
       <div style="flex:1">
-        <div style="font-weight:600">${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">— ${esc(n.role)}</span>` : ''}</div>
+        <div style="font-weight:600">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
         <div style="margin:4px 0 6px;font-size:0.8rem;color:var(--text-dim)">
           ${n.status && n.status !== 'alive' ? wvBadge(n.statusLabel || n.status, '#cc4444') : ''}
           ${n.locationName ? `<span style="margin-right:10px">Found in: ${wvChip({ type: 'locations', id: n.locationId, name: n.locationName })}</span>` : ''}
           ${n.factionName ? `<span>Faction: ${wvChip({ type: 'factions', id: n.factionId, name: n.factionName })}</span>` : ''}
         </div>
         ${n.notes ? `<div style="font-size:0.85rem">${esc(n.notes)}</div>` : ''}
+        ${wvReputationHTML(n.reputation)}
       </div>
     </div>`;
 
@@ -164,7 +253,8 @@ function wvSectionLocations() {
   if (!locs.length) return wvEmpty('No locations published yet.');
   return locs.map(l => `
     <div class="wv-entry" id="wv-item-locations-${l.id}">
-      <div style="font-weight:600">${esc(l.name)}</div>
+      ${l.image ? `<img class="wv-loc-image" src="${esc(l.image)}" alt="">` : ''}
+      <div style="font-weight:600;margin-top:${l.image?'10px':'0'}">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
       ${l.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(l.description)}</div>` : ''}
       ${l.residents?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Notable residents: ${l.residents.map(wvChip).join(', ')}</div>` : ''}
     </div>`).join('');
@@ -173,12 +263,17 @@ function wvSectionLocations() {
 function wvSectionFactions() {
   const facs = wvData.factions || [];
   if (!facs.length) return wvEmpty('No factions published yet.');
-  return facs.map(f => `
+  return facs.map(f => {
+    const gaugePct = WV_ATTITUDE_GAUGE[f.attitude];
+    return `
     <div class="wv-entry" id="wv-item-factions-${f.id}">
-      <div style="font-weight:600">${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
-      ${f.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(f.description)}</div>` : ''}
+      ${f.color ? `<div class="wv-banner" style="background:${f.color}"></div>` : ''}
+      <div style="font-weight:600">${wvNewBadge(f.revealedAt)}${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
+      ${gaugePct !== undefined ? wvGaugeHTML(gaugePct, f.attitudeColor || '#888') : ''}
+      ${f.description ? `<div style="font-size:0.85rem;margin-top:8px">${esc(f.description)}</div>` : ''}
       ${f.members?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Known members: ${f.members.map(wvChip).join(', ')}</div>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function wvSectionSessions() {
@@ -186,7 +281,7 @@ function wvSectionSessions() {
   if (!sess.length) return wvEmpty('No sessions published yet.');
   return sess.map(s => `
     <div class="wv-entry" id="wv-item-sessions-${s.id}">
-      <div style="font-weight:600">Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
+      <div style="font-weight:600">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
       ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
       ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
       ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
@@ -198,11 +293,46 @@ function wvSectionRumors() {
   if (!rumors.length) return wvEmpty('No rumors published yet.');
   return rumors.map(t => `
     <div class="wv-entry" id="wv-item-rumors-${t.id}">
-      <div style="font-weight:600">${esc(t.title)}</div>
+      <div style="font-weight:600">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
       ${t.description ? `<div style="font-size:0.85rem;margin-top:6px">${esc(t.description)}</div>` : ''}
       ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${esc(cl)}</li>`).join('')}</ul>` : ''}
       ${t.related?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Related: ${t.related.map(wvChip).join(', ')}</div>` : ''}
+      ${wvReactionRowHTML(t.id)}
     </div>`).join('');
+}
+
+function wvReactionTally(rumorId) {
+  const tally = {};
+  try {
+    (window.parent?.game?.users?.contents || []).forEach(u => {
+      const emoji = u.getFlag?.('untangle', 'rumorReaction')?.[rumorId];
+      if (emoji) tally[emoji] = (tally[emoji] || 0) + 1;
+    });
+  } catch { /* not in Foundry */ }
+  return tally;
+}
+
+function wvMyReaction(rumorId) {
+  try { return window.parent?.game?.user?.getFlag?.('untangle', 'rumorReaction')?.[rumorId] || null; }
+  catch { return null; }
+}
+
+async function wvSetReaction(rumorId, emoji) {
+  try {
+    const user = window.parent?.game?.user;
+    if (!user) return;
+    if (wvMyReaction(rumorId) === emoji) await user.unsetFlag('untangle', `rumorReaction.${rumorId}`);
+    else await user.setFlag('untangle', `rumorReaction.${rumorId}`, emoji);
+  } catch { /* not in Foundry, or permission denied */ }
+  wvRenderBody();
+}
+
+function wvReactionRowHTML(rumorId) {
+  const tally = wvReactionTally(rumorId);
+  const mine = wvMyReaction(rumorId);
+  return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${WV_REACTIONS.map(e =>
+    `<button type="button" class="wv-reaction-btn${mine===e?' active':''}" onclick="wvSetReaction('${rumorId}','${e}')">${e}${tally[e]?` ${tally[e]}`:''}</button>`
+  ).join('')}</div>`;
 }
 
 function wvSectionMap() {
