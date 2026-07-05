@@ -4,6 +4,22 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [0.14.1]
+
+### Added
+- **Timeline "Auto-Sort" button** on the GM's Timeline page - flips the current order so the newest session/entry reads at the top, without disturbing anything you've manually dragged.
+- **"Reveal all" button per session** on the Player Companion management page - one click reveals a session plus every NPC and location that was actually featured in it, instead of hunting each one down across three sections.
+
+### Changed
+- **Player Companion management page reorganized** for long campaigns: sections are now a responsive multi-column grid instead of one narrow stacked column, each section collapses and shows an "X/Y shown" count, sections over 6 items get a filter box, and Characters are grouped the same way as the main Characters page (PCs/Allies/Contacts/NPCs/Enemies/Deities/Settlements/Unknown).
+- New Timeline entries (sessions or freeform events) now default to the top of the timeline instead of the bottom, matching the newest-first convention.
+- The Player Companion's favorite star now sits on a small dark badge so it stays visible over colored Faction banners and Location images.
+
+### Fixed
+- The Player Companion hotbar button now disappears immediately for everyone when the feature is toggled off, instead of waiting for an unrelated re-render or a reload.
+- The Notes counter on Player Companion cards now updates immediately when a note is added or deleted, instead of waiting for a tab switch or a favorite click.
+- Deleting a session or Timeline entry no longer leaves a dead gap in the Timeline where it used to sit - remaining entries are renumbered evenly.
+
 ## [0.14.0]
 
 ### Added

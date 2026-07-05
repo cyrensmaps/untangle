@@ -2172,18 +2172,113 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
 // known-secret fields" model, since a continuously-live wiki has much
 // higher spoiler risk than a one-off PDF printed at a deliberate moment.
 
+// Collapse state is a GM-local viewing preference (which sections they have
+// open), not campaign data — kept in localStorage per campaign rather than
+// in the saved campaign JSON, same reasoning as Player Companion's favorites.
+function pwCollapsedState() {
+  try { return JSON.parse(localStorage.getItem('pw_collapsed_' + camp().id) || '{}'); } catch { return {}; }
+}
+function pwIsCollapsed(key) { return !!pwCollapsedState()[key]; }
+function pwToggleSection(key) {
+  const state = pwCollapsedState();
+  state[key] = !state[key];
+  try { localStorage.setItem('pw_collapsed_' + camp().id, JSON.stringify(state)); } catch { /* ignore */ }
+  render();
+}
+
+// Filters one section's rows by name as the GM types, and hides any
+// TYPE_GROUPS sub-heading left with nothing visible under it (only the
+// Characters section groups rows; other sections have no .pw-group wrapper
+// so that second loop is a no-op for them).
+function pwFilterSection(key, query) {
+  const q = query.trim().toLowerCase();
+  const root = document.querySelector(`[data-pw-section="${key}"]`);
+  if (!root) return;
+  root.querySelectorAll('[data-pw-name]').forEach(row => {
+    row.style.display = !q || row.dataset.pwName.includes(q) ? '' : 'none';
+  });
+  root.querySelectorAll('[data-pw-group]').forEach(group => {
+    const anyVisible = [...group.querySelectorAll('[data-pw-name]')].some(row => row.style.display !== 'none');
+    group.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+// One collapsible card: header (title + subtitle + revealed/total count),
+// an optional filter box once a section is long enough for one to matter,
+// and whatever row markup the caller built.
+function pwSectionHTML(key, title, subtitle, items, bodyHtml, extraHeaderHtml) {
+  const total = items.length;
+  const revealedCount = items.filter(it => it.playerVisible).length;
+  const collapsed = pwIsCollapsed(key);
+  return `
+    <div class="card pw-section" data-pw-section="${key}" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer" onclick="pwToggleSection('${key}')">
+        <div>
+          <h3 style="display:inline-block">${title}</h3>
+          ${subtitle ? `<span class="text-xs text-dim" style="margin-left:8px">${subtitle}</span>` : ''}
+        </div>
+        <span class="text-xs text-dim" style="white-space:nowrap"><span class="pw-count">${revealedCount}/${total} shown</span> ${collapsed ? '▸' : '▾'}</span>
+      </div>
+      ${collapsed ? '' : `
+        <div style="margin-top:12px">
+          ${extraHeaderHtml || ''}
+          ${total > 6 ? `<input type="text" placeholder="Filter…" oninput="pwFilterSection('${key}', this.value)" style="margin-bottom:10px;font-size:0.85rem" onclick="event.stopPropagation()">` : ''}
+          ${total ? bodyHtml : `<p class="text-xs text-dim">None yet.</p>`}
+        </div>`}
+    </div>`;
+}
+
+// Reveals a session and everything it's actually linked to (the NPCs and
+// locations that were featured in it) in one shot, instead of the GM having
+// to hunt each one down individually across three different sections. Plot
+// threads/factions/clocks have no session link in the data model, so they're
+// deliberately left out of this bundle rather than guessed at.
+function revealSessionBundle(sessionId) {
+  const c = camp();
+  const s = c.sessions.find(x => x.id === sessionId);
+  if (!s) return;
+  let touched = 0;
+  const stamp = entity => { if (!entity.playerVisible) { entity.playerVisible = true; entity.revealedAt = Date.now(); touched++; } };
+  stamp(s);
+  c.npcs.filter(n => (n.sessions||[]).includes(sessionId)).forEach(stamp);
+  c.locations.filter(l => (l.sessionIds||[]).includes(sessionId)).forEach(stamp);
+  save();
+  render();
+  toast(touched ? `Revealed ${touched} item${touched!==1?'s':''} from this session.` : 'Everything from this session was already revealed.', 'success');
+}
+
 function renderPlayerWiki() {
   const c = camp();
-  const rows = (items, type, nameKey) => items.length
-    ? items.map(it => `
-        <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
-          <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${it.playerVisible?'checked':''} onchange="toggleEntityVisible('${type}','${it.id}',this.checked)">
-          <span>${esc(it[nameKey])}</span>
-        </label>`).join('')
-    : `<p class="text-xs text-dim">None yet.</p>`;
+  const rows = (items, type, nameKey) => items.map(it => `
+      <label data-pw-name="${esc((it[nameKey]||'').toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
+        <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${it.playerVisible?'checked':''} onchange="toggleEntityVisible('${type}','${it.id}',this.checked)">
+        <span>${esc(it[nameKey])}</span>
+      </label>`).join('');
 
-  const mapsRows = c.maps.length ? c.maps.map(m => `
-    <div style="margin-bottom:10px">
+  // Characters get grouped the same way the main Characters page does (PCs,
+  // Allies, Contacts, NPCs, Enemies, Deities, Settlements, Unknown) instead
+  // of one flat list — a long campaign's roster reads a lot better broken up
+  // the way the GM already thinks about it there.
+  const charRows = TYPE_GROUPS.map(g => {
+    const members = c.npcs.filter(n => g.types.includes(n.type || 'npc'));
+    if (!members.length) return '';
+    return `<div data-pw-group style="margin-bottom:10px">
+      <div class="text-xs text-dim" style="margin-bottom:4px;font-weight:600">${esc(g.label)}</div>
+      ${rows(members, 'npc', 'name')}
+    </div>`;
+  }).join('');
+
+  const sessionRows = c.sessions.map(s => `
+    <div data-pw-name="${esc((s.title||'').toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem">
+      <label style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer">
+        <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${s.playerVisible?'checked':''} onchange="toggleEntityVisible('session','${s.id}',this.checked)">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.title || 'Session ' + s.number)}</span>
+      </label>
+      <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Reveal this session plus every NPC/location featured in it" onclick="revealSessionBundle('${s.id}')">Reveal all</button>
+    </div>`).join('');
+
+  const mapsRows = c.maps.map(m => `
+    <div data-pw-name="${esc((m.name||'').toLowerCase())}" style="margin-bottom:10px">
       <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer;font-weight:600">
         <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${m.playerVisible?'checked':''} onchange="toggleEntityVisible('map','${m.id}',this.checked)">
         <span>${esc(m.name)}</span>
@@ -2193,7 +2288,7 @@ function renderPlayerWiki() {
           <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${p.playerVisible?'checked':''} onchange="togglePinVisible('${m.id}','${p.id}',this.checked)">
           <span>${esc(p.label || 'Unlabeled pin')}</span>
         </label>`).join('')}</div>` : ''}
-    </div>`).join('') : `<p class="text-xs text-dim">None yet.</p>`;
+    </div>`).join('');
 
   const lastPublished = c.playerWikiLastPublished ? new Date(c.playerWikiLastPublished).toLocaleString() : null;
 
@@ -2204,34 +2299,27 @@ function renderPlayerWiki() {
     </div>
     <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing updates the Player Companion window players can open near their hotbar.</p>
 
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Characters</h3>
-      ${rows(c.npcs, 'npc', 'name')}
-    </div>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Locations</h3>
-      ${rows(c.locations, 'location', 'name')}
-    </div>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Factions</h3>
-      ${rows(c.factions, 'faction', 'name')}
-    </div>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Sessions <span class="text-xs text-dim">(shown as "The Story So Far")</span></h3>
-      ${rows(c.sessions, 'session', 'title')}
-    </div>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Plot Threads <span class="text-xs text-dim">(shown as "Rumors & Open Questions" - GM Truth is never included)</span></h3>
-      ${rows(c.plotThreads, 'thread', 'title')}
-    </div>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <h3 style="margin-bottom:10px">Maps <span class="text-xs text-dim">(and individual pins)</span></h3>
-      ${mapsRows}
-    </div>
-    <div class="card" style="max-width:640px">
-      <h3 style="margin-bottom:10px">Clocks <span class="text-xs text-dim">(shown on the Home tab if close to filling)</span></h3>
-      ${rows(c.clocks, 'clock', 'label')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start">
+      ${pwSectionHTML('characters', 'Characters', null, c.npcs, charRows)}
+      ${pwSectionHTML('locations', 'Locations', null, c.locations, rows(c.locations, 'location', 'name'))}
+      ${pwSectionHTML('factions', 'Factions', null, c.factions, rows(c.factions, 'faction', 'name'))}
+      ${pwSectionHTML('sessions', 'Sessions', '(shown as "The Story So Far")', c.sessions, sessionRows)}
+      ${pwSectionHTML('threads', 'Plot Threads', '(shown as "Rumors & Open Questions" - GM Truth is never included)', c.plotThreads, rows(c.plotThreads, 'thread', 'title'))}
+      ${pwSectionHTML('maps', 'Maps', '(and individual pins)', c.maps, mapsRows)}
+      ${pwSectionHTML('clocks', 'Clocks', '(shown on the Home tab if close to filling)', c.clocks, rows(c.clocks, 'clock', 'label'))}
     </div>`;
+}
+
+// Updates just a Player Companion section's "X/Y shown" count in place
+// instead of calling the app's full render() — this page can hold a couple
+// hundred checkboxes on a long campaign, and re-rendering the whole page on
+// every single click would reset scroll position back to the top each time,
+// which is exactly the pain this reorganization is trying to fix.
+const PW_SECTION_KEY = { npc: 'characters', location: 'locations', faction: 'factions', session: 'sessions', thread: 'threads', map: 'maps', clock: 'clocks' };
+function pwUpdateSectionCount(type, items) {
+  const key = PW_SECTION_KEY[type];
+  const badge = document.querySelector(`[data-pw-section="${key}"] .pw-count`);
+  if (badge) badge.textContent = `${items.filter(it => it.playerVisible).length}/${items.length} shown`;
 }
 
 function toggleEntityVisible(type, id, checked) {
@@ -2246,6 +2334,7 @@ function toggleEntityVisible(type, id, checked) {
   // re-revealing later still reads as freshly new at that later point.
   if (checked) entity.revealedAt = Date.now();
   save();
+  pwUpdateSectionCount(type, finder);
 }
 
 function togglePinVisible(mapId, pinId, checked) {
@@ -2523,6 +2612,7 @@ async function deleteSession(id) {
   if (!(await confirmModal('Delete this session?'))) return;
   const c = camp();
   c.sessions = c.sessions.filter(s => s.id !== id);
+  closeTimelineGaps(c);
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Session deleted.', 'success');
@@ -3959,6 +4049,47 @@ function connectionChipsReadOnly(connections) {
 const TIMELINE_GAP = 140;     // px between auto-placed nodes, and between nodes after a reorder renumber
 const TIMELINE_BASE = 20;     // px position of the very first node — matches the track's own top margin
 
+// Removing an entry used to leave every other node exactly where it was,
+// stretching the track with a dead gap where the deleted node used to sit.
+// Renumbering everyone evenly by their current relative order (same scheme
+// the drag mouseup handler already uses) closes the gap without disturbing
+// any manual drag arrangement otherwise — call this right after removing a
+// node from c.sessions/c.timelineEvents, before save().
+function closeTimelineGaps(c) {
+  const nodes = [
+    ...c.sessions.map(s => ({ kind: 'session', ref: s, position: s.timelinePosition })),
+    ...(c.timelineEvents||[]).map(ev => ({ kind: 'event', ref: ev, position: ev.position })),
+  ].filter(n => typeof n.position === 'number');
+  nodes.sort((a, b) => a.position - b.position);
+  nodes.forEach((n, i) => {
+    const pos = TIMELINE_BASE + i * TIMELINE_GAP;
+    if (n.kind === 'session') n.ref.timelinePosition = pos; else n.ref.position = pos;
+  });
+}
+
+// Opt-in "flip to newest-first" — reverses every node's current top-to-
+// bottom reading order and renumbers evenly. Deliberately reverses whatever
+// order is currently on screen (manual drags included) rather than
+// re-deriving "true" chronology, since the GM's dragged arrangement already
+// reflects the story order they want — this button only exists to fix which
+// end of it reads as "newest," not to second-guess the arrangement itself.
+function autoSortTimeline() {
+  const c = camp();
+  const nodes = [
+    ...c.sessions.map(s => ({ kind: 'session', ref: s, position: s.timelinePosition })),
+    ...(c.timelineEvents||[]).map(ev => ({ kind: 'event', ref: ev, position: ev.position })),
+  ];
+  nodes.sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
+  nodes.reverse();
+  nodes.forEach((n, i) => {
+    const pos = TIMELINE_BASE + i * TIMELINE_GAP;
+    if (n.kind === 'session') n.ref.timelinePosition = pos; else n.ref.position = pos;
+  });
+  save();
+  render();
+  toast('Timeline flipped — newest is now on top.', 'success');
+}
+
 function renderTimeline() {
   const c = camp();
   if (!c.timelineEvents) c.timelineEvents = [];
@@ -3977,33 +4108,33 @@ function renderTimeline() {
   }
 
   // Auto-assign a position to anything that doesn't have one yet (new
-  // sessions, freshly-added freeform entries) — it lands at the bottom,
-  // the natural place for "the newest thing" — then persists immediately
-  // so the position is sticky from then on. `maxPos` starts `null` (not 0)
-  // so the very first node ever placed lands at TIMELINE_BASE, right near
-  // the track's own top margin, instead of a full TIMELINE_GAP below it.
-  let maxPos = null;
-  nodes.forEach(n => {
-    const pos = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
-    if (typeof pos === 'number' && (maxPos === null || pos > maxPos)) maxPos = pos;
-  });
+  // sessions, freshly-added freeform entries) — lands at the TOP, since a
+  // never-yet-positioned node is by definition newer than anything already
+  // on the timeline. Already-positioned nodes keep their current relative
+  // order untouched below it; only whichever fresh entries showed up this
+  // render get slotted in above them, newest-of-that-batch highest. Then
+  // persists immediately so the position is sticky from then on.
+  const getPos = n => n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
+  const setPos = (n, pos) => { if (n.kind === 'session') n.ref.timelinePosition = pos; else n.ref.position = pos; };
+  const unpositioned = nodes.filter(n => typeof getPos(n) !== 'number');
+  const positioned = nodes.filter(n => typeof getPos(n) === 'number').sort((a, b) => getPos(a) - getPos(b));
   let changed = false;
-  nodes.forEach(n => {
-    const hasPos = typeof (n.kind === 'session' ? n.ref.timelinePosition : n.ref.position) === 'number';
-    if (!hasPos) {
-      maxPos = maxPos === null ? TIMELINE_BASE : maxPos + TIMELINE_GAP;
-      if (n.kind === 'session') n.ref.timelinePosition = maxPos; else n.ref.position = maxPos;
-      changed = true;
-    }
-  });
+  if (unpositioned.length) {
+    // nodes is oldest→newest, so reversing the unpositioned slice puts the
+    // newest of them first — exactly the top-to-bottom order they should
+    // read in once slotted in ahead of everything already positioned.
+    [...unpositioned].reverse().concat(positioned).forEach((n, i) => setPos(n, TIMELINE_BASE + i * TIMELINE_GAP));
+    changed = true;
+  }
   if (changed) save();
 
   nodes.forEach(n => {
-    n.position = n.kind === 'session' ? n.ref.timelinePosition : n.ref.position;
+    n.position = getPos(n);
     n.color = (n.kind === 'session' ? n.ref.timelineColor : n.ref.color) || null;
   });
   nodes.sort((a, b) => a.position - b.position);
 
+  const maxPos = Math.max(...nodes.map(n => n.position));
   const trackHeight = Math.max(400, maxPos + 160);
 
   const html = nodes.map((n, i) => {
@@ -4045,6 +4176,7 @@ function renderTimeline() {
   return `
     <div class="page-header">
       <div><h2>Timeline</h2><p class="subtitle">Click the spine to add an entry · drag a circle to reorder — entries can move past each other</p></div>
+      <button class="btn btn-ghost" title="Flip the current order so the newest entry ends up on top" onclick="autoSortTimeline()">⇅ Auto-Sort</button>
     </div>
     <div class="timeline-track" id="timeline-track" style="height:${trackHeight}px">
       <div class="timeline-spine" id="timeline-spine" style="height:${trackHeight}px" onclick="handleTimelineSpineClick(event)"></div>
@@ -4293,6 +4425,7 @@ async function deleteTimelineEvent(id) {
   if (!(await confirmModal('Delete this timeline entry?'))) return;
   const c = camp();
   c.timelineEvents = (c.timelineEvents||[]).filter(x => x.id !== id);
+  closeTimelineGaps(c);
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Timeline entry deleted.', 'success');

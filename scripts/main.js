@@ -356,11 +356,16 @@ Hooks.on('init', () => {
     // config:false since app/state.js's isFeatureEnabled() is the only
     // intended way to read/write this; main.js hooks read it directly since
     // they run in the top window, outside the iframe app/state.js lives in.
+    // onChange re-evaluates the Player Companion button immediately when the
+    // GM flips its toggle off/on, same reasoning as patreonEntitledCache and
+    // playerWikiData below — without it the button only disappears after a
+    // hotbar re-render triggered by something unrelated, or a page reload.
     game.settings.register(MODULE_ID, 'featureToggles', {
       scope: 'world',
       config: false,
       type: Object,
       default: {},
+      onChange: () => renderWikiButton(),
     });
   } catch (err) { console.error('Untangle | Failed to register featureToggles setting', err); }
 

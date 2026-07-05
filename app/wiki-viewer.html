@@ -26,8 +26,8 @@
 
     .wv-card { position: relative; display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
     .wv-entry { position: relative; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.3s; }
-    .wv-star { position: absolute; top: 12px; right: 14px; font-size: 1.15rem; cursor: pointer; color: var(--text-dim); line-height: 1; }
-    .wv-star.active { color: var(--accent); }
+    .wv-star { position: absolute; top: 8px; right: 10px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,0.45); font-size: 1.05rem; cursor: pointer; color: rgba(255,255,255,0.7); line-height: 1; z-index: 5; }
+    .wv-star.active { color: var(--accent); background: rgba(0,0,0,0.55); }
     .wv-star:hover { color: var(--accent); }
     .wv-portrait { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
     .wv-loc-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
@@ -498,7 +498,17 @@ async function wvWriteNotes(type, id, notes) {
 
 function wvNotesButtonHTML(type, id) {
   const count = wvGetNotes(type, id).length;
-  return `<button type="button" class="btn btn-ghost" style="margin-top:10px;font-size:0.8rem;padding:5px 12px" onclick="wvOpenNotesModal('${type}','${id}')">Notes${count ? ` (${count})` : ''}</button>`;
+  return `<button type="button" class="btn btn-ghost" id="wv-notes-btn-${type}-${id}" style="margin-top:10px;font-size:0.8rem;padding:5px 12px" onclick="wvOpenNotesModal('${type}','${id}')">Notes${count ? ` (${count})` : ''}</button>`;
+}
+
+// The card's Notes button lives outside the modal overlay, so add/edit/delete
+// (which only touch #wv-notes-list) need to poke it directly - otherwise the
+// count only catches up on the next full section re-render (tab switch, etc).
+function wvUpdateNotesButton(type, id, notes) {
+  const btn = document.getElementById(`wv-notes-btn-${type}-${id}`);
+  if (!btn) return;
+  const count = (notes || wvGetNotes(type, id)).length;
+  btn.textContent = `Notes${count ? ` (${count})` : ''}`;
 }
 
 function wvOpenNotesModal(type, id) {
@@ -546,6 +556,7 @@ function wvAddNote(type, id) {
   const me = window.parent?.game?.user;
   notes.push({ id: uid(), authorId: me?.id || '', authorName: me?.name || 'Someone', text: '', updatedAt: Date.now() });
   wvRenderNotesList(type, id, notes);
+  wvUpdateNotesButton(type, id, notes);
   wvWriteNotes(type, id, notes);
   const tas = document.querySelectorAll('#wv-notes-list textarea');
   tas[tas.length - 1]?.focus();
@@ -567,6 +578,7 @@ function wvDeleteNote(type, id, idx) {
   const notes = wvGetNotes(type, id);
   notes.splice(idx, 1);
   wvRenderNotesList(type, id, notes);
+  wvUpdateNotesButton(type, id, notes);
   wvWriteNotes(type, id, notes);
 }
 
