@@ -502,18 +502,30 @@ function getOpenAIKey() {
 }
 
 // One-time migration: keys used to live in this state object. The first time
-// we find one there, push it into the new Foundry setting and drop the copy.
-(function migrateApiKeysToFoundrySettings() {
-  try {
-    const pgame = window.parent?.game;
-    if (!pgame?.settings || !pgame.user?.isGM) return;
-    if (state.settings.apiKey && !pgame.settings.get('untangle', 'claudeApiKey')) {
-      pgame.settings.set('untangle', 'claudeApiKey', state.settings.apiKey);
-    }
-    if (state.settings.openaiKey && !pgame.settings.get('untangle', 'openaiApiKey')) {
-      pgame.settings.set('untangle', 'openaiApiKey', state.settings.openaiKey);
-    }
-  } catch { /* not embedded in Foundry, or settings not registered yet */ }
-  delete state.settings.apiKey;
-  delete state.settings.openaiKey;
+// we find one there, push it into the new Foundry setting and drop the copy -
+// but only once that write is actually confirmed to have gone through; each
+// key is handled independently so a failure migrating one doesn't take the
+// other down with it, and a failed write always leaves the local copy in
+// place rather than deleting a key that was never actually saved anywhere.
+(async function migrateApiKeysToFoundrySettings() {
+  const pgame = window.parent?.game;
+  if (!pgame?.settings || !pgame.user?.isGM) return;
+
+  if (state.settings.apiKey) {
+    try {
+      if (!pgame.settings.get('untangle', 'claudeApiKey')) {
+        await pgame.settings.set('untangle', 'claudeApiKey', state.settings.apiKey);
+      }
+      delete state.settings.apiKey;
+    } catch { /* settings not registered yet, or the write failed - keep the local copy */ }
+  }
+
+  if (state.settings.openaiKey) {
+    try {
+      if (!pgame.settings.get('untangle', 'openaiApiKey')) {
+        await pgame.settings.set('untangle', 'openaiApiKey', state.settings.openaiKey);
+      }
+      delete state.settings.openaiKey;
+    } catch { /* settings not registered yet, or the write failed - keep the local copy */ }
+  }
 })();

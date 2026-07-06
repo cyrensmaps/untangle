@@ -155,12 +155,21 @@ function qaRegenerateNames() {
   container.innerHTML = names.map(n => `<button class="qa-name-btn" onclick="qaCopyName('${esc(n)}')">${esc(n)}</button>`).join('');
 }
 
+// A token guard, rather than each call snapshotting/restoring whatever the
+// hint said a moment ago - under rapid consecutive copies, snapshotting let
+// an earlier click's restore fire after a later click's "copied!" message,
+// leaving the hint stuck on stale copied-name text instead of the style
+// label. Only the most recent call's timer is allowed to restore anything,
+// and it always restores to the definitively-current style label.
+let _qaCopyToken = 0;
 function qaCopyName(name) {
   navigator.clipboard.writeText(name).catch(() => {});
   const hint = document.getElementById('qa-name-hint');
-  const prev = hint.textContent;
+  const token = ++_qaCopyToken;
   hint.textContent = `"${name}" copied!`;
-  setTimeout(() => { hint.textContent = prev; }, 1200);
+  setTimeout(() => {
+    if (token === _qaCopyToken) hint.textContent = NAME_STYLES[qaStyle]?.label || '';
+  }, 1200);
 }
 
 // ── Clocks ──

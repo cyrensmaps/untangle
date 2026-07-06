@@ -551,6 +551,7 @@ function navigate(v) {
   if (VIEW_FEATURE[v] && !isFeatureEnabled(VIEW_FEATURE[v])) v = 'dashboard';
   view = v;
   window._audioFile = null; // clear audio selection on navigation
+  window._localAudioFile = null;
   renderNavLinks();
   render();
 }
@@ -935,18 +936,10 @@ function onLocalAudioSelected(input) {
   document.getElementById('local-file-name').textContent = file.name;
   document.getElementById('local-file-size').textContent = fmtBytes(file.size);
   document.getElementById('local-transcribe-btn').disabled = false;
-  // Drop zone also needs drag support
-  const zone = document.getElementById('local-drop-zone');
-  if (zone) {
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-    zone.addEventListener('drop', e => {
-      e.preventDefault();
-      zone.classList.remove('drag-over');
-      const f = e.dataTransfer.files[0];
-      if (f) { window._localAudioFile = f; onLocalAudioSelected({ files: [f] }); }
-    });
-  }
+  // Drag support is already bound once per render by bindLocalDrop() -
+  // re-attaching here on every selection used to stack duplicate listeners
+  // on the same persistent zone element, so a drop would eventually fire
+  // onLocalAudioSelected multiple times for one file.
 }
 
 function clearLocalAudio() {
@@ -969,6 +962,7 @@ async function transcribeLocal() {
 
   const modelId = document.getElementById('local-model')?.value || 'Xenova/whisper-small';
   let elapsedTicker = null;
+  let progressBar = null;
 
   try {
     // Lazy-load transformers.js — only downloads the library on first use
@@ -1034,7 +1028,7 @@ async function transcribeLocal() {
     const transcribeStartTime = Date.now();
 
     // Start the progress bar shimmer immediately
-    const progressBar = document.getElementById('chunk-progress-bar');
+    progressBar = document.getElementById('chunk-progress-bar');
     if (progressBar) progressBar.classList.add('shimmer');
 
     // Tick every second.
@@ -1844,9 +1838,18 @@ function showReviewModal(session, extracted) {
       ${factions.length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Factions (${factions.length})</div>
-        ${factions.map((f,i) => {
+        ${(() => {
+          // Mirrors confirmSave()'s color assignment exactly (a running
+          // count seeded from the campaign's current faction total,
+          // incremented only for genuinely-new factions, in the same
+          // iteration order) so the preview swatch always matches what
+          // actually gets saved - previously this used the index within
+          // the extracted batch instead, which drifted from the saved
+          // color as soon as the campaign already had any factions.
+          let newFactionCount = camp().factions.length;
+          return factions.map((f,i) => {
           const existing = camp().factions.find(x => x.name.toLowerCase() === f.name.toLowerCase());
-          const col = existing?.color || FACTION_COLORS[i % FACTION_COLORS.length];
+          const col = existing?.color || FACTION_COLORS[newFactionCount++ % FACTION_COLORS.length];
           return `
           <div class="review-item">
             <input type="checkbox" id="fc-r-${i}" checked>
@@ -1858,7 +1861,8 @@ function showReviewModal(session, extracted) {
               <p>${esc(f.notes||'')}</p>
             </div>
           </div>`;
-        }).join('')}` : ''}
+          }).join('');
+        })()}` : ''}
       ${(extracted.openQuestions||[]).length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Loose Ends (${extracted.openQuestions.length})</div>
@@ -2640,51 +2644,58 @@ const TYPE_BADGE = {
   settlement:'#6b5638', city:'#6b5638', unknown:'#555',
 };
 
+// Shared by renderNPCs() and filterNPCCards() - previously each kept its own
+// copy of this card template, and they drifted: the search-filtered version
+// silently lost hotbar drag support, faction chips, and the PC goals/bonds
+// summary since nobody was updating both copies in lockstep. One shared
+// function means a future card change can't drift out of sync again.
+function npcCard(n) {
+  const c = camp();
+  const loc = n.locationId ? c.locations.find(l=>l.id===n.locationId) : null;
+  const sessionPills = (n.sessions||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" onclick="event.stopPropagation();openSessionModal('${s.id}')">S${s.number}</span>`:''}).join('');
+  const t = n.type || 'npc';
+  const tint = TYPE_BADGE[t];
+  const showStatus = t !== 'pc';
+  const typeLabel = charTypeLabel(t);
+  const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
+  return `
+  <div class="card npc-card" onclick="openNPCModal('${n.id}')" ${dragToHotbarAttrs('npc', n.id)} style="${n.status==='dead'?'opacity:0.6':''}">
+    <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
+    <div style="font-weight:600;display:flex;align-items:center;gap:6px">
+      ${showStatus?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}
+      ${esc(n.name)}
+    </div>
+    <div class="text-xs" style="margin-top:3px;display:flex;align-items:center;gap:6px">
+      ${tint?`<span style="background:${tint}22;color:${tint};border:1px solid ${tint}44;border-radius:4px;padding:1px 6px;font-size:0.68rem;font-weight:600">${typeLabel}</span>`:`<span style="background:var(--bg-elevated);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.68rem">${typeLabel}</span>`}
+      ${n.role?`<span class="text-dim">${esc(n.role)}</span>`:''}
+    </div>
+    ${npcFactionList.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${npcFactionList.map(f=>`<span class="faction-chip" style="background:${f.color||'#888'}22;color:${f.color||'#888'};border-color:${f.color||'#888'}55" onclick="event.stopPropagation();openFactionModal('${f.id}')">${esc(f.name)}</span>`).join('')}</div>`:''}
+    ${loc?`<div class="location-chip" onclick="event.stopPropagation();openLocationModal('${loc.id}')">${esc(loc.name)}</div>`:''}
+    ${t==='pc'&&(n.goals||[]).length?`<div class="text-xs text-dim" style="margin-top:6px">${n.goals.filter(g=>g.done).length}/${n.goals.length} goals & bonds</div>`:''}
+    ${n.voiceDescription?`<div class="text-xs" style="margin-top:8px;color:var(--accent);font-style:italic;line-height:1.4">${esc(n.voiceDescription.slice(0,90))}${n.voiceDescription.length>90?'…':''}</div>`:''}
+    ${n.notes&&!n.voiceDescription?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.5">${esc(n.notes.slice(0,80))}${n.notes.length>80?'…':''}</div>`:''}
+    ${sessionPills?`<div class="session-pills">${sessionPills}</div>`:''}
+  </div>`;
+}
+
+function buildNPCSections(filtered) {
+  const sections = TYPE_GROUPS.map(g => {
+    const chars = filtered.filter(n => g.types.includes(n.type||'npc'));
+    if (!chars.length) return '';
+    return `<div style="margin-bottom:28px">
+      <h3 style="margin:0 0 12px;font-size:0.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)">${g.label}</h3>
+      <div class="card-grid">${chars.map(npcCard).join('')}</div>
+    </div>`;
+  }).join('');
+  return filtered.length===0
+    ? `<div class="empty-state"><h3>No results</h3><p>Try a different search.</p></div>`
+    : sections;
+}
+
 function renderNPCs() {
   const c = camp();
   const q = (window._npcSearch||'').toLowerCase();
   const all = q ? c.npcs.filter(n => n.name.toLowerCase().includes(q)||(n.role||'').toLowerCase().includes(q)) : c.npcs;
-
-  function npcCard(n) {
-    const loc = n.locationId ? c.locations.find(l=>l.id===n.locationId) : null;
-    const sessionPills = (n.sessions||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" onclick="event.stopPropagation();openSessionModal('${s.id}')">S${s.number}</span>`:''}).join('');
-    const t = n.type || 'npc';
-    const tint = TYPE_BADGE[t];
-    const showStatus = t !== 'pc';
-    const typeLabel = charTypeLabel(t);
-    const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
-    return `
-    <div class="card npc-card" onclick="openNPCModal('${n.id}')" ${dragToHotbarAttrs('npc', n.id)} style="${n.status==='dead'?'opacity:0.6':''}">
-      <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
-      <div style="font-weight:600;display:flex;align-items:center;gap:6px">
-        ${showStatus?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}
-        ${esc(n.name)}
-      </div>
-      <div class="text-xs" style="margin-top:3px;display:flex;align-items:center;gap:6px">
-        ${tint?`<span style="background:${tint}22;color:${tint};border:1px solid ${tint}44;border-radius:4px;padding:1px 6px;font-size:0.68rem;font-weight:600">${typeLabel}</span>`:`<span style="background:var(--bg-elevated);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.68rem">${typeLabel}</span>`}
-        ${n.role?`<span class="text-dim">${esc(n.role)}</span>`:''}
-      </div>
-      ${npcFactionList.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${npcFactionList.map(f=>`<span class="faction-chip" style="background:${f.color||'#888'}22;color:${f.color||'#888'};border-color:${f.color||'#888'}55" onclick="event.stopPropagation();openFactionModal('${f.id}')">${esc(f.name)}</span>`).join('')}</div>`:''}
-      ${loc?`<div class="location-chip" onclick="event.stopPropagation();openLocationModal('${loc.id}')">${esc(loc.name)}</div>`:''}
-      ${n.voiceDescription?`<div class="text-xs" style="margin-top:8px;color:var(--accent);font-style:italic;line-height:1.4">${esc(n.voiceDescription.slice(0,90))}${n.voiceDescription.length>90?'…':''}</div>`:''}
-      ${n.notes&&!n.voiceDescription?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.5">${esc(n.notes.slice(0,80))}${n.notes.length>80?'…':''}</div>`:''}
-      ${sessionPills?`<div class="session-pills">${sessionPills}</div>`:''}
-    </div>`;
-  }
-
-  function buildNPCSections(filtered) {
-    const sections = TYPE_GROUPS.map(g => {
-      const chars = filtered.filter(n => g.types.includes(n.type||'npc'));
-      if (!chars.length) return '';
-      return `<div style="margin-bottom:28px">
-        <h3 style="margin:0 0 12px;font-size:0.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)">${g.label}</h3>
-        <div class="card-grid">${chars.map(npcCard).join('')}</div>
-      </div>`;
-    }).join('');
-    return filtered.length===0
-      ? `<div class="empty-state"><h3>No results</h3><p>Try a different search.</p></div>`
-      : sections;
-  }
 
   const searchBar = c.npcs.length>4?`<div style="margin-bottom:18px"><input type="text" id="npc-search" placeholder="Search characters…" value="${esc(window._npcSearch||'')}" oninput="filterNPCCards()" style="max-width:320px"></div>`:'';
 
@@ -3373,32 +3384,10 @@ function filterNPCCards() {
   const c = camp();
   const q = window._npcSearch.toLowerCase();
   const filtered = q ? c.npcs.filter(n => n.name.toLowerCase().includes(q)||(n.role||'').toLowerCase().includes(q)) : c.npcs;
-  // Rebuild just the cards, not the whole page — search field keeps focus
-  const sections = TYPE_GROUPS.map(g => {
-    const chars = filtered.filter(n => g.types.includes(n.type||'npc'));
-    if (!chars.length) return '';
-    const tint = t => TYPE_BADGE[t]||null;
-    return `<div style="margin-bottom:28px">
-      <h3 style="margin:0 0 12px;font-size:0.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)">${g.label}</h3>
-      <div class="card-grid">${chars.map(n => {
-        const loc = n.locationId ? c.locations.find(l=>l.id===n.locationId) : null;
-        const t = n.type||'npc'; const tb = tint(t);
-        const sessionPills = (n.sessions||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" onclick="event.stopPropagation();openSessionModal('${s.id}')">S${s.number}</span>`:''}).join('');
-        return `<div class="card npc-card" onclick="openNPCModal('${n.id}')" style="${n.status==='dead'?'opacity:0.6':''}">
-          <div class="npc-initial" style="${n.image?'':(tb?`background:${tb};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
-          <div style="font-weight:600;display:flex;align-items:center;gap:6px">${t!=='pc'?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}${esc(n.name)}</div>
-          <div class="text-xs" style="margin-top:3px;display:flex;align-items:center;gap:6px">${tb?`<span style="background:${tb}22;color:${tb};border:1px solid ${tb}44;border-radius:4px;padding:1px 6px;font-size:0.68rem;font-weight:600">${charTypeLabel(t)}</span>`:`<span style="background:var(--bg-elevated);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.68rem">${charTypeLabel(t)}</span>`}${n.role?`<span class="text-dim">${esc(n.role)}</span>`:''}</div>
-          ${loc?`<div class="location-chip" onclick="event.stopPropagation();openLocationModal('${loc.id}')">${esc(loc.name)}</div>`:''}
-          ${n.voiceDescription?`<div class="text-xs" style="margin-top:8px;color:var(--accent);font-style:italic;line-height:1.4">${esc(n.voiceDescription.slice(0,90))}${n.voiceDescription.length>90?'…':''}</div>`:''}
-          ${n.notes&&!n.voiceDescription?`<div class="text-sm text-dim" style="margin-top:8px;line-height:1.5">${esc(n.notes.slice(0,80))}${n.notes.length>80?'…':''}</div>`:''}
-          ${sessionPills?`<div class="session-pills">${sessionPills}</div>`:''}
-        </div>`;
-      }).join('')}</div>
-    </div>`;
-  }).join('');
-  container.innerHTML = filtered.length===0
-    ? `<div class="empty-state"><h3>No results</h3><p>Try a different search.</p></div>`
-    : sections;
+  // Rebuild just the cards, not the whole page — search field keeps focus.
+  // Uses the same buildNPCSections()/npcCard() as the initial render, so
+  // this can't drift from it again.
+  container.innerHTML = buildNPCSections(filtered);
 }
 
 function openNPCModal(id) {
@@ -3408,6 +3397,7 @@ function openNPCModal(id) {
   if (!n) return;
   window._npcImageOffsetX = n.imageOffsetX ?? 50;
   window._npcImageOffsetY = n.imageOffsetY ?? 50;
+  window._npcGoals = JSON.parse(JSON.stringify(n.goals || []));
   const locationOptions = c.locations.map(l=>`<option value="${l.id}" ${n.locationId===l.id?'selected':''}>${esc(l.name)}</option>`).join('');
   const sessionHistory = (n.sessions||[]).map(sid=>{const s=c.sessions.find(x=>x.id===sid);return s?`<span class="session-pill" style="font-size:0.75rem;padding:3px 10px" onclick="this.closest('.modal-overlay').remove();openSessionModal('${s.id}')">S${s.number}: ${esc(s.title)}</span>`:''}).filter(Boolean).join('');
   const firstSession = (n.sessions||[]).length ? c.sessions.find(x=>x.id===n.sessions[0]) : null;
@@ -3437,7 +3427,7 @@ function openNPCModal(id) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>Type</label>
-          <select id="en-type">${charTypeOptions(n.type||'npc')}</select>
+          <select id="en-type" onchange="toggleNpcGoalsVisibility(this.value)">${charTypeOptions(n.type||'npc')}</select>
         </div>
         <div class="form-group"><label>Status</label>
           <select id="en-status">
@@ -3474,6 +3464,13 @@ function openNPCModal(id) {
         <textarea id="en-voice" rows="5" placeholder="Accent, speech rhythm, tone… (AI can generate a full cheat card here)">${esc(n.voiceDescription||'')}</textarea>
       </div>
       <div class="form-group"><label>Motivation</label><input type="text" id="en-motivation" placeholder="What do they want?" value="${esc(n.motivation||'')}"></div>
+      <div class="form-group" id="npc-goals-wrap" style="${(n.type||'npc')==='pc'?'':'display:none'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <label style="margin:0">Goals & Bonds</label>
+          <button class="btn btn-ghost btn-sm" onclick="addNpcGoal()">+ Add</button>
+        </div>
+        <div id="npc-goals-list">${renderNpcGoalsList()}</div>
+      </div>
       <div class="form-group"><label>Background Notes</label><textarea id="en-notes" rows="3" placeholder="Appearance, history, general behaviour…">${esc(n.notes||'')}</textarea></div>
       <div class="form-group"><label>Secrets (GM only)</label><textarea id="en-secrets" rows="2">${esc(n.secrets||'')}</textarea></div>
       <div class="form-group">
@@ -3561,6 +3558,7 @@ function saveNPC(id) {
   n.locationId = document.getElementById('en-location').value || null;
   n.voiceDescription = document.getElementById('en-voice').value;
   n.motivation = document.getElementById('en-motivation').value;
+  n.goals = (window._npcGoals||[]).filter(g => g.text.trim());
   n.notes = document.getElementById('en-notes').value;
   n.secrets = document.getElementById('en-secrets').value;
   if (window._npcImageData !== undefined) n.image = window._npcImageData;
@@ -3586,7 +3584,7 @@ function saveNPC(id) {
 function addNPC() {
   const name = document.getElementById('an-name').value.trim();
   if (!name) { toast('Name is required.', 'error'); return; }
-  camp().npcs.push({ id: uid(), name, role: document.getElementById('an-role').value, motivation: document.getElementById('an-motivation').value, notes: document.getElementById('an-notes').value, secrets: document.getElementById('an-secrets').value, locationId: null, status: 'alive', type: document.getElementById('an-type').value || 'npc', voiceDescription: '', sessions: [], events: [], image: window._npcImageData || null, imageOffsetX: window._npcImageOffsetX ?? 50, imageOffsetY: window._npcImageOffsetY ?? 50, playerVisible: false });
+  camp().npcs.push({ id: uid(), name, role: document.getElementById('an-role').value, motivation: document.getElementById('an-motivation').value, goals: [], notes: document.getElementById('an-notes').value, secrets: document.getElementById('an-secrets').value, locationId: null, status: 'alive', type: document.getElementById('an-type').value || 'npc', voiceDescription: '', sessions: [], events: [], image: window._npcImageData || null, imageOffsetX: window._npcImageOffsetX ?? 50, imageOffsetY: window._npcImageOffsetY ?? 50, playerVisible: false });
   save();
   document.querySelector('.modal-overlay')?.remove();
   toast('Character added.', 'success');
@@ -3713,6 +3711,45 @@ function toggleEventEdit(btn) {
     ta.focus();
     btn.textContent = 'Done';
   }
+}
+
+// Goals & Bonds - free, PC-only (per creator's call: NPCs don't get personal
+// goals tracked this way). Only shown/editable when Type is Player Character,
+// toggled live via the Type select's onchange rather than only at modal-open
+// time, so switching an NPC to PC mid-edit reveals the section immediately.
+// Staged in window._npcGoals exactly like Plot Threads' window._threadClues -
+// mutated in place via inline oninput/onchange, only persisted on Save.
+function renderNpcGoalsList() {
+  const goals = window._npcGoals || [];
+  if (!goals.length) return `<p class="text-xs text-dim">No goals or bonds yet.</p>`;
+  return goals.map((g, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" style="width:auto;flex-shrink:0;accent-color:var(--accent)" ${g.done?'checked':''} title="Mark achieved/resolved" onchange="window._npcGoals[${i}].done=this.checked;renderNpcGoalsListInto()">
+      <input type="text" value="${esc(g.text)}" placeholder="e.g. Avenge my sister, or a bond with Kaelen…" style="flex:1;${g.done?'text-decoration:line-through;color:var(--text-dim)':''}" oninput="window._npcGoals[${i}].text=this.value">
+      <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:0.7rem;flex-shrink:0" onclick="removeNpcGoal(${i})">✕</button>
+    </div>`).join('');
+}
+
+function renderNpcGoalsListInto() {
+  const list = document.getElementById('npc-goals-list');
+  if (list) list.innerHTML = renderNpcGoalsList();
+}
+
+function addNpcGoal() {
+  if (!window._npcGoals) window._npcGoals = [];
+  window._npcGoals.push({ id: uid(), text: '', done: false });
+  renderNpcGoalsListInto();
+  document.querySelector('#npc-goals-list > div:last-child input[type="text"]')?.focus();
+}
+
+function removeNpcGoal(idx) {
+  window._npcGoals.splice(idx, 1);
+  renderNpcGoalsListInto();
+}
+
+function toggleNpcGoalsVisibility(type) {
+  const wrap = document.getElementById('npc-goals-wrap');
+  if (wrap) wrap.style.display = type === 'pc' ? '' : 'none';
 }
 
 // "NPC Voice Coach" - a free (never premium; see Patreon gating policy) AI
@@ -4753,6 +4790,7 @@ function renderFieldNotes() {
       <div><h2>Field Notes</h2><p class="subtitle">${c.quickNotes.length} note${c.quickNotes.length!==1?'s':''} · capture anything mid-session</p></div>
       <button class="btn btn-primary" onclick="openQuickNoteModal()">+ Add Note</button>
     </div>
+    <p class="text-xs text-dim" style="margin-bottom:20px">Tip: type <code>/fdn</code> followed by your text in Foundry's chat box to save a Field Note without opening Untangle at all - e.g. <code>/fdn the innkeeper knows more than she's saying</code>.</p>
     ${notes.length===0
       ?`<div class="empty-state"><h3>No field notes yet</h3><p>Use + Add Note above, or the quick-access button over the macro bar, to capture names, ideas, or anything that can't wait mid-session.<br>Notes are timestamped and stored per campaign.</p></div>`
       :notes.map(n=>{
@@ -4839,6 +4877,33 @@ function deleteQuickNote(id) {
   c.quickNotes = (c.quickNotes||[]).filter(n=>n.id!==id);
   save();
   render();
+}
+
+// Mirrors toggleEventEdit()'s view/edit toggle, but a Field Note has no
+// enclosing "Save" button to collect from later - the second click has to
+// persist the edit itself.
+function toggleNoteEdit(btn, id) {
+  const entry = btn.closest('.note-entry');
+  const view = entry.querySelector('.note-text-view');
+  const ta = entry.querySelector('.note-text-edit');
+  const editing = ta.style.display !== 'none';
+  if (editing) {
+    const text = ta.value.trim();
+    if (text) {
+      const c = camp();
+      const note = (c.quickNotes||[]).find(n => n.id === id);
+      if (note) { note.text = text; save(); }
+      view.textContent = text;
+    }
+    view.style.display = '';
+    ta.style.display = 'none';
+    btn.textContent = 'Edit';
+  } else {
+    view.style.display = 'none';
+    ta.style.display = '';
+    ta.focus();
+    btn.textContent = 'Save';
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -5803,6 +5868,7 @@ function saveEditRel(relId) {
   const toVal   = document.getElementById('rel-to').value;
   const [fromType, fromId] = fromVal.split(':');
   const [toType,   toId]   = toVal.split(':');
+  if (fromId === toId && fromType === toType) { toast('Choose two different entities.', 'error'); return; }
   rel.fromId   = fromId;   rel.fromType = fromType;
   rel.toId     = toId;     rel.toType   = toType;
   rel.type     = document.getElementById('rel-type').value;
@@ -6302,6 +6368,15 @@ function saveThread(id) {
     else if (c.locations.find(l=>l.id===cb.value)) checkedLocIds.push(cb.value);
     else if (c.hooks.find(h=>h.id===cb.value)) checkedHookIds.push(cb.value);
   });
+  // A truth with only a label and no body text gets dropped below - if that
+  // happened to be the currently-resolved one, resolvedTruthId must be
+  // cleared too, or the card/modal would disagree afterward about whether
+  // the thread is resolved (same cleanup removeThreadTruth() already does
+  // when a truth is removed explicitly via its own delete button).
+  const savedTruths = (window._threadTruths||[]).filter(tr => tr.text.trim());
+  const resolvedTruthId = (window._threadResolvedId && savedTruths.some(tr => tr.id === window._threadResolvedId))
+    ? window._threadResolvedId
+    : null;
   const data = {
     title,
     status: document.getElementById('th-status')?.value || 'active',
@@ -6313,8 +6388,8 @@ function saveThread(id) {
     locationIds: checkedLocIds,
     hookIds: checkedHookIds,
     clues: (window._threadClues||[]).filter(cl => cl.text.trim()),
-    truths: (window._threadTruths||[]).filter(tr => tr.text.trim()),
-    resolvedTruthId: window._threadResolvedId || null,
+    truths: savedTruths,
+    resolvedTruthId,
   };
   if (id) {
     const t = c.plotThreads.find(x => x.id === id);
@@ -6637,11 +6712,14 @@ function tickClock(id, segIndex) {
 // copy-pasted version of this HTML that had already started to drift (e.g.
 // mismatched placeholder text between add/remove).
 function sceneRowHTML(sc, i) {
+  // Toggling "done" flips the .prep-scene-done class live (it previously only
+  // updated the staged data, so the strikethrough style never actually
+  // appeared/disappeared until something else forced a full row rebuild).
   return `
-    <div data-scene-idx="${i}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
-      <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" ${sc.done?'checked':''} onchange="window._prepScenes[${i}].done=this.checked">
+    <div data-scene-idx="${i}" class="${sc.done?'prep-scene-done':''}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" style="width:auto;margin-top:4px;accent-color:var(--accent)" ${sc.done?'checked':''} onchange="window._prepScenes[${i}].done=this.checked;this.closest('[data-scene-idx]').classList.toggle('prep-scene-done',this.checked)">
       <div style="flex:1">
-        <input type="text" value="${esc(sc.title)}" placeholder="Scene title…" oninput="window._prepScenes[${i}].title=this.value" style="${sc.done?'text-decoration:line-through;color:var(--text-dim)':''}">
+        <input type="text" value="${esc(sc.title)}" placeholder="Scene title…" oninput="window._prepScenes[${i}].title=this.value">
         <textarea rows="2" placeholder="What happens…" oninput="window._prepScenes[${i}].description=this.value" style="margin-top:6px;resize:vertical">${esc(sc.description||'')}</textarea>
       </div>
       <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:2px" onclick="removePrepScene(${i})">✕</button>
@@ -6649,9 +6727,12 @@ function sceneRowHTML(sc, i) {
 }
 
 function questionRowHTML(q, i) {
+  // No shared CSS class exists for this one (unlike scenes) - toggle the
+  // adjacent text input's strikethrough directly so it updates immediately
+  // instead of only on the next full row rebuild.
   return `
     <div data-question-idx="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked">
+      <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked;this.nextElementSibling.style.textDecoration=this.checked?'line-through':'';this.nextElementSibling.style.color=this.checked?'var(--text-dim)':''">
       <input type="text" value="${esc(q.text)}" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value" style="flex:1;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">
       <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="removePrepQuestion(${i})">✕</button>
     </div>`;

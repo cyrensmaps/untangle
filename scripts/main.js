@@ -321,6 +321,12 @@ Hooks.on('init', () => {
     // All Untangle settings use scope 'world': it keeps them out of players'
     // Configure Settings entirely (world-scoped entries are GM-only, both to
     // see and to edit), which matters since this whole module is GM-only.
+    // onChange re-renders both the quickbar AND the Player Companion button -
+    // renderWikiButton() positions itself relative to the quickbar's live
+    // getBoundingClientRect(), so if only renderQuickbar() ran here the
+    // Companion button would visually detach (frozen at the old position)
+    // the moment the GM changed one of these three settings, until some
+    // unrelated hotbar re-render happened to fix it.
     game.settings.register(MODULE_ID, 'quickbarEnabled', {
       name: 'Show Quick Bar',
       hint: 'Shows the Untangle quick-access buttons above the macro bar.',
@@ -328,7 +334,7 @@ Hooks.on('init', () => {
       config: true,
       type: Boolean,
       default: true,
-      onChange: () => renderQuickbar(),
+      onChange: () => { renderQuickbar(); renderWikiButton(); },
     });
     game.settings.register(MODULE_ID, 'quickbarOffsetX', {
       name: 'Quick Bar Horizontal Offset',
@@ -337,7 +343,7 @@ Hooks.on('init', () => {
       config: true,
       type: Number,
       default: 0,
-      onChange: () => renderQuickbar(),
+      onChange: () => { renderQuickbar(); renderWikiButton(); },
     });
     game.settings.register(MODULE_ID, 'quickbarOffsetY', {
       name: 'Quick Bar Vertical Offset',
@@ -346,7 +352,7 @@ Hooks.on('init', () => {
       config: true,
       type: Number,
       default: 0,
-      onChange: () => renderQuickbar(),
+      onChange: () => { renderQuickbar(); renderWikiButton(); },
     });
   } catch (err) { console.error('Untangle | Failed to register quick bar settings', err); }
 
@@ -638,6 +644,39 @@ Hooks.on('renderActorSheet', (app, html) => {
   } catch (err) { console.error('Untangle | Failed to add Actor sheet button', err); }
 });
 
+// ── "/fdn" chat command: save a Field Note without opening Untangle ──
+// Same direct-localStorage approach as addActorToUntangle() above (works
+// even if no Untangle window is open at all) — the GM can jot something
+// down mid-session straight from the chat box instead of alt-tabbing.
+function addFieldNoteFromChat(text) {
+  const state = _readUntangleState();
+  if (!state?.campaigns?.length) {
+    ui.notifications.warn('Untangle | Open Untangle at least once first, so there is a campaign to add this note to.');
+    return;
+  }
+  const campaign = state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0];
+  if (!campaign.quickNotes) campaign.quickNotes = [];
+  const now = new Date();
+  const timestamp = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    + ' ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  campaign.quickNotes.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    text, timestamp, aboutType: null, aboutId: null,
+  });
+  localStorage.setItem('cp_v1', JSON.stringify(state));
+  _untangleStateCacheLoaded = false; // this window's own write - no 'storage' event fires for it
+  ui.notifications.info('Untangle | Field note saved.');
+}
+
+Hooks.on('chatMessage', (chatLog, message) => {
+  if (!/^\/fdn\b/i.test(message)) return true; // not our command - let Foundry handle it normally
+  if (!game.user.isGM) { ui.notifications.warn('Untangle | Only the GM can add field notes this way.'); return false; }
+  const text = message.replace(/^\/fdn\s*/i, '').trim();
+  if (!text) { ui.notifications.warn('Untangle | Usage: /fdn <text>'); return false; }
+  addFieldNoteFromChat(text);
+  return false; // swallow the message - never post "/fdn ..." to chat
+});
+
 // ── Hover-a-token tooltip (GM only) ────────────────────────
 // Glancing at a token mid-encounter shows its linked NPC's key details
 // without opening the full planner, straight from the same localStorage
@@ -861,12 +900,103 @@ Hooks.on('ready', () => {
 // try to apply the same write. Always active whenever the GM's own browser
 // session is open, independent of whether any Untangle window happens to be
 // open at the time.
+// Serializes relayed writes strictly one-at-a-time: without this, two
+// sharedNotesWrite messages arriving close together (from the same player
+// firing two quick actions, or two different players editing near-
+// simultaneously) could both read the same pre-update snapshot via
+// game.settings.get() before either write's set() had actually resolved -
+// the second one to finish would then silently overwrite the first's
+// change. Chaining every write off a single promise means each one's get()
+// always happens after the previous write has fully landed.
+let _sharedNotesQueue = Promise.resolve();
+
 Hooks.once('ready', () => {
   game.socket.on('module.untangle', (data) => {
     if (!game.user.isGM || data?.type !== 'sharedNotesWrite') return;
-    try {
-      const all = game.settings.get(MODULE_ID, 'sharedNotes') || {};
-      game.settings.set(MODULE_ID, 'sharedNotes', { ...all, [data.key]: data.notes });
-    } catch (err) { console.error('Untangle | Failed to relay a shared note write', err); }
+    if (typeof data.key !== 'string' || !Array.isArray(data.notes)) return;
+    _sharedNotesQueue = _sharedNotesQueue.then(async () => {
+      try {
+        const all = game.settings.get(MODULE_ID, 'sharedNotes') || {};
+        await game.settings.set(MODULE_ID, 'sharedNotes', { ...all, [data.key]: data.notes });
+      } catch (err) { console.error('Untangle | Failed to relay a shared note write', err); }
+    });
   });
 });
+
+// ── Macros ────────────────────────────────────────────────
+// Auto-created as ordinary World Macros the first time each GM client loads
+// (idempotent - recreated if deleted), so they show up ready to drag onto
+// the hotbar without needing an actual Compendium pack build pipeline,
+// which this repo has no tooling for. Every macro here is flagged with
+// {untangle: {builtin: <key>}} so ensureUntangleMacros() can tell which
+// ones already exist without relying on name matching (which would break
+// if a GM renamed one).
+
+// A few of these need to call a function that only exists inside the
+// planner's iframe (app/index.html), not this top-window script - this
+// opens the planner if it's not already open, then polls briefly for its
+// iframe to finish loading (contentWindow.navigate is one of the first
+// functions app/index.html's script defines) before running fn against it.
+function _withPlannerWindow(fn) {
+  if (!game.user.isGM) return;
+  openCampaignPlanner();
+  const tryRun = (attemptsLeft) => {
+    const iframe = _plannerApp?.element?.[0]?.querySelector?.('iframe');
+    const win = iframe?.contentWindow;
+    if (win && typeof win.navigate === 'function') { fn(win); return; }
+    if (attemptsLeft <= 0) { console.warn('Untangle | Timed out waiting for the planner to load.'); return; }
+    setTimeout(() => tryRun(attemptsLeft - 1), 100);
+  };
+  tryRun(50); // ~5s max wait
+}
+
+function untangleShowOnboarding() {
+  _withPlannerWindow(win => {
+    win.state.settings.onboarded = false;
+    win.save();
+    win.maybeShowOnboarding();
+  });
+}
+function untangleNewSession() {
+  _withPlannerWindow(win => win.navigate('session-new'));
+}
+function untanglePublishPlayerCompanion() {
+  _withPlannerWindow(win => win.publishPlayerWiki());
+}
+function untangleJumpToSessionPrep() {
+  _withPlannerWindow(win => win.navigate('prep'));
+}
+
+const UNTANGLE_MACROS = [
+  { key: 'showOnboarding', name: 'Untangle: Show Onboarding', command: 'untangleShowOnboarding();' },
+  { key: 'openPlanner', name: 'Untangle: Open Planner', command: 'openCampaignPlanner();' },
+  { key: 'toggleQuickAccess', name: 'Untangle: Toggle Quick Access', command: 'toggleQuickAccessWidget();' },
+  { key: 'togglePlayerCompanion', name: 'Untangle: Toggle Player Companion', command: 'toggleWikiViewer();' },
+  { key: 'newSession', name: 'Untangle: New Session', command: 'untangleNewSession();' },
+  { key: 'publishPlayerCompanion', name: 'Untangle: Publish Player Companion', command: 'untanglePublishPlayerCompanion();' },
+  { key: 'rollAName', name: 'Untangle: Roll a Name', command: 'toggleQuickAccessWidget();' },
+  { key: 'sessionPrep', name: 'Untangle: Jump to Session Prep', command: 'untangleJumpToSessionPrep();' },
+];
+
+async function ensureUntangleMacros() {
+  if (!game.user.isGM) return;
+  const existingKeys = new Set(
+    game.macros.contents
+      .map(m => m.getFlag(MODULE_ID, 'builtin'))
+      .filter(Boolean)
+  );
+  for (const m of UNTANGLE_MACROS) {
+    if (existingKeys.has(m.key)) continue;
+    try {
+      await Macro.create({
+        name: m.name,
+        type: 'script',
+        img: 'icons/svg/book.svg',
+        command: m.command,
+        flags: { [MODULE_ID]: { builtin: m.key } },
+      });
+    } catch (err) { console.error(`Untangle | Failed to create macro "${m.name}"`, err); }
+  }
+}
+
+Hooks.once('ready', ensureUntangleMacros);

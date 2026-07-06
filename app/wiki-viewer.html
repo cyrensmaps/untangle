@@ -312,7 +312,7 @@ function wvSectionHome() {
   }).filter(Boolean);
 
   const grid = [
-    widget('⭐ My Favorites', favoriteItems.length ? `
+    widget('My Favorites', favoriteItems.length ? `
       <div style="font-size:0.68rem;color:var(--text-dim);margin:-6px 0 8px">Only visible to you</div>
       ${favoriteItems.map(i => `<div style="margin-bottom:4px;font-size:0.85rem">${wvChip(i)}</div>`).join('')}` : ''),
     widget('Where We Left Off', lastLocations.length
@@ -511,7 +511,20 @@ function wvUpdateNotesButton(type, id, notes) {
   btn.textContent = `Notes${count ? ` (${count})` : ''}`;
 }
 
+// Working copy for whichever notes modal is currently open. Add/edit/delete
+// all read and write through this instead of re-fetching wvGetNotes() every
+// time - re-fetching meant two rapid actions on the same note list (a fast
+// double-click, or an Add immediately followed by a Delete) each recomputed
+// their own "next" array from the same stale last-synced snapshot, and
+// whichever write's round-trip landed second silently clobbered the first's
+// change. Re-seeded fresh every time the modal is (re)opened, so it never
+// goes stale across separate open/close sessions.
+let _wvOpenNotesKey = null;
+let _wvOpenNotes = null;
+
 function wvOpenNotesModal(type, id) {
+  _wvOpenNotesKey = wvNoteKey(type, id);
+  _wvOpenNotes = wvGetNotes(type, id).slice();
   const overlay = document.createElement('div');
   overlay.className = 'wv-modal-overlay';
   overlay.id = 'wv-notes-overlay';
@@ -529,7 +542,19 @@ function wvOpenNotesModal(type, id) {
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  wvRenderNotesList(type, id);
+  wvRenderNotesList(type, id, _wvOpenNotes);
+}
+
+// Returns the in-progress working copy for (type,id) if that's the currently
+// open notes modal, otherwise falls back to a fresh read - keeps add/edit/
+// delete safe to call even if something ever invokes them without the modal
+// having been opened through wvOpenNotesModal() first.
+function wvWorkingNotes(type, id) {
+  const key = wvNoteKey(type, id);
+  if (_wvOpenNotesKey === key && _wvOpenNotes) return _wvOpenNotes;
+  _wvOpenNotesKey = key;
+  _wvOpenNotes = wvGetNotes(type, id).slice();
+  return _wvOpenNotes;
 }
 
 // notesOverride lets add/edit/delete render the just-computed local array
@@ -552,7 +577,7 @@ function wvRenderNotesList(type, id, notesOverride) {
 }
 
 function wvAddNote(type, id) {
-  const notes = wvGetNotes(type, id);
+  const notes = wvWorkingNotes(type, id);
   const me = window.parent?.game?.user;
   notes.push({ id: uid(), authorId: me?.id || '', authorName: me?.name || 'Someone', text: '', updatedAt: Date.now() });
   wvRenderNotesList(type, id, notes);
@@ -564,7 +589,7 @@ function wvAddNote(type, id) {
 
 function wvSaveNoteEdit(type, id, idx) {
   const ta = document.querySelectorAll('#wv-notes-list textarea')[idx];
-  const notes = wvGetNotes(type, id);
+  const notes = wvWorkingNotes(type, id);
   if (!ta || !notes[idx]) return;
   const me = window.parent?.game?.user;
   notes[idx].text = ta.value;
@@ -575,7 +600,7 @@ function wvSaveNoteEdit(type, id, idx) {
 }
 
 function wvDeleteNote(type, id, idx) {
-  const notes = wvGetNotes(type, id);
+  const notes = wvWorkingNotes(type, id);
   notes.splice(idx, 1);
   wvRenderNotesList(type, id, notes);
   wvUpdateNotesButton(type, id, notes);
