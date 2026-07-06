@@ -245,25 +245,39 @@ function _noteEntityOpts(selectedType, selectedId) {
 }
 
 // Toggles a single quick note between its static view and an editable
-// textarea, persisting to camp().quickNotes immediately on "Done" (unlike
-// toggleEventEdit's NPC-events pattern, a note has no enclosing modal Save
-// button to collect it later, so it has to save itself).
+// textarea + About link select, persisting to camp().quickNotes immediately
+// on "Done" (unlike toggleEventEdit's NPC-events pattern, a note has no
+// enclosing modal Save button to collect it later, so it has to save
+// itself). Re-renders the whole page on commit rather than patching the DOM
+// in place, since the About chip below the note (built from a fresh camp()
+// lookup + a per-type click handler) needs a real rebuild when the link
+// just changed. widget.html has no note list at all, so this only ever
+// actually runs from app/index.html's Field Notes page, where a global
+// render() always exists.
 function toggleNoteEdit(btn, noteId) {
   const entry = btn.closest('.note-entry');
   const view = entry.querySelector('.note-text-view');
   const ta = entry.querySelector('.note-text-edit');
+  const aboutSel = entry.querySelector('.note-about-edit');
   const editing = ta.style.display !== 'none';
   if (editing) {
     const text = ta.value.trim();
-    const note = (camp().quickNotes||[]).find(n => n.id === noteId);
-    if (note && text) { note.text = text; save(); }
-    view.textContent = note ? note.text : ta.value;
-    view.style.display = '';
-    ta.style.display = 'none';
-    btn.textContent = 'Edit';
+    if (text) {
+      const note = (camp().quickNotes||[]).find(n => n.id === noteId);
+      if (note) {
+        note.text = text;
+        const aboutVal = aboutSel?.value || '';
+        const [aboutType, aboutId] = aboutVal ? aboutVal.split(':') : [null, null];
+        note.aboutType = aboutType || null;
+        note.aboutId = aboutId || null;
+        save();
+      }
+    }
+    if (typeof render === 'function') render();
   } else {
     view.style.display = 'none';
     ta.style.display = '';
+    if (aboutSel) aboutSel.style.display = '';
     ta.focus();
     btn.textContent = 'Done';
   }
