@@ -72,9 +72,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NOTES="Bleeding-edge build from commit ${{ github.sha }} on dev - not merged into main yet, not an official release, may be unstable. Installs as a separate module (id: untangle-dev) alongside the real Untangle, so it's safe to test even in a world that already has the real one installed."
+          # module.json must be uploaded as its own release asset (not just
+          # bundled inside module.zip) since the manifest URL Foundry polls
+          # points directly at .../releases/download/dev/module.json.
           if gh release view dev >/dev/null 2>&1; then
-            gh release upload dev module.zip --clobber
+            gh release upload dev module.zip dev-build/module.json --clobber
             gh release edit dev --notes "$NOTES" --prerelease
           else
-            gh release create dev module.zip --title "Untangle (Dev Build)" --notes "$NOTES" --prerelease
+            gh release create dev module.zip dev-build/module.json --title "Untangle (Dev Build)" --notes "$NOTES" --prerelease
           fi
