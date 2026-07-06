@@ -1,0 +1,80 @@
+name: Dev Build
+
+# Publishes a rolling, unofficial build on every push to the dev branch, so
+# testers can get bleeding-edge fixes before they're merged into main and
+# officially released. It installs as a completely separate module
+# (id: untangle-dev) alongside the real one - same source, but with the
+# module id (and everywhere that id gates world settings / the shared-notes
+# socket channel) swapped so a bad dev build can never touch a tester's real
+# Untangle campaign data.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'module.json'
+      - 'scripts/**'
+      - 'styles/**'
+      - 'app/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@v4
+
+      - name: Build dev module folder
+        run: |
+          set -e
+          DEV_ID="untangle-dev"
+          REPO="${{ github.repository }}"
+
+          mkdir dev-build
+          cp -r scripts styles app dev-build/
+
+          # Patch the module id everywhere it gates data isolation between
+          # the stable and dev builds - world settings keys and the shared-
+          # notes socket channel. main.js's MODULE_ID constant covers every
+          # settings call there in one line; app/*.html hardcode the id
+          # per-call instead of using a shared constant, so each occurrence
+          # needs patching individually. Verified these are the only 'untangle'/
+          # "untangle" quoted-token occurrences in the repo before relying on
+          # this blind substitution.
+          for f in dev-build/scripts/main.js dev-build/app/state.js dev-build/app/index.html dev-build/app/wiki-viewer.html; do
+            sed -i "s/'untangle'/'$DEV_ID'/g; s/\"untangle\"/\"$DEV_ID\"/g; s/module\.untangle/module.$DEV_ID/g" "$f"
+          done
+
+          # Derive dev's module.json from the real one (never hand-maintain
+          # a duplicate) so compatibility/authors/etc. can't silently drift.
+          # Version gets a run-number prerelease suffix so Foundry's update
+          # check always sees the rolling release as newer than whatever a
+          # tester currently has installed.
+          BASE_VERSION="$(jq -r .version module.json)"
+          jq \
+            --arg id "$DEV_ID" \
+            --arg version "${BASE_VERSION}-dev.${{ github.run_number }}" \
+            --arg titleSuffix " (Dev Build)" \
+            --arg descPrefix "[UNOFFICIAL TEST BUILD - not for regular play] " \
+            --arg manifest "https://github.com/$REPO/releases/download/dev/module.json" \
+            --arg download "https://github.com/$REPO/releases/download/dev/module.zip" \
+            '.id = $id | .version = $version | .title = (.title + $titleSuffix) | .description = ($descPrefix + .description) | .manifest = $manifest | .download = $download' \
+            module.json > dev-build/module.json
+
+      - name: Zip dev module
+        run: cd dev-build && zip -r ../module.zip module.json scripts styles app
+
+      - name: Publish rolling dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Bleeding-edge build from commit ${{ github.sha }} on dev - not merged into main yet, not an official release, may be unstable. Installs as a separate module (id: untangle-dev) alongside the real Untangle, so it's safe to test even in a world that already has the real one installed."
+          if gh release view dev >/dev/null 2>&1; then
+            gh release upload dev module.zip --clobber
+            gh release edit dev --notes "$NOTES" --prerelease
+          else
+            gh release create dev module.zip --title "Untangle (Dev Build)" --notes "$NOTES" --prerelease
+          fi
