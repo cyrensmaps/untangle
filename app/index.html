@@ -240,9 +240,10 @@
     .status-imprisoned { background: #8866cc; }
 
     /* ── FIELD NOTES ── */
-    .note-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 8px; }
+    .note-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 8px; transition: border-color 0.3s, box-shadow 0.3s; }
     .note-item .note-text { font-size: 0.875rem; line-height: 1.65; white-space: pre-wrap; }
     .note-item .note-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 6px; display: flex; justify-content: space-between; }
+    .note-item.note-highlight { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb),0.35); }
 
     /* ── FACTIONS ── */
     .faction-card { cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
@@ -545,7 +546,7 @@ function renderNavLinks() {
 // If a view was navigated to (or left active from before a feature was
 // toggled off) while its feature is now disabled, fall back to the dashboard
 // rather than rendering a page whose nav entry no longer exists.
-const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes', playerwiki: 'playerWiki' };
+const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes', playerwiki: 'playerWiki', mysteryboard: 'mysteryBoard' };
 
 function navigate(v) {
   if (VIEW_FEATURE[v] && !isFeatureEnabled(VIEW_FEATURE[v])) v = 'dashboard';
@@ -559,11 +560,12 @@ function navigate(v) {
 function render() {
   const main = document.getElementById('main-content');
   document.getElementById('nav-campaign-name').textContent = camp().name;
-  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings, playerwiki: renderPlayerWiki };
+  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings, playerwiki: renderPlayerWiki, mysteryboard: renderMysteryBoard };
   if (VIEW_FEATURE[view] && !isFeatureEnabled(VIEW_FEATURE[view])) { view = 'dashboard'; renderNavLinks(); }
   if (view === 'prep') {
     window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes || []));
     window._prepQuestions = JSON.parse(JSON.stringify(camp().sessionPrep?.questions || []));
+    window._prepPlannedSpotlight = [...(camp().sessionPrep?.plannedSpotlightPcIds || [])];
   }
   main.innerHTML = (views[view] || renderDashboard)();
   if (view === 'session-new') { bindAudioDrop(); bindLocalDrop(); }
@@ -1759,6 +1761,7 @@ function cleanupSessionPrep(c) {
   if (!c.sessionPrep) return;
   if (c.sessionPrep.scenes) c.sessionPrep.scenes = c.sessionPrep.scenes.filter(s => !s.done);
   if (c.sessionPrep.questions) c.sessionPrep.questions = c.sessionPrep.questions.filter(q => !q.done);
+  c.sessionPrep.plannedSpotlightPcIds = [];
 }
 
 function saveManual() {
@@ -1767,7 +1770,12 @@ function saveManual() {
   const date = document.getElementById('s-date')?.value;
   const inWorldDate = document.getElementById('s-inworld-date')?.value?.trim() || '';
   const transcript = document.getElementById('s-transcript')?.value?.trim() || '';
-  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, inWorldDate, rawTranscript: transcript, summary: '', keyEvents: [], playerVisible: false });
+  // Starting draft of Key Events comes from whatever scenes were planned for
+  // this session in Session Prep - saves re-typing what was already written
+  // down, and the GM can still edit/clear it via Edit Session afterward.
+  const plannedScenes = (c.sessionPrep?.scenes || []).filter(s => s.title.trim() || s.description.trim());
+  const keyEvents = plannedScenes.map(s => [s.title.trim(), s.description.trim()].filter(Boolean).join(' - '));
+  c.sessions.push({ id: uid(), number: c.sessions.length + 1, title, date, inWorldDate, rawTranscript: transcript, summary: '', keyEvents, spotlightPcIds: c.sessionPrep?.plannedSpotlightPcIds || [], playerVisible: false });
   cleanupSessionPrep(c);
   save();
   toast('Session saved.', 'success');
@@ -1990,6 +1998,10 @@ function confirmSave() {
     const idx = c.sessions.findIndex(x => x.id === session.id);
     if (idx >= 0) c.sessions[idx] = session;
   } else {
+    // Carry over whatever the GM planned to spotlight for this session (see
+    // Session Prep) - only on genuine creation, never on a reanalyse of an
+    // already-logged session where spotlightPcIds may already be set for real.
+    session.spotlightPcIds = c.sessionPrep?.plannedSpotlightPcIds || [];
     c.sessions.push(session);
   }
   cleanupSessionPrep(c);
@@ -2295,13 +2307,14 @@ function renderPlayerWiki() {
     </div>`).join('');
 
   const lastPublished = c.playerWikiLastPublished ? new Date(c.playerWikiLastPublished).toLocaleString() : null;
+  const unpublishedCount = computeUnpublishedRevealCount();
 
   return `
     <div class="page-header">
       <div><h2>Player Companion</h2><p class="subtitle">Check what's safe to share, then publish - nothing reaches players until you do</p></div>
       <button class="btn btn-primary" onclick="publishPlayerWiki()">Publish / Refresh Player Companion</button>
     </div>
-    <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing updates the Player Companion window players can open near their hotbar.</p>
+    <p class="text-xs text-dim" style="margin-bottom:20px">${lastPublished ? `Last published: ${lastPublished}` : 'Not published yet.'} Publishing updates the Player Companion window players can open near their hotbar.${unpublishedCount ? ` <span style="color:var(--red);font-weight:600">${unpublishedCount} revealed item${unpublishedCount!==1?'s':''} not yet published.</span>` : ''}</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start">
       ${pwSectionHTML('characters', 'Characters', null, c.npcs, charRows)}
@@ -2475,6 +2488,19 @@ function buildPlayerWikiSnapshot(c) {
   });
 
   return { campaignId: c.id, campaignName: c.name, characters, locations, factions, sessions, rumors, maps, clocks };
+}
+
+// Counts entities/pins revealed to players (playerVisible + a revealedAt
+// stamp - see toggleEntityVisible/togglePinVisible) since the last publish,
+// so the GM gets warned before players end up looking at a stale snapshot.
+function computeUnpublishedRevealCount() {
+  const c = camp();
+  const since = c.playerWikiLastPublished || 0;
+  let count = 0;
+  [c.npcs, c.locations, c.factions, c.sessions, c.plotThreads, c.maps, c.clocks].forEach(list =>
+    (list||[]).forEach(item => { if (item.playerVisible && (item.revealedAt||0) > since) count++; }));
+  (c.maps||[]).forEach(m => (m.pins||[]).forEach(p => { if (p.playerVisible && (p.revealedAt||0) > since) count++; }));
+  return count;
 }
 
 async function publishPlayerWiki() {
@@ -4843,6 +4869,20 @@ function renderTaggedNotesSection(type, id) {
   </div>`;
 }
 
+// Field Notes has no single-item modal to deep-link to (each note is just an
+// inline card on the page), so a search hit jumps to the page and scrolls/
+// highlights the matching entry instead of opening something new.
+function jumpToFieldNote(id) {
+  navigate('fieldnotes');
+  setTimeout(() => {
+    const el = document.querySelector(`.note-entry[data-note-id="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('note-highlight');
+    setTimeout(() => el.classList.remove('note-highlight'), 2000);
+  }, 50);
+}
+
 function openQuickNoteModal() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -4987,6 +5027,11 @@ function openRecapModal() {
   if (staleEntities.length) {
     lines.push('', "Hasn't come up in a while:");
     staleEntities.slice(0, 5).forEach(e => lines.push(`• ${e.name} (${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago)`));
+  }
+  const spotlightNeed = computeSpotlightNeed().filter(p => p.sessionsSince >= SPOTLIGHT_THRESHOLD);
+  if (spotlightNeed.length) {
+    lines.push('', 'Give the spotlight to:');
+    spotlightNeed.forEach(p => lines.push(`• ${p.name} (${p.everHadSpotlight ? p.sessionsSince + ' session' + (p.sessionsSince!==1?'s':'') + ' ago' : 'never yet'})`));
   }
   window._recapText = lines.join('\n');
 
@@ -5143,11 +5188,24 @@ function runSearch(qRaw) {
       items: c.factions.filter(f => (f.name||'').toLowerCase().includes(q) || (f.notes||'').toLowerCase().includes(q)),
       render: f => ({ title: f.name, sub: (f.notes||'').slice(0,70), onClick: `openFactionModal('${f.id}')` }) },
     { label: 'Plot Threads',
-      items: c.plotThreads.filter(t => (t.title||'').toLowerCase().includes(q) || (t.description||'').toLowerCase().includes(q)),
-      render: t => ({ title: t.title, sub: threadStatusInfo(t.status).label, onClick: `openEditThreadModal('${t.id}')` }) },
+      items: c.plotThreads.filter(t => (t.title||'').toLowerCase().includes(q) || (t.description||'').toLowerCase().includes(q) || (t.clues||[]).some(cl => (cl.text||'').toLowerCase().includes(q))),
+      render: t => {
+        const matchedClue = (t.clues||[]).find(cl => (cl.text||'').toLowerCase().includes(q));
+        const sub = !((t.title||'').toLowerCase().includes(q)) && matchedClue ? `Clue: ${matchedClue.text.slice(0,60)}` : threadStatusInfo(t.status).label;
+        return { title: t.title, sub, onClick: `openEditThreadModal('${t.id}')` };
+      } },
     { label: 'Sessions',
       items: c.sessions.filter(s => (s.title||'').toLowerCase().includes(q) || (s.summary||'').toLowerCase().includes(q)),
       render: s => ({ title: s.title || 'Untitled Session', sub: `Session ${s.number} · ${s.date}`, onClick: `openSessionModal('${s.id}')` }) },
+    { label: 'Field Notes',
+      items: (c.quickNotes||[]).filter(n => (n.text||'').toLowerCase().includes(q)),
+      render: n => {
+        const finder = { npc: c.npcs, location: c.locations, faction: c.factions, thread: c.plotThreads }[n.aboutType];
+        const nameKey = n.aboutType === 'thread' ? 'title' : 'name';
+        const entity = n.aboutType && n.aboutId ? finder?.find(x => x.id === n.aboutId) : null;
+        const sub = (entity ? `${entity[nameKey]} · ` : '') + n.timestamp;
+        return { title: n.text.length > 70 ? n.text.slice(0,69) + '…' : n.text, sub, onClick: `jumpToFieldNote('${n.id}')` };
+      } },
   ];
 
   const nonEmpty = groups.filter(g => g.items.length);
@@ -6047,12 +6105,103 @@ function renderPlotThreads() {
   return `
     <div class="page-header">
       <div><h2>Plot Threads</h2><p class="subtitle">${c.plotThreads.length} thread${c.plotThreads.length!==1?'s':''} · ${counts.active||0} active</p></div>
-      <button class="btn btn-primary" onclick="openAddThreadModal()">+ New Thread</button>
+      <div style="display:flex;gap:8px">
+        ${isFeatureEnabled('mysteryBoard')?`<button class="btn btn-ghost" onclick="navigate('mysteryboard')">Mystery Board</button>`:''}
+        <button class="btn btn-primary" onclick="openAddThreadModal()">+ New Thread</button>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">${filterBtns}</div>
     ${filtered.length===0
       ? `<div class="empty-state"><h3>${c.plotThreads.length===0?'No threads yet':'No threads match this filter'}</h3><p>${c.plotThreads.length===0?'Track your storylines, mysteries, and ongoing plots.':''}</p></div>`
       : `<div class="card-grid">${threadCards}</div>`}`;
+}
+
+// Premium add-on to the always-free Plot Threads list: one page showing
+// every live thread's truth(s) and clue-to-truth tagging at once, instead of
+// having to open each thread's edit modal to see how its clues line up.
+// Reuses computeBranchTally/findBranchContradictions (buildTruthBlockHTML's
+// helpers) rather than recomputing anything - this is a read-only overview,
+// editing still happens in the existing thread modal.
+function renderMysteryBoard() {
+  const c = camp();
+  const liveThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned');
+
+  const boardCards = liveThreads.map(t => {
+    const si = threadStatusInfo(t.status);
+    const involvedNpcs = (t.npcIds||[]).map(id => c.npcs.find(n=>n.id===id)).filter(Boolean);
+    const involvedLocs = (t.locationIds||[]).map(id => c.locations.find(l=>l.id===id)).filter(Boolean);
+    const avatars = involvedNpcs.slice(0,6).map(n =>
+      `<div class="npc-initial" style="width:24px;height:24px;font-size:0.65rem;margin-bottom:0;${n.image?'':`background:rgba(var(--accent-rgb),0.1);`}flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:esc((n.name[0]||'?').toUpperCase())}</div>`
+    ).join('');
+    const locChips = involvedLocs.slice(0,4).map(l => `<span class="text-xs text-dim" style="border:1px solid var(--border);border-radius:10px;padding:2px 8px">${esc(l.name)}</span>`).join('');
+
+    const hasBranches = (t.truths||[]).length > 0;
+    let truthSection = '';
+    if (hasBranches) {
+      const tally = computeBranchTally(t.truths, t.clues||[]);
+      const contradictions = t.resolvedTruthId ? findBranchContradictions(t.clues||[], t.resolvedTruthId) : [];
+      truthSection = `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          ${tally.map((tr,i) => {
+            const letter = String.fromCharCode(65+i);
+            const isResolved = t.resolvedTruthId === tr.id;
+            return `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
+              <span style="width:20px;height:20px;border-radius:5px;background:${isResolved?'var(--accent)':'var(--bg-elevated)'};border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;color:${isResolved?'#12100a':'var(--text-dim)'}">${letter}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:0.85rem;font-weight:600">${esc(tr.label||('Truth '+letter))}${isResolved?' <span class="text-xs" style="color:var(--accent);font-weight:600">Resolved</span>':''}</div>
+                <div class="text-xs text-dim" style="margin-top:2px;line-height:1.5">${esc(tr.text||'(no detail written)')}</div>
+                <div class="text-xs" style="margin-top:3px;color:var(--text-dim)">${tr.supporting} supporting · ${tr.contradicting} contradicting</div>
+              </div>
+            </div>`;
+          }).join('')}
+          ${contradictions.length?`<div class="text-xs" style="color:var(--red)">${contradictions.length} told-to-players clue${contradictions.length!==1?'s':''} contradict${contradictions.length===1?'s':''} the resolved truth - review in the thread's edit modal.</div>`:''}
+        </div>`;
+    } else if (t.truth) {
+      truthSection = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">GM Truth (private)</div>
+        <div class="text-sm" style="line-height:1.5">${esc(t.truth)}</div>
+      </div>`;
+    }
+
+    const cluesSection = (t.clues||[]).length ? `
+      <div style="margin-top:12px">
+        <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">Clues dropped (${t.clues.length})</div>
+        ${t.clues.map(cl => {
+          const badges = hasBranches ? (t.truths||[]).map((tr,i) => {
+            const letter = String.fromCharCode(65+i);
+            const tagged = (cl.branchIds||[]).includes(tr.id);
+            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:0.62rem;font-weight:700;margin-right:3px;background:${tagged?'var(--accent)':'transparent'};color:${tagged?'#12100a':'var(--text-dim)'};border:1px solid ${tagged?'var(--accent)':'var(--border)'}">${letter}</span>`;
+          }).join('') : '';
+          return `<div style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;font-size:0.82rem;color:var(--text-dim)">
+            ${badges?`<span style="flex-shrink:0;margin-top:1px">${badges}</span>`:''}
+            <span style="flex:1">${esc(cl.text)}</span>
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
+    return `
+      <div class="card" style="margin-bottom:16px;border-left:3px solid ${si.color}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:pointer" onclick="openEditThreadModal('${t.id}')">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:1rem;margin-bottom:4px">${esc(t.title)}</div>
+            ${t.description?`<div class="text-sm text-dim" style="line-height:1.5">${esc(t.description)}</div>`:''}
+          </div>
+          <span style="background:${si.color}22;color:${si.color};border:1px solid ${si.color}44;border-radius:4px;padding:2px 8px;font-size:0.72rem;font-weight:600;white-space:nowrap">${si.label}</span>
+        </div>
+        ${(avatars||locChips)?`<div style="display:flex;gap:4px;margin-top:10px;align-items:center;flex-wrap:wrap">${avatars}${locChips}</div>`:''}
+        ${truthSection}
+        ${cluesSection}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="page-header">
+      <div><h2>Mystery Board</h2><p class="subtitle">Every active thread's truth(s) and clues, at a glance</p></div>
+      <button class="btn btn-ghost" onclick="navigate('threads')">← Plot Threads</button>
+    </div>
+    ${liveThreads.length===0
+      ? `<div class="empty-state"><h3>No active mysteries</h3><p>Threads marked Rumor, Active, or Dormant show up here once you have some.</p></div>`
+      : boardCards}`;
 }
 
 function openAddThreadModal() {
@@ -6772,6 +6921,7 @@ function renderSessionPrep() {
   const activeFactions    = c.factions.filter(f => (f.status||'active') === 'active');
   const staleEntities     = computeStaleEntities();
   const spotlightNeed     = computeSpotlightNeed();
+  const clocksNearTipping = (c.clocks||[]).filter(ck => ck.filled > 0 && ck.filled >= ck.segments - 1);
 
   const sceneRows = scenes.map(sceneRowHTML).join('');
   const qRows = questions.map(questionRowHTML).join('');
@@ -6817,16 +6967,31 @@ function renderSessionPrep() {
         </div>`:''}
         ${spotlightNeed.length?`
         <div class="card" style="margin-bottom:16px">
-          <div class="flex-between" style="margin-bottom:12px">
+          <div class="flex-between" style="margin-bottom:4px">
             <h3>PC Spotlight</h3>
             <span class="text-xs text-dim">who hasn't had it lately</span>
           </div>
+          <p class="text-xs text-dim" style="margin-bottom:10px">Check who you plan to spotlight next session - it'll be pre-checked when you log it.</p>
           ${spotlightNeed.map(p => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openNPCModal('${p.id}')">
-              <span style="width:10px;height:10px;border-radius:50%;background:${spotlightHeatColor(p.sessionsSince)};flex-shrink:0;display:inline-block"></span>
-              <span class="text-sm" style="font-weight:500;flex:1">${esc(p.name)}</span>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <input type="checkbox" style="width:auto;flex-shrink:0;accent-color:var(--accent)" ${(window._prepPlannedSpotlight||[]).includes(p.id)?'checked':''} onchange="togglePlannedSpotlight('${p.id}',this.checked)">
+              <span style="width:10px;height:10px;border-radius:50%;background:${spotlightHeatColor(p.sessionsSince)};flex-shrink:0;display:inline-block;cursor:pointer" onclick="openNPCModal('${p.id}')"></span>
+              <span class="text-sm" style="font-weight:500;flex:1;cursor:pointer" onclick="openNPCModal('${p.id}')">${esc(p.name)}</span>
               <span class="text-xs text-dim">${p.everHadSpotlight ? `${p.sessionsSince} session${p.sessionsSince!==1?'s':''} ago` : 'never yet'}</span>
               ${p.sessionsSince>=SPOTLIGHT_THRESHOLD?`<span class="text-xs" style="color:var(--red);font-weight:600">needs it soon</span>`:''}
+            </div>`).join('')}
+        </div>`:''}
+        ${clocksNearTipping.length?`
+        <div class="card" style="margin-bottom:16px">
+          <div class="flex-between" style="margin-bottom:12px">
+            <h3>Clocks Near Tipping</h3>
+            <span class="text-xs text-dim">about to come to a head</span>
+          </div>
+          ${clocksNearTipping.map(ck => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openEditClockModal('${ck.id}')">
+              <span style="width:8px;height:8px;border-radius:50%;background:${ck.color||'var(--accent)'};flex-shrink:0;display:inline-block"></span>
+              <span class="text-sm" style="font-weight:500;flex:1">${esc(ck.label)}</span>
+              <span class="text-xs text-dim">${ck.filled}/${ck.segments}</span>
             </div>`).join('')}
         </div>`:''}
         <div class="card" style="margin-bottom:16px">
@@ -6898,7 +7063,21 @@ function commitSessionPrep() {
   c.sessionPrep.notes     = document.getElementById('prep-notes')?.value || '';
   c.sessionPrep.scenes    = (window._prepScenes||[]).filter(s=>s.title.trim()||s.description.trim());
   c.sessionPrep.questions = (window._prepQuestions||[]).filter(q=>q.text.trim());
+  c.sessionPrep.plannedSpotlightPcIds = window._prepPlannedSpotlight || [];
   save();
+}
+
+// Toggles a PC's membership in the "planning to spotlight next session"
+// staging list - carried into the session record at creation time (see
+// saveManual()/confirmSave()) so the Spotlight checklist on that session is
+// already pre-checked with what was planned, instead of the GM re-deciding
+// from scratch after the fact.
+function togglePlannedSpotlight(id, checked) {
+  if (!window._prepPlannedSpotlight) window._prepPlannedSpotlight = [];
+  window._prepPlannedSpotlight = checked
+    ? [...new Set([...window._prepPlannedSpotlight, id])]
+    : window._prepPlannedSpotlight.filter(x => x !== id);
+  commitSessionPrep();
 }
 
 let _prepAutoSaveTimer = null;

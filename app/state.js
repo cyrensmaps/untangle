@@ -352,6 +352,7 @@ const FEATURE_REGISTRY = [
   { key: 'relationshipWeb',   label: 'Relationships & Spark',     category: 'Story',               premium: false },
   { key: 'fieldNotes',        label: 'Field Notes',                category: 'Story',               premium: false },
   { key: 'threadBranches',    label: 'Thread Branches',           category: 'Story',               premium: true  },
+  { key: 'mysteryBoard',      label: 'Mystery Board',             category: 'Story',               premium: true  },
   { key: 'globalSearch',      label: 'Search',                    category: 'Tools',               premium: false },
   { key: 'nameGenerator',     label: 'Name Generator',            category: 'Tools',               premium: false },
   { key: 'voiceDictation',    label: 'Voice Dictation',           category: 'Tools',               premium: false },
