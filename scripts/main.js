@@ -579,6 +579,23 @@ window.addEventListener('storage', (e) => {
   if (e.key === 'cp_v1') _untangleStateCacheLoaded = false;
 });
 
+// Tokenizer and Token Variant Art can both leave actor.img pointing at
+// Foundry's blank mystery-man placeholder while the "real" art the GM sees
+// lives on the prototype token instead (Tokenizer commonly saves the
+// composited artwork to the token image without also updating the portrait;
+// Token Variant Art's per-user/HUD art swaps are often display-only and
+// never touch the document at all, so there's nothing on the Actor for
+// either module to read in that case - only the token-image fallback below
+// is something we can reliably pull).
+function _resolveActorImgMain(actor) {
+  const isPlaceholder = (p) => !p || p.includes('mystery-man');
+  const toRoute = (p) => foundry.utils?.getRoute ? foundry.utils.getRoute(p) : (p.startsWith('http') ? p : '/' + p.replace(/^\/+/, ''));
+  if (!isPlaceholder(actor.img)) return toRoute(actor.img);
+  const tokenSrc = actor.prototypeToken?.texture?.src;
+  if (!isPlaceholder(tokenSrc)) return toRoute(tokenSrc);
+  return actor.img ? toRoute(actor.img) : null;
+}
+
 function addActorToUntangle(actor) {
   const state = _readUntangleState();
   if (!state?.campaigns?.length) {
@@ -588,9 +605,7 @@ function addActorToUntangle(actor) {
   const campaign = state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0];
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const bio = actor.system?.details?.biography?.value || actor.system?.details?.biography || '';
-  const img = actor.img
-    ? (foundry.utils?.getRoute ? foundry.utils.getRoute(actor.img) : (actor.img.startsWith('http') ? actor.img : '/' + actor.img.replace(/^\/+/, '')))
-    : null;
+  const img = _resolveActorImgMain(actor);
   if (!campaign.npcs) campaign.npcs = [];
   campaign.npcs.push({
     id: uid(), name: actor.name, role: '', motivation: '', notes: _stripHtmlMain(bio), secrets: '',
