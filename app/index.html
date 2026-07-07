@@ -245,6 +245,12 @@
     .note-item .note-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 6px; display: flex; justify-content: space-between; }
     .note-item.note-highlight { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb),0.35); }
 
+    /* ── MYSTERY BOARD ── */
+    .mb-node.mb-node-drop-target { filter: drop-shadow(0 0 8px var(--accent)); }
+
+    /* ── RELATIONSHIP WEB ── */
+    .rel-node.rel-drop-target, .rel-faction-node.rel-drop-target { filter: drop-shadow(0 0 8px var(--accent)); }
+
     /* ── FACTIONS ── */
     .faction-card { cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
     .faction-card:hover { border-color: var(--border-hover); transform: translateY(-1px); }
@@ -5583,7 +5589,7 @@ function renderRelationshipWeb() {
         <button onclick="relZoom(0.8)" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
       </div>
     </div>
-    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag characters or factions to reposition · Click a line to edit</p>`;
+    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag characters or factions to reposition, or drop one on another to connect them · Click a line to edit</p>`;
 }
 
 let _relDrag = null;
@@ -5668,6 +5674,27 @@ function _applyWebFocus(type, id) {
     const involved = (type === 'faction' && fid === id) || (type === 'npc' && nid === id);
     el.style.opacity = involved ? '0.8' : '0.08';
   });
+}
+
+// Finds the nearest other node within a drop-on-me radius, so dropping one
+// piece on top of another can offer to connect them instead of just leaving
+// them stacked - excludes the node currently being dragged.
+function _relFindDropTarget(dragType, dragId, x, y) {
+  const c = camp();
+  let best = null, bestDist = 50;
+  c.npcs.forEach(n => {
+    if (dragType === 'npc' && n.id === dragId) return;
+    const p = c.npcPositions[n.id]; if (!p) return;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestDist) { bestDist = d; best = { type: 'npc', id: n.id }; }
+  });
+  c.factions.forEach(f => {
+    if (dragType === 'faction' && f.id === dragId) return;
+    const p = c.factionPositions[f.id]; if (!p) return;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestDist) { bestDist = d; best = { type: 'faction', id: f.id }; }
+  });
+  return best;
 }
 
 function setupRelationshipWebEvents() {
@@ -5774,6 +5801,12 @@ function setupRelationshipWebEvents() {
           if (line) { line.setAttribute('x2', nx); line.setAttribute('y2', ny); }
         });
       }
+      svg.querySelectorAll('.rel-drop-target').forEach(el => el.classList.remove('rel-drop-target'));
+      const dropTarget = _relFindDropTarget(_relDrag.type, _relDrag.id, nx, ny);
+      if (dropTarget) {
+        const sel = dropTarget.type === 'faction' ? `[data-faction-id="${dropTarget.id}"]` : `[data-npc-id="${dropTarget.id}"]`;
+        svg.querySelector(sel)?.classList.add('rel-drop-target');
+      }
       return;
     }
     // Pan
@@ -5790,12 +5823,22 @@ function setupRelationshipWebEvents() {
       const vp = _screenToViewport(e.clientX, e.clientY, svg);
       const dx = vp.x - _relDrag.startX, dy = vp.y - _relDrag.startY;
       if (_relDrag.moved) {
-        if (_relDrag.type === 'faction') {
-          camp().factionPositions[_relDrag.id] = { x: Math.round(_relDrag.origX + dx), y: Math.round(_relDrag.origY + dy) };
+        const nx = _relDrag.origX + dx, ny = _relDrag.origY + dy;
+        const dropTarget = _relFindDropTarget(_relDrag.type, _relDrag.id, nx, ny);
+        if (dropTarget) {
+          // Dropped on another node - offer to connect them instead of
+          // relocating; nothing is persisted so the piece snaps back to
+          // where it started.
+          render();
+          openAddRelModal(`${_relDrag.type}:${_relDrag.id}`, `${dropTarget.type}:${dropTarget.id}`);
         } else {
-          camp().npcPositions[_relDrag.id] = { x: Math.round(_relDrag.origX + dx), y: Math.round(_relDrag.origY + dy) };
+          if (_relDrag.type === 'faction') {
+            camp().factionPositions[_relDrag.id] = { x: Math.round(nx), y: Math.round(ny) };
+          } else {
+            camp().npcPositions[_relDrag.id] = { x: Math.round(nx), y: Math.round(ny) };
+          }
+          save();
         }
-        save();
       } else {
         if (_relDrag.type === 'faction') openFactionModal(_relDrag.id);
         else openNPCModal(_relDrag.id);
@@ -5834,9 +5877,14 @@ function _relEntityOpts(selectedId, selectedType) {
   return npcGroup + facGroup;
 }
 
-function openAddRelModal() {
+// presetFromVal/presetToVal are "type:id" strings (e.g. "npc:abc123") - set
+// when dropping one node on another in the web should prefill both sides
+// instead of the GM re-picking what they just visually pointed at.
+function openAddRelModal(presetFromVal, presetToVal) {
   const c = camp();
   if (c.npcs.length + c.factions.length < 2) { toast('Need at least 2 characters or factions to create a relationship.', 'error'); return; }
+  const [presetFromType, presetFromId] = presetFromVal ? presetFromVal.split(':') : ['', ''];
+  const [presetToType, presetToId] = presetToVal ? presetToVal.split(':') : ['', ''];
   const typeOpts = REL_TYPES.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -5844,8 +5892,8 @@ function openAddRelModal() {
     <div class="modal" style="max-width:420px">
       <div class="modal-header"><h3>Add Relationship</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-row">
-        <div class="form-group"><label>From</label><select id="rel-from">${_relEntityOpts('','')}</select></div>
-        <div class="form-group"><label>To</label><select id="rel-to">${_relEntityOpts('','')}</select></div>
+        <div class="form-group"><label>From</label><select id="rel-from">${_relEntityOpts(presetFromId, presetFromType)}</select></div>
+        <div class="form-group"><label>To</label><select id="rel-to">${_relEntityOpts(presetToId, presetToType)}</select></div>
       </div>
       <div class="form-group"><label>Relationship type</label><select id="rel-type">${typeOpts}</select></div>
       <div class="form-group"><label>Label (optional)</label><input type="text" id="rel-label" placeholder="e.g. Childhood friends, Master & apprentice…"></div>
@@ -5856,8 +5904,10 @@ function openAddRelModal() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const toSel = document.getElementById('rel-to');
-  if (toSel && toSel.options.length > 1) toSel.selectedIndex = 1;
+  if (!presetToVal) {
+    const toSel = document.getElementById('rel-to');
+    if (toSel && toSel.options.length > 1) toSel.selectedIndex = 1;
+  }
 }
 
 function saveNewRel() {
@@ -6267,6 +6317,22 @@ function renderMysteryBoard() {
 
   const contradictions = (hasBranches && t.resolvedTruthId) ? findBranchContradictions(t.clues||[], t.resolvedTruthId) : [];
 
+  // GM-drawn string, distinct from the auto clue<->truth string above - the
+  // GM can connect any two pins (people, places, clues, truths) to mark
+  // relationships the data model itself has no field for, same as pinning
+  // string between photos on a real board. Created by dropping one piece on
+  // another (see setupMysteryBoardEvents) rather than a separate mode.
+  let customEdgeSvg = '';
+  (t.boardConnections||[]).forEach(cn => {
+    const pa = _pos(cn.a), pb = _pos(cn.b);
+    const mx = (pa.x+pb.x)/2, my = (pa.y+pb.y)/2;
+    customEdgeSvg += `<g class="mb-custom-edge" style="cursor:pointer" onclick="openEditBoardConnectionModal('${cn.id}')">
+      <line id="mb-conn-line-${cn.id}" data-edge="${cn.a}|${cn.b}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="#ddd" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+      <line id="mb-conn-hit-${cn.id}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="transparent" stroke-width="14"/>
+      ${cn.label?`<text id="mb-conn-label-${cn.id}" x="${mx}" y="${my}" text-anchor="middle" font-size="9.5" fill="#ddd" font-family="var(--font)" dy="-5" pointer-events="none">${esc(cn.label)}</text>`:''}
+    </g>`;
+  });
+
   return `
     <div class="page-header">
       <div><h2>Mystery Board</h2><p class="subtitle">One case at a time - drag pieces around, string shows which clues back which truth</p></div>
@@ -6281,6 +6347,7 @@ function renderMysteryBoard() {
       <svg id="mb-svg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;min-height:400px;max-height:65vh;cursor:grab">
         <g id="mb-viewport">
           <g id="mb-edges">${edgeSvg}</g>
+          <g id="mb-custom-edges">${customEdgeSvg}</g>
           <g id="mb-truth-nodes">${truthNodeSvg}</g>
           <g id="mb-clue-nodes">${clueNodeSvg}</g>
           <g id="mb-loc-nodes">${locNodeSvg}</g>
@@ -6294,7 +6361,7 @@ function renderMysteryBoard() {
         <button onclick="autoLayoutMysteryBoard()" title="Auto-arrange" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center">↺</button>
       </div>
     </div>
-    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag pieces to reposition · Click a piece (without dragging) to edit this thread${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}</p>`;
+    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag a piece to reposition, or drop it on another piece to connect them · Click a piece (without dragging) to edit this thread${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}${(t.boardConnections||[]).length?' · Click white string to relabel or remove it':''}</p>`;
 }
 
 let _mbDrag = null;
@@ -6335,6 +6402,105 @@ function autoLayoutMysteryBoard() {
   if (!t) return;
   t.boardPositions = {};
   save();
+  render();
+}
+
+// Finds the nearest other node within a drop-on-me radius, so dropping one
+// piece on top of another can offer to connect them instead of just leaving
+// them stacked - excludes the node currently being dragged.
+function _mbFindDropTarget(t, dragKey, x, y) {
+  let bestKey = null, bestDist = 45;
+  Object.keys(t.boardPositions || {}).forEach(key => {
+    if (key === dragKey) return;
+    const p = t.boardPositions[key];
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestDist) { bestDist = d; bestKey = key; }
+  });
+  return bestKey;
+}
+
+// Human-readable label for a node key, for the "Connect X to Y" modal title.
+function _mbNodeLabel(t, key) {
+  const c = camp();
+  const sep = key.indexOf(':');
+  const kind = key.slice(0, sep), id = key.slice(sep + 1);
+  if (kind === 'npc') return c.npcs.find(n => n.id === id)?.name || 'Character';
+  if (kind === 'loc') return c.locations.find(l => l.id === id)?.name || 'Location';
+  if (kind === 'clue') {
+    const cl = (t.clues || []).find(x => x.id === id);
+    return cl ? (cl.text.length > 24 ? cl.text.slice(0, 23) + '…' : cl.text) : 'Clue';
+  }
+  if (kind === 'truth') {
+    if (id === 'single') return 'GM Truth';
+    return (t.truths || []).find(x => x.id === id)?.label || 'Truth';
+  }
+  return 'Piece';
+}
+
+function openCreateBoardConnectionModal(fromKey, toKey) {
+  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  if (!t) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Connect ${esc(_mbNodeLabel(t, fromKey))} &amp; ${esc(_mbNodeLabel(t, toKey))}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Label <span class="text-dim text-xs">(optional)</span></label><input type="text" id="mb-conn-label-input" placeholder="e.g. Owes him money, Was seen there…"></div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="createBoardConnection('${fromKey}','${toKey}')">Connect</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('mb-conn-label-input')?.focus(), 50);
+}
+
+function createBoardConnection(a, b) {
+  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  if (!t) return;
+  if (!t.boardConnections) t.boardConnections = [];
+  const label = document.getElementById('mb-conn-label-input')?.value.trim() || '';
+  t.boardConnections.push({ id: uid(), a, b, label });
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+function openEditBoardConnectionModal(connId) {
+  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const cn = t?.boardConnections?.find(c => c.id === connId);
+  if (!cn) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Connection</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Label <span class="text-dim text-xs">(optional)</span></label><input type="text" id="mb-conn-label-input" value="${esc(cn.label||'')}" placeholder="e.g. Owes him money, Was seen there…"></div>
+      <div class="flex gap-8" style="justify-content:space-between">
+        <button class="btn btn-danger" onclick="removeBoardConnection('${connId}')">Remove String</button>
+        <button class="btn btn-primary" onclick="saveBoardConnectionLabel('${connId}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('mb-conn-label-input')?.focus(), 50);
+}
+
+function saveBoardConnectionLabel(connId) {
+  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const cn = t?.boardConnections?.find(c => c.id === connId);
+  if (!cn) return;
+  cn.label = document.getElementById('mb-conn-label-input')?.value.trim() || '';
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+function removeBoardConnection(connId) {
+  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  if (!t?.boardConnections) return;
+  t.boardConnections = t.boardConnections.filter(c => c.id !== connId);
+  save();
+  document.querySelector('.modal-overlay')?.remove();
   render();
 }
 
@@ -6379,6 +6545,27 @@ function setupMysteryBoardEvents() {
         if (k1 === _mbDrag.key) { line.setAttribute('x1', nx); line.setAttribute('y1', ny); }
         if (k2 === _mbDrag.key) { line.setAttribute('x2', nx); line.setAttribute('y2', ny); }
       });
+      // GM-drawn connections need both endpoints (and the label) recomputed,
+      // not just the moving one - the generic [data-edge] pass above already
+      // moved this same <line>'s endpoint, this just also moves its
+      // invisible hit-line and label in step.
+      const dragT = camp().plotThreads.find(x => x.id === threadId);
+      (dragT?.boardConnections||[]).forEach(cn => {
+        if (cn.a !== _mbDrag.key && cn.b !== _mbDrag.key) return;
+        const otherKey = cn.a === _mbDrag.key ? cn.b : cn.a;
+        const otherPos = dragT.boardPositions?.[otherKey] || { x: 450, y: 280 };
+        const pa = cn.a === _mbDrag.key ? { x: nx, y: ny } : otherPos;
+        const pb = cn.b === _mbDrag.key ? { x: nx, y: ny } : otherPos;
+        const hit = document.getElementById(`mb-conn-hit-${cn.id}`);
+        const label = document.getElementById(`mb-conn-label-${cn.id}`);
+        if (hit) { hit.setAttribute('x1', pa.x); hit.setAttribute('y1', pa.y); hit.setAttribute('x2', pb.x); hit.setAttribute('y2', pb.y); }
+        if (label) { label.setAttribute('x', (pa.x+pb.x)/2); label.setAttribute('y', (pa.y+pb.y)/2); }
+      });
+      svg.querySelectorAll('.mb-node-drop-target').forEach(el => el.classList.remove('mb-node-drop-target'));
+      if (dragT) {
+        const dropKey = _mbFindDropTarget(dragT, _mbDrag.key, nx, ny);
+        if (dropKey) svg.querySelector(`[data-node-key="${dropKey}"]`)?.classList.add('mb-node-drop-target');
+      }
       return;
     }
     if (_mbPan) {
@@ -6396,9 +6583,22 @@ function setupMysteryBoardEvents() {
       if (_mbDrag.moved) {
         const t = camp().plotThreads.find(x => x.id === threadId);
         if (t) {
-          if (!t.boardPositions) t.boardPositions = {};
-          t.boardPositions[_mbDrag.key] = { x: Math.round(_mbDrag.origX + dx), y: Math.round(_mbDrag.origY + dy) };
-          save();
+          const nx = _mbDrag.origX + dx, ny = _mbDrag.origY + dy;
+          const dropKey = _mbFindDropTarget(t, _mbDrag.key, nx, ny);
+          if (dropKey) {
+            // Dropped on another piece - offer to connect them instead of
+            // relocating; nothing is persisted so the piece snaps back. If
+            // they're already connected, jump straight to editing that
+            // connection instead of offering to make a duplicate.
+            render();
+            const existing = (t.boardConnections||[]).find(cn => (cn.a===_mbDrag.key&&cn.b===dropKey) || (cn.a===dropKey&&cn.b===_mbDrag.key));
+            if (existing) openEditBoardConnectionModal(existing.id);
+            else openCreateBoardConnectionModal(_mbDrag.key, dropKey);
+          } else {
+            if (!t.boardPositions) t.boardPositions = {};
+            t.boardPositions[_mbDrag.key] = { x: Math.round(nx), y: Math.round(ny) };
+            save();
+          }
         }
       } else {
         openEditThreadModal(threadId);
