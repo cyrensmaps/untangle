@@ -4209,6 +4209,7 @@ function openLocationModal(id) {
       </div>`:''}
       ${npcsHere.length?`<div class="form-group"><label>NPCs Here</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${npcsHere.map(n=>`<span class="npc-chip" onclick="this.closest('.modal-overlay').remove();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div></div>`:''}
       ${sessionHistory?`<div class="form-group"><label>Session History${firstSession?` · First seen: Session ${firstSession.number}`:''}</label><div class="session-pills" style="margin-top:6px">${sessionHistory}</div></div>`:''}
+      ${gmNotesSectionHTML(l.gmNotes)}
       ${renderTaggedNotesSection('location', l.id)}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-danger btn-sm" onclick="deleteLocation('${l.id}')">Delete</button>
@@ -4278,6 +4279,7 @@ function saveLocation(id) {
   l.name = document.getElementById('el-name').value || l.name;
   l.description = document.getElementById('el-desc').value;
   l.notes = document.getElementById('el-notes').value;
+  l.gmNotes = collectGmNotesFromModal();
   if (window._locationImageData !== undefined) l.image = window._locationImageData;
   const sceneSel = document.getElementById('el-scene');
   if (sceneSel) l.sceneId = sceneSel.value || null;
@@ -7350,6 +7352,7 @@ function openThreadModal(t) {
       </div>
       <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea>${dictateBtnHTML('th-desc')}${dictationUnsupportedNotice()}</div>
       <div class="form-group" id="thread-truth-block">${buildTruthBlockHTML()}</div>
+      ${gmNotesSectionHTML(t?.notes)}
       ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).length?`
       <div class="form-group">
         <label>Linked Clocks <span class="text-dim text-xs">(managed on the Clocks page)</span></label>
@@ -7411,6 +7414,71 @@ function removeThreadClue(idx) {
   const list = document.getElementById('thread-clues-list');
   if (list) list.innerHTML = clueListHTML();
   refreshTruthBlock(); // a removed clue might have been the only one flagged as contradicting
+}
+
+// Shared "GM Notes" section - a freeform list of GM-only notes, styled and
+// behaving identically to NPC Session Events (inline write, Edit/Done
+// toggle, delete) but with no session-label header since these aren't tied
+// to a session. Collected from the DOM on Save (like Session Events),
+// not a staged JS array. Used by Plot Threads, Factions, and Locations.
+// Never read anywhere else in the app - not Campaign Bible, not Player
+// Companion - so there's no separate "hide from players" check needed
+// beyond simply never surfacing this field there.
+function gmNotesSectionHTML(notes) {
+  return `<div class="form-group">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <label style="margin:0">GM Notes <span class="text-dim text-xs">(never shown to players)</span></label>
+      <button class="btn btn-ghost btn-sm" onclick="addGmNoteEntry(this)">+ Add</button>
+    </div>
+    <div class="gm-notes-list">
+      ${(notes||[]).map(nt => `<div class="event-entry" data-note-id="${nt.id}" style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:6px">
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" style="padding:2px 9px;font-size:0.7rem" onclick="toggleEventEdit(this)">Edit</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:0.7rem" onclick="this.closest('.event-entry').remove()">✕</button>
+          </div>
+        </div>
+        <div class="event-text-view" style="font-size:0.875rem;line-height:1.6;white-space:pre-wrap;cursor:default">${esc(nt.text)}</div>
+        <textarea class="event-text" rows="3" style="display:none;margin-top:4px">${esc(nt.text)}</textarea>
+      </div>`).join('')}
+    </div>
+    ${!(notes||[]).length?`<p class="text-xs text-dim">No GM notes yet.</p>`:''}
+  </div>`;
+}
+
+function addGmNoteEntry(btn) {
+  const list = btn.closest('.form-group')?.querySelector('.gm-notes-list');
+  if (!list) return;
+  const div = document.createElement('div');
+  div.className = 'event-entry';
+  div.dataset.noteId = '';
+  div.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:6px">
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" style="padding:2px 9px;font-size:0.7rem" onclick="toggleEventEdit(this)">Done</button>
+        <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:0.7rem" onclick="this.closest('.event-entry').remove()">✕</button>
+      </div>
+    </div>
+    <div class="event-text-view" style="font-size:0.875rem;line-height:1.6;white-space:pre-wrap;display:none"></div>
+    <textarea class="event-text" rows="3" style="margin-top:4px" placeholder="Anything you need to remember…"></textarea>`;
+  list.appendChild(div);
+  div.querySelector('textarea')?.focus();
+}
+
+// Reads the current modal's GM Notes list back into a plain array on Save -
+// only one modal is ever open at a time, so scoping to ".modal-overlay
+// .gm-notes-list" (rather than needing a per-entity id) is unambiguous.
+function collectGmNotesFromModal() {
+  const list = document.querySelector('.modal-overlay .gm-notes-list');
+  if (!list) return [];
+  const notes = [];
+  list.querySelectorAll('.event-entry').forEach(entry => {
+    const text = entry.querySelector('.event-text')?.value?.trim();
+    if (!text) return;
+    notes.push({ id: entry.dataset.noteId || uid(), text });
+  });
+  return notes;
 }
 
 function truthLetter(idx) { return String.fromCharCode(65 + idx); } // A, B, C…
@@ -7592,6 +7660,7 @@ function saveThread(id) {
   const resolvedTruthId = (window._threadResolvedId && savedTruths.some(tr => tr.id === window._threadResolvedId))
     ? window._threadResolvedId
     : null;
+  const notes = collectGmNotesFromModal();
   const data = {
     title,
     status: document.getElementById('th-status')?.value || 'active',
@@ -7605,6 +7674,7 @@ function saveThread(id) {
     clues: (window._threadClues||[]).filter(cl => cl.text.trim()),
     truths: savedTruths,
     resolvedTruthId,
+    notes,
   };
   if (id) {
     const t = c.plotThreads.find(x => x.id === id);
@@ -7735,6 +7805,7 @@ function openFactionModal(id) {
       </div>`:''}
       ${c.npcs.length?`<div class="form-group"><label>Members</label><div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${npcCBs}</div></div>`:''}
       ${c.plotThreads.length?`<div class="form-group"><label>Linked Plot Threads</label><div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px 12px">${threadCBs}</div></div>`:''}
+      ${gmNotesSectionHTML(f?.gmNotes)}
       ${isEdit?renderTaggedNotesSection('faction', f.id):''}
       <div class="flex gap-8" style="justify-content:space-between">
         ${isEdit?`<button class="btn btn-danger" onclick="deleteFaction('${f.id}')">Delete</button>`:'<span></span>'}
@@ -7763,6 +7834,7 @@ function saveFaction(id) {
     color:       window._factionColor || FACTION_COLORS[0],
     memberIds,
     threadIds,
+    gmNotes:     collectGmNotesFromModal(),
   };
   if (id) {
     const f = c.factions.find(x => x.id === id);
@@ -7958,8 +8030,64 @@ function questionRowHTML(q, i) {
     <div data-question-idx="${i}" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <input type="checkbox" style="width:auto;margin-top:8px;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked;this.nextElementSibling.style.textDecoration=this.checked?'line-through':'';this.nextElementSibling.style.color=this.checked?'var(--text-dim)':'';commitSessionPrep()">
       <textarea rows="1" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value;schedulePrepAutoSave();autoGrowTextarea(this)" style="flex:1;resize:none;overflow:hidden;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">${esc(q.text)}</textarea>
+      <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:6px" onclick="openAnswerQuestionModal(${i})">Answer</button>
       <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:6px" onclick="removePrepQuestion(${i})">✕</button>
     </div>`;
+}
+
+// Writing/dictating an answer here resolves the question and, if a thread is
+// picked, files the answer straight into that thread's GM Notes - not Clues
+// (player-facing) or GM Truth (the creator's call: an answered question is
+// usually just something the GM now knows/decided, not necessarily the
+// thread's core secret), and never the Field Notes system either, since GM
+// Notes needs the "never shown to players" guarantee scoped per-thread.
+function openAnswerQuestionModal(i) {
+  const q = window._prepQuestions?.[i];
+  if (!q) return;
+  const c = camp();
+  const threadOpts = c.plotThreads.map(t => `<option value="${t.id}">${esc(t.title)}</option>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header"><h3>Answer Question</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <p class="text-sm text-dim" style="margin-bottom:10px">${esc(q.text || '(empty question)')}</p>
+      <div class="form-group">
+        <textarea id="aq-answer" rows="5" placeholder="What's the answer?…"></textarea>
+        ${dictateBtnHTML('aq-answer')}${dictationUnsupportedNotice()}
+      </div>
+      <div class="form-group"><label>Add as a GM Note on <span class="text-dim text-xs">(optional)</span></label>
+        ${c.plotThreads.length
+          ? `<select id="aq-thread"><option value="">- Don't attach to a thread -</option>${threadOpts}</select>`
+          : `<p class="text-xs text-dim">No plot threads yet - saving will just mark this question resolved.</p>`}
+      </div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveQuestionAnswer(${i})">Save Answer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('aq-answer')?.focus(), 50);
+}
+
+function saveQuestionAnswer(i) {
+  const text = document.getElementById('aq-answer')?.value?.trim();
+  if (!text) { toast('Write an answer first.', 'error'); return; }
+  const c = camp();
+  const threadId = document.getElementById('aq-thread')?.value || '';
+  if (threadId) {
+    const t = c.plotThreads.find(x => x.id === threadId);
+    if (t) {
+      if (!t.notes) t.notes = [];
+      t.notes.push({ id: uid(), text });
+    }
+  }
+  if (window._prepQuestions?.[i]) window._prepQuestions[i].done = true;
+  commitSessionPrep();
+  document.querySelector('.modal-overlay')?.remove();
+  const list = document.getElementById('prep-questions-list');
+  if (list) { list.innerHTML = window._prepQuestions.map(questionRowHTML).join(''); list.querySelectorAll('textarea').forEach(autoGrowTextarea); }
+  toast(threadId ? 'Answer saved as a GM Note.' : 'Question marked resolved.', 'success');
 }
 
 // ── PC Spotlight tracking ──
