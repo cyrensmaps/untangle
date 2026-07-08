@@ -55,12 +55,11 @@
     .wv-timeline-rail { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 14px; }
     .wv-timeline-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 5px; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15); }
     .wv-timeline-line { flex: 1; width: 2px; background: var(--border); margin-top: 4px; min-height: 20px; }
-    .wv-timeline-content { flex: 1; padding-bottom: 22px; }
+    .wv-timeline-content { position: relative; flex: 1; padding-bottom: 22px; }
 
-    .wv-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-    .wv-modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; }
-    .wv-modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-    .wv-modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1rem; flex-shrink: 0; }
+    /* Base rules shared with the main window's .modal-* family live in components.css */
+    .wv-modal { padding: 20px; max-width: 480px; max-height: 80vh; }
+    .wv-modal-header { margin-bottom: 14px; }
     .wv-note-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
     .wv-note-item textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--font); font-size: 0.85rem; padding: 8px; resize: vertical; }
     .wv-note-save, .wv-note-del { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; cursor: pointer; color: var(--text); font-family: var(--font); }
@@ -102,6 +101,7 @@ const WV_TABS = [
   { key: 'factions',   label: 'Factions' },
   { key: 'sessions',   label: 'The Story So Far' },
   { key: 'rumors',     label: 'Rumors & Open Questions' },
+  { key: 'clocks',     label: 'Clocks' },
   { key: 'maps',       label: 'Map' },
 ];
 
@@ -155,6 +155,11 @@ async function wvInit() {
     localStorage.setItem(key, String(Date.now()));
   } catch { wvLastVisit = 0; }
 
+  // Land back on whichever tab the URL hash names (set by wvSwitchTab/wvGoTo)
+  // instead of always resetting to Home on refresh or back/forward.
+  const hashTab = (location.hash || '').replace('#', '');
+  if (WV_TABS.some(t => t.key === hashTab)) wvActiveTab = hashTab;
+
   wvRenderTabs();
   wvRenderBody();
 }
@@ -171,6 +176,7 @@ function wvRenderTabs() {
 
 function wvSwitchTab(key) {
   wvActiveTab = key;
+  try { history.replaceState(null, '', '#' + key); } catch { /* ignore */ }
   wvRenderTabs();
   wvRenderBody();
 }
@@ -178,7 +184,7 @@ function wvSwitchTab(key) {
 function wvRenderBody() {
   const renderers = {
     home: wvSectionHome, characters: wvSectionCharacters, locations: wvSectionLocations, factions: wvSectionFactions,
-    sessions: wvSectionSessions, rumors: wvSectionRumors, maps: wvSectionMap,
+    sessions: wvSectionSessions, rumors: wvSectionRumors, clocks: wvSectionClocks, maps: wvSectionMap,
   };
   document.getElementById('wv-body').innerHTML = (renderers[wvActiveTab] || wvSectionHome)();
 }
@@ -188,6 +194,7 @@ function wvRenderBody() {
 function wvGoTo(type, id) {
   if (!type || !id) return;
   wvActiveTab = type;
+  try { history.replaceState(null, '', '#' + type); } catch { /* ignore */ }
   wvRenderTabs();
   wvRenderBody();
   const el = document.getElementById(`wv-item-${type}-${id}`);
@@ -207,14 +214,18 @@ function wvSearch(query) {
   const results = document.getElementById('wv-search-results');
   const q = query.trim().toLowerCase();
   if (!q) { results.style.display = 'none'; results.innerHTML = ''; return; }
+  // `text` holds everything this entry should be matched against (name plus
+  // description/notes/clue text); only `name` is ever shown in the result
+  // row, so a hit that only came from a secondary field still surfaces
+  // rather than being invisible to search entirely.
   const pools = [
-    ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name })),
-    ...(wvData.locations||[]).map(x => ({ type: 'locations', id: x.id, name: x.name })),
-    ...(wvData.factions||[]).map(x => ({ type: 'factions', id: x.id, name: x.name })),
-    ...(wvData.rumors||[]).map(x => ({ type: 'rumors', id: x.id, name: x.title })),
-    ...(wvData.sessions||[]).map(x => ({ type: 'sessions', id: x.id, name: `Session ${x.number}${x.title ? ': ' + x.title : ''}` })),
+    ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name, text: [x.name, x.notes].filter(Boolean).join(' ') })),
+    ...(wvData.locations||[]).map(x => ({ type: 'locations', id: x.id, name: x.name, text: [x.name, x.description].filter(Boolean).join(' ') })),
+    ...(wvData.factions||[]).map(x => ({ type: 'factions', id: x.id, name: x.name, text: [x.name, x.description].filter(Boolean).join(' ') })),
+    ...(wvData.rumors||[]).map(x => ({ type: 'rumors', id: x.id, name: x.title, text: [x.title, x.description, ...(x.clues||[])].filter(Boolean).join(' ') })),
+    ...(wvData.sessions||[]).map(x => ({ type: 'sessions', id: x.id, name: `Session ${x.number}${x.title ? ': ' + x.title : ''}`, text: [x.title, x.summary].filter(Boolean).join(' ') })),
   ];
-  const matches = pools.filter(p => p.name?.toLowerCase().includes(q)).slice(0, 8);
+  const matches = pools.filter(p => p.text?.toLowerCase().includes(q)).slice(0, 8);
   results.style.display = matches.length ? 'block' : 'none';
   results.innerHTML = matches.map(m => `
     <div class="wv-search-result" onclick="wvSearchGoTo('${m.type}','${m.id}')">
@@ -254,6 +265,32 @@ function wvFavoriteStarHTML(type, id) {
 function wvChip(ref) {
   if (!ref?.id) return '';
   return `<span class="wv-chip" onclick="wvGoTo('${ref.type}','${ref.id}')">${esc(ref.name)}</span>`;
+}
+
+// Wraps any published Character/Location name found in free-text (rumor clue
+// text, which has no structured link to the entities it mentions in prose)
+// in a clickable chip - a linear single-pass scan against the raw text
+// rather than sequential per-name regex replacements, so a shorter name that
+// happens to be a substring of a longer one already wrapped (e.g. "Marta"
+// inside "Marta Vosk") can't get wrapped a second time inside itself.
+function wvLinkifyMentions(text) {
+  const pool = [
+    ...(wvData.characters||[]).map(x => ({ type: 'characters', id: x.id, name: x.name })),
+    ...(wvData.locations||[]).map(x => ({ type: 'locations', id: x.id, name: x.name })),
+  ].filter(x => x.name && x.name.trim().length > 1).sort((a,b) => b.name.length - a.name.length);
+  if (!pool.length) return esc(text);
+  const byName = new Map(pool.map(p => [p.name, p]));
+  const alt = pool.map(p => p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(`\\b(?:${alt})\\b`, 'g');
+  let out = '', lastIndex = 0, m;
+  while ((m = re.exec(text))) {
+    out += esc(text.slice(lastIndex, m.index));
+    const p = byName.get(m[0]);
+    out += p ? `<span class="wv-chip" onclick="wvGoTo('${p.type}','${p.id}')">${esc(m[0])}</span>` : esc(m[0]);
+    lastIndex = m.index + m[0].length;
+  }
+  out += esc(text.slice(lastIndex));
+  return out;
 }
 
 function wvBadge(text, color) {
@@ -435,7 +472,8 @@ function wvSectionSessions() {
         ${i < sess.length - 1 ? '<div class="wv-timeline-line"></div>' : ''}
       </div>
       <div class="wv-timeline-content">
-        <div style="font-weight:600">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
+        ${wvFavoriteStarHTML('sessions', s.id)}
+        <div style="font-weight:600;padding-right:20px">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
         ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
         ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
         ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
@@ -451,7 +489,7 @@ function wvSectionRumors() {
       ${wvFavoriteStarHTML('rumors', t.id)}
       <div style="font-weight:600;padding-right:20px">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
       ${t.description ? `<div style="font-size:0.85rem;margin-top:6px">${esc(t.description)}</div>` : ''}
-      ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${esc(cl)}</li>`).join('')}</ul>` : ''}
+      ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${wvLinkifyMentions(cl)}</li>`).join('')}</ul>` : ''}
       ${t.related?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Related: ${t.related.map(wvChip).join(', ')}</div>` : ''}
       ${wvNotesButtonHTML('rumors', t.id)}
     </div>`).join('');
@@ -472,6 +510,10 @@ function wvSectionRumors() {
 function wvNoteKey(type, id) { return `${type}:${id}`; }
 
 function wvEntityName(type, id) {
+  if (type === 'sessions') {
+    const s = (wvData.sessions||[]).find(x => x.id === id);
+    return s ? `Session ${s.number}${s.title ? ': ' + s.title : ''}` : null;
+  }
   const pool = { characters: wvData.characters, locations: wvData.locations, factions: wvData.factions, rumors: wvData.rumors }[type] || [];
   const item = pool.find(x => x.id === id);
   return item ? (item.title || item.name) : null;
@@ -491,9 +533,27 @@ async function wvWriteNotes(type, id, notes) {
       const all = pgame.settings.get('untangle', 'sharedNotes') || {};
       await pgame.settings.set('untangle', 'sharedNotes', toFoundryPlain({ ...all, [key]: notes }));
     } else {
+      // A relayed write only ever actually lands if some GM's client is
+      // connected to apply it - game.users tracks connection state, so this
+      // is a real signal, not a guess. Previously a player got no indication
+      // at all that their note silently never persisted.
+      const gmOnline = pgame.users?.some(u => u.isGM && u.active);
+      if (!gmOnline) { wvShowNoteSaveWarning(type, id); return; }
+      document.getElementById('wv-notes-gm-warning')?.remove();
       pgame.socket?.emit('module.untangle', { type: 'sharedNotesWrite', key, notes });
     }
   } catch { /* not in Foundry, or write failed */ }
+}
+
+function wvShowNoteSaveWarning(type, id) {
+  const list = document.getElementById('wv-notes-list');
+  if (!list || list.dataset.type !== type || list.dataset.id !== id) return;
+  if (document.getElementById('wv-notes-gm-warning')) return;
+  const warn = document.createElement('p');
+  warn.id = 'wv-notes-gm-warning';
+  warn.style.cssText = 'color:var(--red);font-size:0.78rem;margin-top:8px';
+  warn.textContent = "Not saved - your GM isn't currently connected, so this change couldn't be sent.";
+  list.after(warn);
 }
 
 function wvNotesButtonHTML(type, id) {
@@ -607,6 +667,20 @@ function wvDeleteNote(type, id, idx) {
   wvWriteNotes(type, id, notes);
 }
 
+// Previously only surfaced as a non-clickable "Clocks Ticking" widget on
+// Home (and only once ≥60% full at that) - a real tab means every published
+// clock is browsable, not just the ones about to fill.
+function wvSectionClocks() {
+  const clocks = wvData.clocks || [];
+  if (!clocks.length) return wvEmpty('No clocks published yet.');
+  return clocks.map(ck => `
+    <div class="wv-entry" id="wv-item-clocks-${ck.id}">
+      <div style="font-weight:600">${esc(ck.label)}</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);margin-top:2px">${ck.filled}/${ck.segments}</div>
+      ${wvGaugeHTML(Math.round((ck.filled / ck.segments) * 100), ck.color || 'var(--accent)')}
+    </div>`).join('');
+}
+
 function wvSectionMap() {
   const maps = Object.values(wvData.maps || {});
   if (!maps.length) return wvEmpty('No maps published yet.');
@@ -649,7 +723,7 @@ function wvShowPin(pinId) {
     <div class="wv-pin-info">
       <div style="font-weight:600;margin-bottom:6px">${esc(pin.label || 'Unlabeled')}</div>
       ${pin.npcsHere?.length
-        ? `<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:4px">Who's here:</div>${pin.npcsHere.map(n => `<div style="font-size:0.85rem">${esc(n)}</div>`).join('')}`
+        ? `<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:4px">Who's here:</div><div style="display:flex;flex-wrap:wrap;gap:8px;font-size:0.85rem">${pin.npcsHere.map(wvChip).join('')}</div>`
         : ''}
     </div>`;
 }

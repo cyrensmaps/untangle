@@ -86,13 +86,13 @@
     .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
     .badge-new { background: rgba(var(--accent-rgb),0.18); color: var(--accent); }
 
-    /* ── MODAL ── */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; animation: fadeIn 0.15s ease; }
+    /* ── MODAL (base rules shared with the Player Companion live in components.css) ── */
+    .modal-overlay { animation: fadeIn 0.15s ease; }
     @keyframes fadeIn { from { opacity: 0; } }
-    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; animation: slideUp 0.2s ease; }
+    .modal { padding: 28px; max-width: 640px; max-height: 85vh; animation: slideUp 0.2s ease; }
     @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } }
-    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
-    .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1rem; padding: 2px 6px; border-radius: 4px; line-height: 1; flex-shrink: 0; margin-left: 12px; }
+    .modal-header { margin-bottom: 22px; }
+    .modal-close { padding: 2px 6px; border-radius: 4px; line-height: 1; margin-left: 12px; }
     .modal-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 
     /* ── SPINNER ── */
@@ -192,7 +192,7 @@
     /* ── MAP ── */
     .map-wrap { position: relative; display: block; cursor: crosshair; user-select: none; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
     .map-wrap img { display: block; width: 100%; }
-    .map-pin { position: absolute; transform: translate(-50%, -100%); cursor: pointer; z-index: 5; }
+    .map-pin { position: absolute; transform: translate(-50%, -100%); cursor: grab; z-index: 5; touch-action: none; }
     .map-pin-dot { width: 22px; height: 22px; background: var(--accent); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid rgba(0,0,0,0.5); box-shadow: 0 2px 6px rgba(0,0,0,0.5); transition: transform 0.15s; }
     .map-pin:hover .map-pin-dot { transform: rotate(-45deg) scale(1.2); }
     .map-pin-label { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; white-space: nowrap; font-size: 0.72rem; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
@@ -203,7 +203,7 @@
     /* ── TIMELINE ── */
     .timeline-track { position: relative; margin: 20px 0 60px; }
     .timeline-spine { position: absolute; left: 50%; top: 0; bottom: 0; width: 6px; margin-left: -3px; background: var(--border); border-radius: 3px; cursor: copy; }
-    .timeline-node { position: absolute; left: 50%; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); box-shadow: 0 0 0 2px var(--accent); cursor: grab; z-index: 2; }
+    .timeline-node { position: absolute; left: 50%; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); box-shadow: 0 0 0 2px var(--accent); cursor: grab; z-index: 2; touch-action: none; }
     .timeline-node:active { cursor: grabbing; }
     .timeline-node.tl-node-event { background: var(--bg-elevated); box-shadow: 0 0 0 2px var(--text-dim); }
     .timeline-connector { position: absolute; top: 9px; height: 2px; background: var(--border); }
@@ -248,6 +248,16 @@
     /* ── MYSTERY BOARD ── */
     .mb-node.mb-node-drop-target { filter: drop-shadow(0 0 8px var(--accent)); }
 
+    /* ── PULL FROM FOUNDRY ── */
+    .pull-actor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+    .pull-actor-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: center; background: var(--bg-card); }
+    .pull-actor-card:hover { border-color: var(--accent); }
+    .pull-actor-card.pull-actor-card-selected { border-color: var(--accent); background: rgba(var(--accent-rgb),0.1); }
+    .pull-actor-card input[type=checkbox] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .pull-actor-portrait { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .pull-actor-portrait img { width: 100%; height: 100%; object-fit: cover; }
+    .pull-actor-name { font-size: 0.76rem; line-height: 1.3; word-break: break-word; }
+
     /* ── RELATIONSHIP WEB ── */
     .rel-node.rel-drop-target, .rel-faction-node.rel-drop-target { filter: drop-shadow(0 0 8px var(--accent)); }
 
@@ -264,6 +274,7 @@
     /* ── SEARCH ── */
     .search-result-item { padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
     .search-result-item:hover { background: rgba(255,255,255,0.05); }
+    .search-result-item.search-result-active { background: rgba(var(--accent-rgb),0.15); }
 
     /* ── CAMPAIGN BIBLE (print) ── */
     #campaign-bible-print { position: fixed; inset: 0; z-index: 9998; background: #fff; overflow-y: auto; }
@@ -279,10 +290,13 @@
     #campaign-bible-print .cb-toolbar-check { display: flex; align-items: center; gap: 6px; margin-right: auto; font-family: var(--font); font-size: 0.78rem; color: #333; cursor: pointer; }
     #campaign-bible-print .cb-entry-npc { display: flex; gap: 12px; align-items: flex-start; }
     #campaign-bible-print .cb-portrait { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; }
+    #campaign-bible-print .cb-exclude-btn { font-family: var(--font); font-size: 0.7rem; color: #999; cursor: pointer; margin-left: 4px; }
+    #campaign-bible-print .cb-exclude-btn:hover { color: #c1503f; }
     @media print {
       body > *:not(#campaign-bible-print) { display: none !important; }
       #campaign-bible-print { position: static; }
       #campaign-bible-print .cb-toolbar { display: none; }
+      #campaign-bible-print .cb-exclude-btn { display: none; }
     }
   </style>
 </head>
@@ -433,7 +447,13 @@ function onEntityDragStart(event, type, id) {
   const finder = { npc: c.npcs, location: c.locations, thread: c.plotThreads, faction: c.factions, clock: c.clocks, map: c.maps }[type];
   const entity = finder?.find(x => x.id === id);
   const name = entity ? (entity.name || entity.title || entity.label || '') : '';
-  const image = (type === 'npc' && entity?.image) ? entity.image : '';
+  // Factions/Threads/Clocks have no uploadable art of their own (color swatch
+  // only), so the fallback icon is genuinely the best available for those -
+  // NPCs and Locations both support a real uploaded portrait/image, and Maps
+  // carry either an uploaded image or a linked Scene's background.
+  let image = '';
+  if ((type === 'npc' || type === 'location') && entity?.image) image = entity.image;
+  else if (type === 'map' && entity?.imageDataUrl) image = entity.imageDataUrl;
   event.dataTransfer.effectAllowed = 'copy';
   event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'untangle-entity', entityType: type, entityId: id, name, image }));
 }
@@ -578,6 +598,7 @@ function render() {
   if (view === 'web') setupRelationshipWebEvents();
   if (view === 'timeline') setupTimelineEvents();
   if (view === 'mysteryboard') setupMysteryBoardEvents();
+  if (view === 'map-view') setupMapPinDrag();
   if (view === 'prep') document.querySelectorAll('#prep-questions-list textarea').forEach(autoGrowTextarea);
 }
 
@@ -661,7 +682,7 @@ function renderDashboard() {
           ? `<p class="text-dim text-sm">NPCs will appear here after processing a session.</p>`
           : `<div class="card-grid">${recentNPCs.map(n => `
               <div class="card npc-card" onclick="openNPCModal('${n.id}')" style="padding:14px">
-                <div class="npc-initial">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
+                <div class="npc-initial">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%" onerror="this.parentElement.textContent='${esc((n.name[0]||'?').toUpperCase())}'">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
                 <div style="font-weight:600;font-size:0.875rem">${esc(n.name)}</div>
                 <div class="text-xs text-dim mt-4">${esc(n.role||'Unknown role')}</div>
               </div>`).join('')}</div>`}
@@ -718,9 +739,33 @@ function pullSimpleCalendarDate(inputId) {
     const text = d?.date || null;
     if (!text) { toast('Could not read the date from Simple Calendar.', 'error'); return; }
     const input = document.getElementById(inputId);
-    if (input) input.value = text;
+    if (input) {
+      input.value = text;
+      // Stashes the structured {year,month,day,...} form alongside the
+      // display text, so a later "Set as Current Date" push doesn't need to
+      // parse this free-text field back into a date - it just replays the
+      // exact object Simple Calendar itself gave us.
+      try { input.dataset.scStructured = JSON.stringify(api.currentDateTime()); } catch { /* ignore */ }
+    }
   } catch (err) {
     toast('Could not read Simple Calendar: ' + (err.message || String(err)), 'error');
+  }
+}
+
+// Pushes a structured date captured by a prior pullSimpleCalendarDate() call
+// on this same field back to Simple Calendar as its current date - lets a
+// GM restore/sync the game clock to a specific session's date, the reverse
+// direction of the pull button next to it.
+function pushSimpleCalendarDate(inputId) {
+  try {
+    const input = document.getElementById(inputId);
+    const raw = input?.dataset.scStructured;
+    if (!raw) { toast('Pull a date from Simple Calendar first - then you can push it back later.', 'error'); return; }
+    const dt = JSON.parse(raw);
+    const ok = window.parent.SimpleCalendar.api.setDate(dt);
+    toast(ok ? 'Simple Calendar date updated.' : 'Simple Calendar rejected the date.', ok ? 'success' : 'error');
+  } catch (err) {
+    toast('Could not set Simple Calendar date: ' + (err.message || String(err)), 'error');
   }
 }
 
@@ -749,7 +794,8 @@ function renderNewSession() {
         <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8">
           <input type="text" id="s-inworld-date" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
-          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('s-inworld-date')">Pull from Calendar</button>`:''}
+          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('s-inworld-date')">Pull from Calendar</button>
+          <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Set Simple Calendar's current date to whatever was last pulled here" onclick="pushSimpleCalendarDate('s-inworld-date')">Set as Current Date</button>`:''}
         </div>
       </div>
 
@@ -842,7 +888,9 @@ The AI will extract:
 • NPCs mentioned and what happened with them
 • Locations visited
 • Plot hooks and unresolved threads
+• Clues for your existing Plot Threads, clock progress, and new relationships/faction ties
 • A session summary"></textarea>
+          ${dictateBtnHTML('s-transcript')}${dictationUnsupportedNotice()}
         </div>
         <div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">
           <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
@@ -1659,6 +1707,23 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
   const existingLocs     = trimmedList(c.locations, 40, l => l.description);
   const existingFactions = trimmedList(c.factions, 40, f => f.description);
 
+  // GM Truth is included here on purpose - this is the GM's own tool running
+  // under their own API key against their own transcript, so there's no
+  // exposure risk, and Claude being able to see the truth is exactly what
+  // lets it tell a real clue apart from an unrelated line of dialogue.
+  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned').slice(0, 30);
+  const existingThreads = activeThreads.length ? activeThreads.map(t => {
+    const truthText = t.truth || (t.truths||[]).map(tr => tr.text).filter(Boolean).join(' / ');
+    const cluesText = (t.clues||[]).map(cl => cl.text).join('; ');
+    return `- "${t.title}"${t.description ? ' - ' + t.description.slice(0,100) : ''}${truthText ? ` [GM TRUTH: ${truthText.slice(0,150)}]` : ''}${cluesText ? ` [clues already logged: ${cluesText.slice(0,150)}]` : ''}`;
+  }).join('\n') : 'none';
+
+  const existingClocks = c.clocks.length ? c.clocks.slice(0, 30).map(ck => {
+    const linkName = ck.linkedType === 'faction' ? c.factions.find(f=>f.id===ck.linkedId)?.name
+      : ck.linkedType === 'thread' ? c.plotThreads.find(t=>t.id===ck.linkedId)?.title : null;
+    return `- "${ck.label}"${linkName ? ` (tracks: ${linkName})` : ''}: ${ck.filled}/${ck.segments} filled`;
+  }).join('\n') : 'none';
+
   // Claude has a context limit and the extraction task doesn't need every word.
   // Take the first 20k chars (opening), middle 10k, and last 10k to cover the full arc.
   const MAX = 40000;
@@ -1681,6 +1746,8 @@ IMPORTANT: Write all text values (summary, keyEvents, role, notes, descriptions,
 Known NPCs already in campaign (with what's already known about them): ${existingNPCs}
 Known locations already in campaign: ${existingLocs}
 Known factions already in campaign: ${existingFactions}${playerNote}
+Active Plot Threads already in campaign (title, what players know, and the GM's private truth/logged clues where they exist): ${existingThreads}
+Tracked Clocks already in campaign: ${existingClocks}
 
 Return exactly this structure:
 {
@@ -1699,6 +1766,18 @@ Return exactly this structure:
   "factions": [
     { "name": "Faction name", "notes": "what they did or were mentioned doing this session", "isNew": true }
   ],
+  "threadClues": [
+    { "threadTitle": "must exactly match a title from Active Plot Threads above, or a title from hooks you're proposing in this same response", "clue": "specific clue/evidence this session revealed or implied, phrased as something a player could plausibly have heard or found" }
+  ],
+  "clockSuggestions": [
+    { "clockLabel": "must exactly match a label from Tracked Clocks above", "tickBy": 1, "reason": "one short sentence on why this session's events move it forward" }
+  ],
+  "relationshipSuggestions": [
+    { "fromName": "Name", "toName": "Name", "type": "one of: ally, enemy, rival, family, romantic, minion, member, neutral", "label": "short label like 'Childhood friends'", "reason": "one sentence citing what in the transcript implies this" }
+  ],
+  "factionMemberSuggestions": [
+    { "npcName": "Name", "factionName": "must exactly match a faction name already known or one you're proposing in this same response", "reason": "one sentence citing what in the transcript implies membership" }
+  ],
   "contradictions": [
     { "entityType": "npc", "name": "Name as already known", "existingDetail": "what was already known", "newDetail": "what this transcript says instead", "note": "one sentence on the conflict" }
   ],
@@ -1706,6 +1785,14 @@ Return exactly this structure:
 }
 
 Set isNew to false if the name matches something already in the campaign. For factions: only include factions explicitly named or clearly active this session - not every group in passing. Empty array if nothing fits a category.
+
+For threadClues: only include a clue if the transcript actually reveals, implies, or hints at something relevant to that specific thread - not a vague thematic echo. Don't repeat a clue already logged for that thread (shown above). Empty array if nothing fits.
+
+For clockSuggestions: only suggest a tick if this session's events are a genuine, specific narrative match for that exact tracked clock - not a guess or a generic "time passed." tickBy is usually 1. Empty array if nothing fits.
+
+For relationshipSuggestions: only suggest a connection between two named characters whose relationship is directly stated or unmistakably implied in the transcript (e.g. "her boss", "his old rival", "grew up together") - not general acquaintance from being in the same scene. Do not use this to guess which player took which in-fiction action; this is about relationships BETWEEN characters, never about attributing dialogue or actions to specific real players. Empty array if nothing fits.
+
+For factionMemberSuggestions: only suggest membership if the transcript directly states or unmistakably implies an NPC belongs to that faction. Empty array if nothing fits.
 
 For contradictions: entityType is "npc", "location", or "faction". Only flag it if the transcript actually conflicts with something already known (a different name, role, description, or fact) - not just when it adds new information. Empty array if nothing conflicts.
 
@@ -1851,6 +1938,17 @@ function showReviewModal(session, extracted) {
               <p>${esc(h.description||'')}</p>
             </div>
           </div>`).join('')}` : ''}
+      ${(extracted.threadClues||[]).length ? `
+        <hr>
+        <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Thread Clues (${extracted.threadClues.length})</div>
+        ${extracted.threadClues.map((tc,i) => `
+          <div class="review-item">
+            <input type="checkbox" id="tc-${i}" checked>
+            <div class="review-item-content">
+              <h4>${esc(tc.threadTitle||'')}</h4>
+              <p>${esc(tc.clue||'')}</p>
+            </div>
+          </div>`).join('')}` : ''}
       ${factions.length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Factions (${factions.length})</div>
@@ -1879,6 +1977,36 @@ function showReviewModal(session, extracted) {
           </div>`;
           }).join('');
         })()}` : ''}
+      ${(extracted.clockSuggestions||[]).length ? `
+        <hr>
+        <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Clock Progress (${extracted.clockSuggestions.length})</div>
+        ${extracted.clockSuggestions.map((cs,i) => `
+          <div class="review-item">
+            <input type="checkbox" id="cks-${i}" checked>
+            <div class="review-item-content">
+              <h4>${esc(cs.clockLabel||'')} <span class="text-dim" style="font-weight:400">+${parseInt(cs.tickBy,10)||1}</span></h4>
+              <p>${esc(cs.reason||'')}</p>
+            </div>
+          </div>`).join('')}` : ''}
+      ${((extracted.relationshipSuggestions||[]).length || (extracted.factionMemberSuggestions||[]).length) ? `
+        <hr>
+        <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">New Connections (${(extracted.relationshipSuggestions||[]).length + (extracted.factionMemberSuggestions||[]).length})</div>
+        ${(extracted.relationshipSuggestions||[]).map((rs,i) => `
+          <div class="review-item">
+            <input type="checkbox" id="rs-${i}" checked>
+            <div class="review-item-content">
+              <h4>${esc(rs.fromName||'')} ↔ ${esc(rs.toName||'')} <span class="text-dim" style="font-weight:400">${esc((REL_TYPES.find(rt=>rt.value===rs.type)||{}).label||rs.type||'')}</span></h4>
+              <p>${esc(rs.reason||'')}</p>
+            </div>
+          </div>`).join('')}
+        ${(extracted.factionMemberSuggestions||[]).map((fs,i) => `
+          <div class="review-item">
+            <input type="checkbox" id="fms-${i}" checked>
+            <div class="review-item-content">
+              <h4>${esc(fs.npcName||'')} → ${esc(fs.factionName||'')}</h4>
+              <p>${esc(fs.reason||'')}</p>
+            </div>
+          </div>`).join('')}` : ''}
       ${(extracted.openQuestions||[]).length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Loose Ends (${extracted.openQuestions.length})</div>
@@ -1969,6 +2097,32 @@ function confirmSave() {
     c.plotThreads.push({ id: uid(), title: hook.title, description: hook.description||'', truth: '', status: 'active', npcIds: [], locationIds: [], clues: [] });
   });
 
+  // Runs after hooks so a clue can attach to a thread that was just created
+  // above (matched by title) as well as one that already existed.
+  const threadClues = extracted.threadClues || [];
+  let cluesChk = 0;
+  threadClues.forEach((tc, i) => {
+    if (!document.getElementById(`tc-${i}`)?.checked) return;
+    const thread = c.plotThreads.find(t => t.title.toLowerCase() === (tc.threadTitle||'').toLowerCase());
+    const text = (tc.clue||'').trim();
+    if (!thread || !text) return;
+    if (!thread.clues) thread.clues = [];
+    if (thread.clues.some(cl => cl.text.toLowerCase() === text.toLowerCase())) return;
+    thread.clues.push({ id: uid(), text, branchIds: [] });
+    cluesChk++;
+  });
+
+  const clockSuggestions = extracted.clockSuggestions || [];
+  let clocksChk = 0;
+  clockSuggestions.forEach((cs, i) => {
+    if (!document.getElementById(`cks-${i}`)?.checked) return;
+    const clock = c.clocks.find(ck => ck.label.toLowerCase() === (cs.clockLabel||'').toLowerCase());
+    if (!clock) return;
+    const by = Math.max(1, parseInt(cs.tickBy, 10) || 1);
+    clock.filled = Math.min(clock.segments, clock.filled + by);
+    clocksChk++;
+  });
+
   const extractedFactions = (window._pe.factions || []);
   let fChk = 0;
   extractedFactions.forEach((f, i) => {
@@ -1983,6 +2137,35 @@ function confirmSave() {
     } else {
       c.factions.push({ id: uid(), name: f.name, description: f.notes||'', goals: '', secrets: '', attitude: 'unknown', status: 'active', color: FACTION_COLORS[c.factions.length % FACTION_COLORS.length], memberIds: [], threadIds: [] });
     }
+  });
+
+  // Both run after NPCs/Factions above are fully in place, so a suggestion
+  // can reference an NPC or faction that was only just created this session.
+  const relSuggestions = extracted.relationshipSuggestions || [];
+  let relsChk = 0;
+  relSuggestions.forEach((rs, i) => {
+    if (!document.getElementById(`rs-${i}`)?.checked) return;
+    const from = c.npcs.find(n => n.name.toLowerCase() === (rs.fromName||'').toLowerCase());
+    const to = c.npcs.find(n => n.name.toLowerCase() === (rs.toName||'').toLowerCase());
+    if (!from || !to || from.id === to.id) return;
+    const dup = c.relationships.some(r => (r.fromId===from.id && r.toId===to.id) || (r.fromId===to.id && r.toId===from.id));
+    if (dup) return;
+    const type = REL_TYPES.some(rt => rt.value === rs.type) ? rs.type : 'neutral';
+    c.relationships.push({ id: uid(), fromId: from.id, fromType: 'npc', toId: to.id, toType: 'npc', type, label: rs.label||'', notes: '' });
+    relsChk++;
+  });
+
+  const factionMemberSuggestions = extracted.factionMemberSuggestions || [];
+  let fmsChk = 0;
+  factionMemberSuggestions.forEach((fms, i) => {
+    if (!document.getElementById(`fms-${i}`)?.checked) return;
+    const npc = c.npcs.find(n => n.name.toLowerCase() === (fms.npcName||'').toLowerCase());
+    const faction = c.factions.find(f => f.name.toLowerCase() === (fms.factionName||'').toLowerCase());
+    if (!npc || !faction) return;
+    if (!faction.memberIds) faction.memberIds = [];
+    if (faction.memberIds.includes(npc.id)) return;
+    faction.memberIds.push(npc.id);
+    fmsChk++;
   });
 
   const openQuestions = extracted.openQuestions || [];
@@ -2020,6 +2203,10 @@ function confirmSave() {
   const hChk = hooks.filter((_,i) => document.getElementById(`hc-${i}`)?.checked).length;
   const parts = [`${nChk} NPCs`, `${lChk} locations`, `${hChk} hooks`];
   if (fChk) parts.push(`${fChk} faction${fChk!==1?'s':''}`);
+  if (cluesChk) parts.push(`${cluesChk} clue${cluesChk!==1?'s':''}`);
+  if (clocksChk) parts.push(`${clocksChk} clock${clocksChk!==1?'s':''} advanced`);
+  if (relsChk) parts.push(`${relsChk} connection${relsChk!==1?'s':''}`);
+  if (fmsChk) parts.push(`${fmsChk} faction member${fmsChk!==1?'s':''}`);
   if (oqChk) parts.push(`${oqChk} loose end${oqChk!==1?'s':''}`);
 
   document.getElementById('review-overlay')?.remove();
@@ -2044,6 +2231,7 @@ function openSessionModal(id) {
       ${s.summary?`<div class="form-group"><label>Summary</label><p class="text-sm" style="line-height:1.75;margin-top:6px">${esc(s.summary)}</p></div>`:''}
       ${s.keyEvents?.length?`<div class="form-group"><label>Key Events</label>${s.keyEvents.map(e=>`<div class="text-sm text-dim" style="padding:3px 0">• ${esc(e)}</div>`).join('')}</div>`:''}
       ${s.rawTranscript?`<div class="form-group"><label>Raw Notes / Transcript</label><div style="background:var(--bg-elevated);border-radius:6px;padding:12px;font-size:0.8rem;color:var(--text-dim);line-height:1.7;max-height:220px;overflow-y:auto;white-space:pre-wrap;margin-top:6px">${esc(s.rawTranscript)}</div></div>`:''}
+      ${isFeatureEnabled('postToJournal') && s.journalPostedAt?`<p class="text-xs text-dim" style="margin-top:12px">Last posted to Journal: ${new Date(s.journalPostedAt).toLocaleString()}</p>`:''}
       <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
         <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')">Delete</button>
         ${s.rawTranscript ? `<button class="btn btn-ghost" onclick="reanalyseSession('${s.id}')">Re-analyse with AI</button>` : ''}
@@ -2086,7 +2274,9 @@ async function postSessionToJournal(id) {
       ]));
       s.journalPageId = created.id;
     }
+    s.journalPostedAt = Date.now();
     save();
+    render();
     toast('Posted to Journal. Share visibility from Foundry’s Journal tab if you want players to see it.', 'success');
   } catch (err) {
     toast('Error posting to Journal: ' + (err.message || String(err)), 'error');
@@ -2106,10 +2296,11 @@ async function syncFoundryRollTables() {
   if (!c.npcs.length && !c.locations.length) { toast('Add some characters or locations first.', 'error'); return; }
 
   try {
-    let count = 0;
+    let created = 0, updated = 0;
+    const tally = r => { r.created ? created++ : updated++; return r.id; };
+
     if (c.npcs.length) {
-      c.npcRollTableId = await _upsertRollTable(pgame, c.npcRollTableId, `Untangle - ${c.name} - All Characters`, c.npcs.map(n => n.name));
-      count++;
+      c.npcRollTableId = tally(await _upsertRollTable(pgame, c.npcRollTableId, `Untangle - ${c.name} - All Characters`, c.npcs.map(n => n.name)));
     }
     // One table per character type group too (Player Characters, Enemies,
     // Contacts, etc — same grouping already used on the Characters page),
@@ -2118,43 +2309,45 @@ async function syncFoundryRollTables() {
     for (const group of TYPE_GROUPS) {
       const names = c.npcs.filter(n => group.types.includes(n.type || 'npc')).map(n => n.name);
       if (!names.length) continue;
-      c.rollTableIdsByGroup[group.label] = await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names);
-      count++;
+      c.rollTableIdsByGroup[group.label] = tally(await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names));
     }
     if (c.locations.length) {
-      c.locationRollTableId = await _upsertRollTable(pgame, c.locationRollTableId, `Untangle - ${c.name} - Locations`, c.locations.map(l => l.name));
-      count++;
+      c.locationRollTableId = tally(await _upsertRollTable(pgame, c.locationRollTableId, `Untangle - ${c.name} - Locations`, c.locations.map(l => l.name)));
     }
 
     // "Who's here right now" — one table per Location, listing NPCs based
     // there, for on-the-fly "who's hanging around the tavern" rolls.
     if (!c.rollTableIdsByLocation) c.rollTableIdsByLocation = {};
+    let skippedEmpty = 0;
     for (const loc of c.locations) {
       const names = c.npcs.filter(n => n.locationId === loc.id).map(n => n.name);
-      if (!names.length) continue;
-      c.rollTableIdsByLocation[loc.id] = await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle - ${c.name} - At ${loc.name}`, names);
-      count++;
+      if (!names.length) { skippedEmpty++; continue; }
+      c.rollTableIdsByLocation[loc.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle - ${c.name} - At ${loc.name}`, names));
     }
 
     // Random faction member — one table per Faction with tracked members.
     if (!c.rollTableIdsByFaction) c.rollTableIdsByFaction = {};
     for (const f of c.factions) {
       const names = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)?.name).filter(Boolean);
-      if (!names.length) continue;
-      c.rollTableIdsByFaction[f.id] = await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle - ${c.name} - ${f.name} Members`, names);
-      count++;
+      if (!names.length) { skippedEmpty++; continue; }
+      c.rollTableIdsByFaction[f.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle - ${c.name} - ${f.name} Members`, names));
     }
 
     // Rumors & Hooks — one table drawing from active/rumor Plot Threads, for
     // "something's going on" improv moments.
     const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
     if (rumorThreads.length) {
-      c.rumorRollTableId = await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle - ${c.name} - Rumors & Hooks`, rumorThreads.map(t => t.title));
-      count++;
+      c.rumorRollTableId = tally(await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle - ${c.name} - Rumors & Hooks`, rumorThreads.map(t => t.title)));
     }
 
+    c.rollTablesLastSynced = Date.now();
     save();
-    toast(`Synced ${count} Roll Table${count!==1?'s':''} to Foundry - find them in the Rollable Tables sidebar.`, 'success');
+    render();
+    const parts = [];
+    if (created) parts.push(`${created} created`);
+    if (updated) parts.push(`${updated} updated`);
+    if (skippedEmpty) parts.push(`${skippedEmpty} skipped (empty)`);
+    toast(`Synced Roll Tables to Foundry: ${parts.join(', ')} - find them in the Rollable Tables sidebar.`, 'success');
   } catch (err) {
     toast('Error syncing Roll Tables: ' + (err.message || String(err)), 'error');
   }
@@ -2180,8 +2373,9 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
     if (existingIds.length) await table.deleteEmbeddedDocuments('TableResult', existingIds);
     if (resultsData.length) await table.createEmbeddedDocuments('TableResult', toFoundryPlain(resultsData));
     await table.update(toFoundryPlain({ name: tableName, formula: `1d${n}` }));
+    return { id: table.id, created: false };
   }
-  return table.id;
+  return { id: table.id, created: true };
 }
 
 // ═══════════════════════════════════════════════
@@ -2407,6 +2601,10 @@ function npcReputationToward(c, npc) {
   return reps;
 }
 
+// Enforces the same GM-secret rule as GM_SECRET_FIELDS (see renderCampaignBible)
+// structurally rather than by a conditional check: motivation/goals/truth/
+// keyEvents are simply never read into any object literal below, so there's
+// nothing for this window to leak even if playerVisible is somehow wrong.
 function buildPlayerWikiSnapshot(c) {
   const npcRef  = n => ({ type: 'characters', id: n.id, name: n.name });
   const locRef  = l => ({ type: 'locations',  id: l.id, name: l.name });
@@ -2485,7 +2683,7 @@ function buildPlayerWikiSnapshot(c) {
       let label = p.label || '';
       let npcsHere = [];
       if (p.linkedType === 'location') {
-        npcsHere = c.npcs.filter(n => n.locationId === p.linkedId && n.playerVisible === true).map(n => n.name);
+        npcsHere = c.npcs.filter(n => n.locationId === p.linkedId && n.playerVisible === true).map(npcRef);
         if (!label) label = c.locations.find(l => l.id === p.linkedId)?.name || '';
       } else if (p.linkedType === 'npc' && !label) {
         label = c.npcs.find(n => n.id === p.linkedId)?.name || '';
@@ -2564,7 +2762,8 @@ function openEditSessionModal(id) {
         <label>In-world Date <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8">
           <input type="text" id="es-inworld-date" value="${esc(s.inWorldDate||'')}" placeholder="e.g. 21st of Winterheart, Year 998" style="flex:1">
-          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('es-inworld-date')">Pull from Calendar</button>`:''}
+          ${isFeatureEnabled('simpleCalendar') && simpleCalendarActive()?`<button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="pullSimpleCalendarDate('es-inworld-date')">Pull from Calendar</button>
+          <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Set Simple Calendar's current date to whatever was last pulled here" onclick="pushSimpleCalendarDate('es-inworld-date')">Set as Current Date</button>`:''}
         </div>
       </div>
       <div class="form-group"><label>Summary</label><textarea id="es-summary" rows="3" placeholder="What happened this session…">${esc(s.summary||'')}</textarea></div>
@@ -2704,7 +2903,7 @@ function npcCard(n) {
   const npcFactionList = c.factions.filter(f=>(f.memberIds||[]).includes(n.id));
   return `
   <div class="card npc-card" onclick="openNPCModal('${n.id}')" ${dragToHotbarAttrs('npc', n.id)} style="${n.status==='dead'?'opacity:0.6':''}">
-    <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
+    <div class="npc-initial" style="${n.image?'':(tint?`background:${tint};`:'')}${n.status==='dead'?'filter:grayscale(1)':''}">${n.image?`<img src="${n.image}" alt="${esc(n.name)}" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%" onerror="this.parentElement.textContent='${esc((n.name[0]||'?').toUpperCase())}'">`:`${esc(n.name[0]||'?').toUpperCase()}`}</div>
     <div style="font-weight:600;display:flex;align-items:center;gap:6px">
       ${showStatus?`<span class="status-dot status-${n.status||'alive'}"></span>`:''}
       ${esc(n.name)}
@@ -2770,6 +2969,34 @@ function renderNPCs() {
 }
 
 // ── Pull characters in from Foundry Actors ──
+// One card per unlinked Actor, grouped into Player Characters / NPCs (the
+// same character/npc distinction pullSelectedActors() itself uses) rather
+// than one flat alphabetical list - mirrors the Player Companion publish
+// page's section-card layout so a big world's roster is actually scannable.
+function _pullActorCardHTML(a) {
+  const img = _resolveActorImgApp(a);
+  const letter = esc((a.name[0] || '?').toUpperCase());
+  return `<label class="pull-actor-card" data-pull-name="${esc(a.name.toLowerCase())}">
+    <input type="checkbox" class="pull-foundry-cb" value="${a.id}" onchange="this.closest('.pull-actor-card').classList.toggle('pull-actor-card-selected', this.checked)">
+    <span class="pull-actor-portrait">${img ? `<img src="${esc(img)}" alt="" onerror="this.parentElement.textContent='${letter}'">` : letter}</span>
+    <span class="pull-actor-name">${esc(a.name)}</span>
+  </label>`;
+}
+
+function _pullActorSectionHTML(key, label, list) {
+  if (!list.length) return '';
+  return `<div data-pull-section="${key}" style="margin-bottom:18px">
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600">${esc(label)} (${list.length})</div>
+      <div class="flex gap-8">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="pullFoundrySelectSection(this,true)">All</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="pullFoundrySelectSection(this,false)">None</button>
+      </div>
+    </div>
+    <div class="pull-actor-grid">${list.map(_pullActorCardHTML).join('')}</div>
+  </div>`;
+}
+
 function openPullFromFoundryModal() {
   const pgame = window.parent?.game;
   if (!pgame?.actors) { toast('Not running inside Foundry.', 'error'); return; }
@@ -2780,23 +3007,34 @@ function openPullFromFoundryModal() {
     .filter(a => !linkedIds.has(a.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Group by whatever Actor types this world's system actually defines
+  // (e.g. dnd5e just has character/npc, but other systems - like the one in
+  // the screenshot this was built from - have several: character, adversary,
+  // environment, party...). Untangle already reads a.type at import time; it
+  // just wasn't being used to organize this list beyond a hardcoded
+  // character-vs-everything-else split.
+  const groups = {};
+  actors.forEach(a => {
+    const key = a.type || 'unknown';
+    (groups[key] || (groups[key] = [])).push(a);
+  });
+  const sectionsHtml = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(key => {
+    const label = key.charAt(0).toUpperCase() + key.slice(1);
+    return _pullActorSectionHTML(key, label, groups[key]);
+  }).join('');
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'pull-foundry-overlay';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:520px">
+    <div class="modal" style="max-width:640px">
       <div class="modal-header"><h3>Pull from Foundry</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${actors.length === 0
         ? `<p class="text-sm text-dim">No unlinked Actors found in this world - everything's already imported, or your world has no Actors yet.</p>`
         : `<p class="text-xs text-dim" style="margin-bottom:12px">Select Actors to import as Characters. Name, portrait, and biography (if present) are copied in.</p>
-           <div style="max-height:45vh;overflow-y:auto;margin-bottom:16px">
-             ${actors.map(a => `
-               <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer">
-                 <input type="checkbox" class="pull-foundry-cb" value="${a.id}" style="width:auto;accent-color:var(--accent)">
-                 <span style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated)">${_resolveActorImgApp(a) ? `<img src="${esc(_resolveActorImgApp(a))}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">` : ''}</span>
-                 <span style="font-size:0.875rem">${esc(a.name)}</span>
-                 <span class="text-xs text-dim" style="margin-left:auto">${esc(a.type||'')}</span>
-               </label>`).join('')}
+           ${actors.length > 8 ? `<input type="text" placeholder="Filter…" oninput="pullFoundryFilter(this.value)" style="margin-bottom:12px">` : ''}
+           <div style="max-height:50vh;overflow-y:auto;margin-bottom:16px" id="pull-foundry-list">
+             ${sectionsHtml}
            </div>`}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${actors.length===0?'Close':'Cancel'}</button>
@@ -2804,6 +3042,22 @@ function openPullFromFoundryModal() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+function pullFoundrySelectSection(btn, selectAll) {
+  const section = btn.closest('[data-pull-section]');
+  if (!section) return;
+  section.querySelectorAll('.pull-foundry-cb').forEach(cb => {
+    cb.checked = selectAll;
+    cb.closest('.pull-actor-card')?.classList.toggle('pull-actor-card-selected', selectAll);
+  });
+}
+
+function pullFoundryFilter(q) {
+  const query = q.trim().toLowerCase();
+  document.querySelectorAll('#pull-foundry-list .pull-actor-card').forEach(card => {
+    card.style.display = card.dataset.pullName.includes(query) ? '' : 'none';
+  });
 }
 
 function _stripHtml(html) {
@@ -2816,14 +3070,17 @@ function _stripHtml(html) {
 // Token Variant Art can both leave actor.img on Foundry's blank mystery-man
 // placeholder while the actual art lives on the prototype token instead (or,
 // for some Token Variant Art display-only overrides, nowhere on the document
-// at all - those genuinely can't be read from here).
+// at all - those genuinely can't be read from here). Wildcard paths (e.g.
+// "npc-*.webp", used by core wildcard tokens and some art-pool modules) are
+// never usable as a literal <img src> - browsers don't glob - so those are
+// rejected too rather than being returned as a guaranteed-404 URL.
 function _resolveActorImgApp(actor) {
-  const isPlaceholder = (p) => !p || p.includes('mystery-man');
+  const isUsable = (p) => !!p && !p.includes('mystery-man') && !p.includes('*');
   const toRoute = (p) => window.parent.foundry?.utils?.getRoute ? window.parent.foundry.utils.getRoute(p) : (p.startsWith('http') ? p : '/' + p.replace(/^\/+/, ''));
-  if (!isPlaceholder(actor.img)) return toRoute(actor.img);
+  if (isUsable(actor.img)) return toRoute(actor.img);
   const tokenSrc = actor.prototypeToken?.texture?.src;
-  if (!isPlaceholder(tokenSrc)) return toRoute(tokenSrc);
-  return actor.img ? toRoute(actor.img) : null;
+  if (isUsable(tokenSrc)) return toRoute(tokenSrc);
+  return null;
 }
 
 function pullSelectedActors() {
@@ -3462,7 +3719,7 @@ function openNPCModal(id) {
     <div class="modal">
       <div class="modal-header"><h3>Edit Character</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px">
-        <div class="npc-img-upload" id="npc-img-preview" onclick="document.getElementById('npc-img-input').click()" title="Upload portrait">${n.image?`<img src="${n.image}" alt="portrait" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:'Add'}</div>
+        <div class="npc-img-upload" id="npc-img-preview" onclick="document.getElementById('npc-img-input').click()" title="Upload portrait">${n.image?`<img src="${n.image}" alt="portrait" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%" onerror="this.parentElement.textContent='Add'">`:'Add'}</div>
         <input type="file" id="npc-img-input" accept="image/*" style="display:none" onchange="onNpcImageSelected(this)">
         <div style="flex:1">
           <div class="text-sm" style="font-weight:600">Character portrait</div>
@@ -3526,7 +3783,7 @@ function openNPCModal(id) {
         </div>
         <div id="npc-goals-list">${renderNpcGoalsList()}</div>
       </div>
-      <div class="form-group"><label>Background Notes</label><textarea id="en-notes" rows="3" placeholder="Appearance, history, general behaviour…">${esc(n.notes||'')}</textarea></div>
+      <div class="form-group"><label>Background Notes</label><textarea id="en-notes" rows="3" placeholder="Appearance, history, general behaviour…">${esc(n.notes||'')}</textarea>${dictateBtnHTML('en-notes')}${dictationUnsupportedNotice()}</div>
       <div class="form-group"><label>Secrets (GM only)</label><textarea id="en-secrets" rows="2">${esc(n.secrets||'')}</textarea></div>
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -3555,6 +3812,7 @@ function openNPCModal(id) {
       ${renderTaggedNotesSection('npc', n.id)}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-danger btn-sm" onclick="deleteNPC('${n.id}')">Delete</button>
+        ${isFeatureEnabled('maps')&&camp().maps?.length?`<button class="btn btn-ghost" onclick="openQuickPinModal('npc','${n.id}')">Pin to Map…</button>`:''}
         <button class="btn btn-primary" onclick="saveNPC('${n.id}')">Save</button>
       </div>
     </div>`;
@@ -3585,7 +3843,11 @@ function openAddNPC() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>Name</label>
-          <div style="display:flex;gap:6px"><input type="text" id="an-name" placeholder="Character name"><button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="document.getElementById('an-name').value=generateStyledName(window._nameGenStyle||'human')" title="Random name">Roll</button></div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="an-name" placeholder="Character name">
+            <select id="an-name-style" style="flex-shrink:0;max-width:112px" title="Name style">${Object.entries(NAME_STYLES).map(([k,v])=>`<option value="${k}" ${k===(window._nameGenStyle||'human')?'selected':''}>${v.label}</option>`).join('')}</select>
+            <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="window._nameGenStyle=document.getElementById('an-name-style').value;document.getElementById('an-name').value=generateStyledName(window._nameGenStyle)" title="Random name">Roll</button>
+          </div>
         </div>
         <div class="form-group"><label>Type</label>
           <select id="an-type">${charTypeOptions('npc')}</select>
@@ -3935,7 +4197,7 @@ function openLocationModal(id) {
       </div>
       <div class="form-group"><label>Name</label><input type="text" id="el-name" value="${esc(l.name)}"></div>
       <div class="form-group"><label>Description</label><textarea id="el-desc" rows="4">${esc(l.description||'')}</textarea></div>
-      <div class="form-group"><label>Notes / Secrets</label><textarea id="el-notes" rows="3">${esc(l.notes||'')}</textarea></div>
+      <div class="form-group"><label>Notes / Secrets</label><textarea id="el-notes" rows="3">${esc(l.notes||'')}</textarea>${dictateBtnHTML('el-notes')}${dictationUnsupportedNotice()}</div>
       ${scenes.length?`<div class="form-group"><label>Linked Foundry Scene <span class="text-dim text-xs">(optional)</span></label>
         <div class="flex gap-8" style="align-items:center">
           <select id="el-scene" style="flex:1">
@@ -3950,6 +4212,7 @@ function openLocationModal(id) {
       ${renderTaggedNotesSection('location', l.id)}
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-danger btn-sm" onclick="deleteLocation('${l.id}')">Delete</button>
+        ${isFeatureEnabled('maps')&&camp().maps?.length?`<button class="btn btn-ghost" onclick="openQuickPinModal('location','${l.id}')">Pin to Map…</button>`:''}
         <button class="btn btn-primary" onclick="saveLocation('${l.id}')">Save</button>
       </div>
     </div>`;
@@ -4091,6 +4354,40 @@ function _resolveConnectionEntity(type, id, c) {
 
 const CONNECTION_OPEN_FN = { npc: 'openNPCModal', location: 'openLocationModal', faction: 'openFactionModal', thread: 'openEditThreadModal' };
 
+// Same groups as _connectionEntityOpts() but without its "Add a connection…"
+// placeholder, which doesn't make sense for a filter dropdown - used by the
+// Timeline's "Show only" filter.
+function _timelineFilterOpts() {
+  const c = camp();
+  const groups = [
+    { label: 'Characters',   items: c.npcs,        type: 'npc',      nameKey: 'name'  },
+    { label: 'Locations',    items: c.locations,   type: 'location', nameKey: 'name'  },
+    { label: 'Factions',     items: c.factions,    type: 'faction',  nameKey: 'name'  },
+    { label: 'Plot Threads', items: c.plotThreads, type: 'thread',   nameKey: 'title' },
+  ];
+  return groups.filter(g => g.items.length).map(g =>
+    `<optgroup label="${g.label}">${g.items.map(it => `<option value="${g.type}:${it.id}">${esc(it[g.nameKey])}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+
+// Hides every timeline node/connector/box whose data-filter-keys doesn't
+// include the selected "type:id" key - an empty value shows everything again.
+function timelineFilterByEntity(val) {
+  const track = document.getElementById('timeline-track');
+  if (!track) return;
+  track.querySelectorAll('[data-node-kind]').forEach(el => {
+    if (!val) { el.style.display = ''; return; }
+    const keys = (el.dataset.filterKeys || '').split(',');
+    el.style.display = keys.includes(val) ? '' : 'none';
+  });
+}
+
+function timelineJumpTo(val) {
+  if (!val) return;
+  const [kind, id] = val.split(':');
+  document.querySelector(`.timeline-box[data-node-kind="${kind}"][data-node-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function addTimelineConnection() {
   const sel = document.getElementById('tl-conn-select');
   const val = sel?.value;
@@ -4227,15 +4524,18 @@ function renderTimeline() {
   const maxPos = Math.max(...nodes.map(n => n.position));
   const trackHeight = Math.max(400, maxPos + 160);
 
+  const jumpOpts = nodes.map(n => `<option value="${n.kind}:${n.id}">${esc(n.kind === 'session' ? (n.ref.title || 'Session ' + n.ref.number) : n.ref.title)}</option>`).join('');
+
   const html = nodes.map((n, i) => {
     const side = i % 2 === 0 ? 'left' : 'right';
     const top = n.position;
-    let boxContent, openFn, nodeClass = 'timeline-node';
+    let boxContent, openFn, nodeClass = 'timeline-node', filterKeys = [];
 
     if (n.kind === 'session') {
       const s = n.ref;
       const npcsInSession = c.npcs.filter(x => (x.sessions||[]).includes(s.id));
       const locsInSession = c.locations.filter(x => (x.sessionIds||[]).includes(s.id));
+      filterKeys = [...npcsInSession.map(x => `npc:${x.id}`), ...locsInSession.map(x => `location:${x.id}`)];
       openFn = `openSessionModal('${s.id}')`;
       boxContent = `
         <div style="font-weight:600">${esc(s.title)}</div>
@@ -4245,6 +4545,7 @@ function renderTimeline() {
     } else {
       const ev = n.ref;
       nodeClass += ' tl-node-event';
+      filterKeys = (ev.connections||[]).map(cn => `${cn.type}:${cn.id}`);
       openFn = `openTimelineEventModal('${ev.id}')`;
       boxContent = `
         <div style="font-weight:600">${esc(ev.title)}</div>
@@ -4255,7 +4556,7 @@ function renderTimeline() {
     const connectorStyle = (side === 'left' ? 'right:50%;width:calc(50% - 40px);' : 'left:50%;width:calc(50% - 40px);') + (n.color ? `background:${n.color};` : '');
     const nodeStyle = `top:${top-10}px;` + (n.color ? `background:${n.color};box-shadow:0 0 0 2px ${n.color};` : '');
     const boxStyle = `top:${top-14}px;` + (n.color ? `border-left:4px solid ${n.color};` : '');
-    const dataAttrs = `data-node-kind="${n.kind}" data-node-id="${n.id}"`;
+    const dataAttrs = `data-node-kind="${n.kind}" data-node-id="${n.id}" data-filter-keys="${esc(filterKeys.join(','))}"`;
 
     return `
       <div class="${nodeClass}" style="${nodeStyle}" ${dataAttrs}></div>
@@ -4266,7 +4567,17 @@ function renderTimeline() {
   return `
     <div class="page-header">
       <div><h2>Timeline</h2><p class="subtitle">Click the spine to add an entry · drag a circle to reorder — entries can move past each other</p></div>
-      <button class="btn btn-ghost" title="Flip the current order so the newest entry ends up on top" onclick="autoSortTimeline()">⇅ Auto-Sort</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select onchange="timelineFilterByEntity(this.value)" style="max-width:170px" title="Show only entries touching one character, location, faction, or thread">
+          <option value="">Show all</option>
+          ${_timelineFilterOpts()}
+        </select>
+        <select onchange="timelineJumpTo(this.value)" style="max-width:170px">
+          <option value="">Jump to…</option>
+          ${jumpOpts}
+        </select>
+        <button class="btn btn-ghost" title="Flip the current order so the newest entry ends up on top" onclick="autoSortTimeline()">⇅ Auto-Sort</button>
+      </div>
     </div>
     <div class="timeline-track" id="timeline-track" style="height:${trackHeight}px">
       <div class="timeline-spine" id="timeline-spine" style="height:${trackHeight}px" onclick="handleTimelineSpineClick(event)"></div>
@@ -4283,8 +4594,8 @@ function handleTimelineSpineClick(e) {
 }
 
 let _tlDrag = null;
-let _tlMouseMoveHandler = null;
-let _tlMouseUpHandler = null;
+let _tlPointerMoveHandler = null;
+let _tlPointerUpHandler = null;
 
 // Applies a left/right side to one node's box + connector without touching
 // their `top` (vertical position) or color-tint styles, which are set
@@ -4309,14 +4620,17 @@ function setupTimelineEvents() {
   // Clean up any listeners from a previous render of this page before
   // adding new ones, since document-level listeners otherwise pile up
   // every time the Timeline page re-renders.
-  if (_tlMouseMoveHandler) document.removeEventListener('mousemove', _tlMouseMoveHandler);
-  if (_tlMouseUpHandler) document.removeEventListener('mouseup', _tlMouseUpHandler);
+  if (_tlPointerMoveHandler) document.removeEventListener('pointermove', _tlPointerMoveHandler);
+  if (_tlPointerUpHandler) document.removeEventListener('pointerup', _tlPointerUpHandler);
 
+  // Pointer events (not mouse-only) so dragging works with touch on tablets,
+  // which is how a lot of GMs actually run this at the table.
   track.querySelectorAll('.timeline-node').forEach(node => {
-    node.addEventListener('mousedown', e => {
-      if (e.button !== 0) return;
+    node.addEventListener('pointerdown', e => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
       e.preventDefault();
       e.stopPropagation();
+      node.setPointerCapture?.(e.pointerId);
       const kind = node.dataset.nodeKind;
       const id = node.dataset.nodeId;
       const c = camp();
@@ -4346,7 +4660,7 @@ function setupTimelineEvents() {
     });
   });
 
-  _tlMouseMoveHandler = e => {
+  _tlPointerMoveHandler = e => {
     if (!_tlDrag) return;
     const dy = e.clientY - _tlDrag.startY;
     if (Math.abs(dy) > 3) _tlDrag.moved = true;
@@ -4374,7 +4688,7 @@ function setupTimelineEvents() {
     applyTimelineSide(_tlDrag.boxEl, _tlDrag.connectorEl, draggedRank % 2 === 0 ? 'left' : 'right');
   };
 
-  _tlMouseUpHandler = () => {
+  _tlPointerUpHandler = () => {
     if (!_tlDrag) return;
     const { kind, id, moved, currentPos, others } = _tlDrag;
     if (moved && typeof currentPos === 'number') {
@@ -4405,8 +4719,8 @@ function setupTimelineEvents() {
     _tlDrag = null;
   };
 
-  document.addEventListener('mousemove', _tlMouseMoveHandler);
-  document.addEventListener('mouseup', _tlMouseUpHandler);
+  document.addEventListener('pointermove', _tlPointerMoveHandler);
+  document.addEventListener('pointerup', _tlPointerUpHandler);
 }
 
 function openAddTimelineEventModal(atPosition) {
@@ -4669,7 +4983,7 @@ function renderMapView() {
     if (pin.linkedType==='location') entity = c.locations.find(l=>l.id===pin.linkedId);
     if (entity) label = entity.name;
     const color = pin.linkedType==='location' ? 'var(--green)' : 'var(--accent)';
-    return `<div class="map-pin" style="left:${pin.x}%;top:${pin.y}%" onclick="event.stopPropagation();openPinModal('${m.id}','${pin.id}')">
+    return `<div class="map-pin" data-map-id="${m.id}" data-pin-id="${pin.id}" style="left:${pin.x}%;top:${pin.y}%">
       <div class="map-pin-dot" style="background:${color}"></div>
       ${label?`<div class="map-pin-label">${esc(label)}</div>`:''}
     </div>`;
@@ -4677,8 +4991,11 @@ function renderMapView() {
 
   return `
     <div class="page-header">
-      <div><h2>${esc(m.name)}</h2><p class="subtitle">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}${(m.pins||[]).length===0?' - click the map to add your first pin':' - click map to add more, click a pin to edit'}</p></div>
+      <div><h2>${esc(m.name)}</h2><p class="subtitle">${(m.pins||[]).length} pin${(m.pins||[]).length!==1?'s':''}${(m.pins||[]).length===0?' - click the map to add your first pin':' - click map to add more, drag a pin to reposition, click a pin to edit'}</p></div>
       <div style="display:flex;gap:8px">
+        <label class="text-xs text-dim" style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${m.playerVisible?'checked':''} onchange="toggleEntityVisible('map','${m.id}',this.checked)"> Visible to players
+        </label>
         ${m.sceneId&&!sceneMissing?`<button class="btn btn-ghost" onclick="jumpToScene('${m.sceneId}')">Jump to Scene</button>`:''}
         <button class="btn btn-ghost" onclick="navigate('maps')">← Maps</button>
       </div>
@@ -4689,6 +5006,49 @@ function renderMapView() {
           <img src="${imgSrc}" alt="${esc(m.name)}" draggable="false" onerror="handleMapImageError(this)">
           ${pins}
         </div>`}`;
+}
+
+let _mapPinDrag = null;
+function setupMapPinDrag() {
+  const wrap = document.querySelector('.map-wrap');
+  if (!wrap) return;
+
+  wrap.querySelectorAll('.map-pin').forEach(pinEl => {
+    pinEl.addEventListener('pointerdown', e => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      e.preventDefault();
+      e.stopPropagation();
+      pinEl.setPointerCapture?.(e.pointerId);
+      _mapPinDrag = { pinEl, mapId: pinEl.dataset.mapId, pinId: pinEl.dataset.pinId, moved: false, x: parseFloat(pinEl.style.left), y: parseFloat(pinEl.style.top) };
+    });
+  });
+
+  wrap.addEventListener('pointermove', e => {
+    if (!_mapPinDrag) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, (e.clientX - rect.left) / rect.width * 100));
+    const y = Math.max(0, Math.min(100, (e.clientY - rect.top) / rect.height * 100));
+    _mapPinDrag.moved = true;
+    _mapPinDrag.x = x;
+    _mapPinDrag.y = y;
+    _mapPinDrag.pinEl.style.left = x + '%';
+    _mapPinDrag.pinEl.style.top = y + '%';
+  });
+
+  const endPinDrag = () => {
+    if (!_mapPinDrag) return;
+    const { mapId, pinId, moved, x, y } = _mapPinDrag;
+    if (moved) {
+      const m = camp().maps.find(mp => mp.id === mapId);
+      const pin = m?.pins?.find(p => p.id === pinId);
+      if (pin) { pin.x = parseFloat(x.toFixed(2)); pin.y = parseFloat(y.toFixed(2)); save(); }
+    } else {
+      openPinModal(mapId, pinId);
+    }
+    _mapPinDrag = null;
+  };
+  wrap.addEventListener('pointerup', endPinDrag);
+  wrap.addEventListener('pointerleave', endPinDrag);
 }
 
 function openMapView(mapId) {
@@ -4737,6 +5097,7 @@ function resizeImage(file, maxPx) {
 }
 
 function handleMapClick(e, mapId) {
+  if (e.target.closest('.map-pin')) return; // clicking/dragging a pin shouldn't also drop a new one underneath it
   const wrap = e.currentTarget;
   const rect = wrap.getBoundingClientRect();
   const x = parseFloat(((e.clientX - rect.left) / rect.width * 100).toFixed(2));
@@ -4757,6 +5118,9 @@ function openAddPinModal(mapId, x, y) {
         <select id="pin-link"><option value="">- Unlinked -</option><optgroup label="NPCs">${npcOpts}</optgroup><optgroup label="Locations">${locOpts}</optgroup></select>
       </div>
       <div class="form-group"><label>Label (if unlinked)</label><input type="text" id="pin-label" placeholder="Custom label…"></div>
+      <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px">
+        <input type="checkbox" id="pin-visible" style="width:auto;accent-color:var(--accent)"> Visible to players
+      </label>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="addPin('${mapId}',${x},${y})">Place Pin</button>
@@ -4771,13 +5135,48 @@ function addPin(mapId, x, y) {
   if (!m) return;
   const linkVal = document.getElementById('pin-link').value;
   const label = document.getElementById('pin-label').value;
+  const playerVisible = document.getElementById('pin-visible')?.checked || false;
   let linkedType = null, linkedId = null;
   if (linkVal) { [linkedType, linkedId] = linkVal.split(':'); }
   if (!m.pins) m.pins = [];
-  m.pins.push({ id: uid(), x, y, linkedType, linkedId, label, playerVisible: false });
+  m.pins.push({ id: uid(), x, y, linkedType, linkedId, label, playerVisible, revealedAt: playerVisible ? Date.now() : undefined });
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
+}
+
+// Quick path to attach an NPC/Location to a map from that entity's own edit
+// modal, since dragging a card onto a map isn't possible here - only one page
+// is ever visible at a time. Drops the pin center-map and leans on the pin
+// dragging above to get it into its exact spot.
+function openQuickPinModal(type, id) {
+  const c = camp();
+  if (!c.maps?.length) { toast('Add a map first (Maps page) before pinning to one.', 'error'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header"><h3>Pin to Map</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Map</label><select id="quickpin-map">${c.maps.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div>
+      <p class="text-xs text-dim" style="margin-bottom:16px">Drops a pin in the middle of the map - drag it into place afterward.</p>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="quickPinEntity('${type}','${id}')">Place Pin</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function quickPinEntity(type, id) {
+  const mapId = document.getElementById('quickpin-map')?.value;
+  const m = camp().maps.find(mp => mp.id === mapId);
+  if (!m) return;
+  if (!m.pins) m.pins = [];
+  m.pins.push({ id: uid(), x: 50, y: 50, linkedType: type, linkedId: id, label: '', playerVisible: false });
+  save();
+  document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+  toast('Pin placed - drag it into position.', 'success');
+  openMapView(mapId);
 }
 
 function openPinModal(mapId, pinId) {
@@ -4803,6 +5202,9 @@ function openPinModal(mapId, pinId) {
       <div class="modal-header"><h3>${esc(label)}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${entity&&(entity.description||entity.role||entity.notes)?`<p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">${esc((entity.description||entity.role||entity.notes||'').slice(0,200))}</p>`:''}
       ${npcsHere.length?`<div class="form-group"><label>Based here</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${npcsHere.map(n=>`<span class="npc-chip" onclick="this.closest('.modal-overlay').remove();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div></div>`:''}
+      <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px">
+        <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${pin.playerVisible?'checked':''} onchange="togglePinVisible('${mapId}','${pinId}',this.checked)"> Visible to players
+      </label>
       <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-danger btn-sm" onclick="deletePin('${mapId}','${pinId}')">Delete Pin</button>
         ${openLink}
@@ -4843,7 +5245,7 @@ function renderFieldNotes() {
       <div><h2>Field Notes</h2><p class="subtitle">${c.quickNotes.length} note${c.quickNotes.length!==1?'s':''} · capture anything mid-session</p></div>
       <button class="btn btn-primary" onclick="openQuickNoteModal()">+ Add Note</button>
     </div>
-    <p class="text-xs text-dim" style="margin-bottom:20px">Tip: type <code>/fdn</code> followed by your text in Foundry's chat box to save a Field Note without opening Untangle at all - e.g. <code>/fdn the innkeeper knows more than she's saying</code>.</p>
+    <p class="text-xs text-dim" style="margin-bottom:20px">Tip: type <code>/fdn</code> followed by your text in Foundry's chat box to save a Field Note without opening Untangle at all - e.g. <code>/fdn the innkeeper knows more than she's saying</code>. Start with <code>@[Name]</code> to link it to a character, location, faction, or thread by its exact name - e.g. <code>/fdn @[Marta] knows more than she's saying</code>.</p>
     ${notes.length===0
       ?`<div class="empty-state"><h3>No field notes yet</h3><p>Use + Add Note above, or the quick-access button over the macro bar, to capture names, ideas, or anything that can't wait mid-session.<br>Notes are timestamped and stored per campaign.</p></div>`
       :notes.map(n=>{
@@ -4903,6 +5305,28 @@ function jumpToFieldNote(id) {
   }, 50);
 }
 
+// Shared "Dictate" button markup - was only ever wired to Field Notes' quick-
+// capture box, even though every free-text field here benefits equally.
+// Renders nothing at all (not even a disabled state) when unsupported, since
+// speechRecognitionSupported() already governs whether the feature exists
+// for this browser at all - see dictationUnsupportedNotice() for the one
+// place that DOES need to say something about that.
+function dictateBtnHTML(textareaId) {
+  return isFeatureEnabled('voiceDictation') && speechRecognitionSupported()
+    ? `<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('${textareaId}', this)">Dictate</button>`
+    : '';
+}
+
+// Shown next to a Dictate button's usual spot when the feature is enabled in
+// Settings but this browser doesn't support the Web Speech API (Firefox,
+// notably) - previously the button just silently didn't render with nothing
+// telling the GM dictation exists but isn't available here.
+function dictationUnsupportedNotice() {
+  return isFeatureEnabled('voiceDictation') && !speechRecognitionSupported()
+    ? `<div class="text-xs text-dim" style="margin-top:6px">Voice dictation isn't supported in this browser (try Chrome or Edge).</div>`
+    : '';
+}
+
 function openQuickNoteModal() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -4911,7 +5335,7 @@ function openQuickNoteModal() {
       <div class="modal-header"><h3>Field Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group">
         <textarea id="qn-text" rows="5" placeholder="NPC name, location idea, player action, plot twist… anything that needs capturing right now." style="font-size:0.95rem"></textarea>
-        ${isFeatureEnabled('voiceDictation') && speechRecognitionSupported()?`<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('qn-text', this)">Dictate</button>`:''}
+        ${dictateBtnHTML('qn-text')}${dictationUnsupportedNotice()}
       </div>
       <div class="form-group"><label>About <span class="text-dim text-xs">(optional)</span></label>
         <select id="qn-about"><option value="">- Not tied to anything -</option>${_noteEntityOpts('','')}</select>
@@ -5002,11 +5426,10 @@ function regenerateNames() {
   if (!container) return;
   const names = Array.from({length: 12}, () => generateStyledName(styleKey));
   container.innerHTML = names.map(n => `
-    <button onclick="copyNameFromGen('${esc(n)}')" style="
-      background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;
-      padding:9px 12px;font-size:0.9rem;font-weight:500;cursor:pointer;
-      color:var(--text);text-align:left;transition:border-color .15s
-    " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">${esc(n)}</button>
+    <div style="display:flex;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <button onclick="copyNameFromGen('${esc(n)}')" title="Copy" style="flex:1;min-width:0;background:none;border:none;padding:9px 10px;font-size:0.9rem;font-weight:500;cursor:pointer;color:var(--text);text-align:left">${esc(n)}</button>
+      <button onclick="createCharacterFromGeneratedName('${esc(n)}')" title="Add as new Character" style="flex-shrink:0;background:none;border:none;border-left:1px solid var(--border);padding:9px 10px;cursor:pointer;color:var(--accent);font-weight:700">+</button>
+    </div>
   `).join('');
 }
 
@@ -5015,6 +5438,20 @@ function copyNameFromGen(name) {
   // Flash the hint text
   const hint = document.getElementById('namegen-hint');
   if (hint) { const prev = hint.textContent; hint.textContent = `"${name}" copied!`; setTimeout(()=>{ if(hint) hint.textContent = prev; }, 1500); }
+}
+
+// Skips the Add Character form entirely - a generated name that's good
+// enough to keep is good enough to become a real character right away,
+// rather than forcing a copy-paste round trip through a separate form.
+function createCharacterFromGeneratedName(name) {
+  const c = camp();
+  c.npcs.push({ id: uid(), name, role: '', motivation: '', goals: [], notes: '', secrets: '', locationId: null, status: 'alive', type: 'npc', voiceDescription: '', sessions: [], events: [], image: null, imageOffsetX: 50, imageOffsetY: 50, playerVisible: false });
+  save();
+  const newId = c.npcs[c.npcs.length-1].id;
+  document.getElementById('namegen-overlay')?.remove();
+  toast(`"${name}" added as a new Character.`, 'success');
+  render();
+  openNPCModal(newId);
 }
 
 // ═══════════════════════════════════════════════
@@ -5048,12 +5485,40 @@ function openRecapModal() {
     lines.push('', "Hasn't come up in a while:");
     staleEntities.slice(0, 5).forEach(e => lines.push(`• ${e.name} (${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago)`));
   }
-  const spotlightNeed = computeSpotlightNeed().filter(p => p.sessionsSince >= SPOTLIGHT_THRESHOLD);
+  const spotlightNeed = computeSpotlightNeed().filter(p => p.sessionsSince >= getSpotlightThreshold());
   if (spotlightNeed.length) {
     lines.push('', 'Give the spotlight to:');
     spotlightNeed.forEach(p => lines.push(`• ${p.name} (${p.everHadSpotlight ? p.sessionsSince + ' session' + (p.sessionsSince!==1?'s':'') + ' ago' : 'never yet'})`));
   }
   window._recapText = lines.join('\n');
+
+  // Same content, Discord markdown (bold section headers and names) - GMs
+  // routinely paste this straight into a table's Discord between sessions.
+  const dlines = [`**Previously, in ${c.name}…**`];
+  if (last) {
+    dlines.push('', `**Session ${last.number}${last.title ? ' - ' + last.title : ''}** (${last.date}):`);
+    dlines.push(last.summary || '_(No summary recorded.)_');
+    if (last.keyEvents?.length) { dlines.push(''); last.keyEvents.forEach(e => dlines.push('• ' + e)); }
+  } else {
+    dlines.push('', '_No sessions logged yet._');
+  }
+  if (openThreads.length) {
+    dlines.push('', '**Open threads:**');
+    openThreads.forEach(t => dlines.push(`• **${t.title}**${t.description ? ' - ' + t.description : ''}`));
+  }
+  if (clocksNearFull.length) {
+    dlines.push('', '**About to come to a head:**');
+    clocksNearFull.forEach(ck => dlines.push(`• **${ck.label}** (${ck.filled}/${ck.segments})`));
+  }
+  if (staleEntities.length) {
+    dlines.push('', "**Hasn't come up in a while:**");
+    staleEntities.slice(0, 5).forEach(e => dlines.push(`• **${e.name}** (${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago)`));
+  }
+  if (spotlightNeed.length) {
+    dlines.push('', '**Give the spotlight to:**');
+    spotlightNeed.forEach(p => dlines.push(`• **${p.name}** (${p.everHadSpotlight ? p.sessionsSince + ' session' + (p.sessionsSince!==1?'s':'') + ' ago' : 'never yet'})`));
+  }
+  window._recapDiscordText = dlines.join('\n');
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -5064,6 +5529,7 @@ function openRecapModal() {
       <div style="background:var(--bg-elevated);border-radius:8px;padding:16px;font-size:0.9rem;line-height:1.8;white-space:pre-wrap;max-height:50vh;overflow-y:auto">${esc(window._recapText)}</div>
       <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
         <button class="btn btn-ghost" onclick="copyRecapText()">Copy</button>
+        <button class="btn btn-ghost" onclick="copyRecapDiscordText()">Copy for Discord</button>
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
       </div>
     </div>`;
@@ -5072,6 +5538,10 @@ function openRecapModal() {
 
 function copyRecapText() {
   navigator.clipboard.writeText(window._recapText || '').then(() => toast('Recap copied.', 'success')).catch(() => {});
+}
+
+function copyRecapDiscordText() {
+  navigator.clipboard.writeText(window._recapDiscordText || '').then(() => toast('Recap copied (Discord format).', 'success')).catch(() => {});
 }
 
 // ═══════════════════════════════════════════════
@@ -5083,8 +5553,18 @@ function copyRecapText() {
 // extra library needed). Deliberately light-on-white regardless of the
 // active theme, since a dark theme printed as-is would waste ink.
 
+// Single source of truth for which fields are GM-only "behind the scenes"
+// info. Campaign Bible reads this to decide what player-safe mode hides;
+// Player Companion (buildPlayerWikiSnapshot, below) enforces the same rule
+// structurally by simply never reading these fields into its snapshot at
+// all. Keeping both driven by/cross-referenced to this one list is what
+// stops them drifting apart from being edited independently later.
+const GM_SECRET_FIELDS = { session: 'keyEvents', faction: 'goals', thread: 'truth', npc: 'motivation' };
+
 function openCampaignBibleModal() {
-  window._cbPlayerSafe = false;
+  // Remembered per-campaign so a GM who always prints the player-safe
+  // version doesn't have to re-check the box before every single print.
+  window._cbPlayerSafe = !!camp().cbPlayerSafe;
   renderCampaignBible();
 }
 
@@ -5097,18 +5577,28 @@ function renderCampaignBible() {
   document.getElementById('campaign-bible-print')?.remove();
   const c = camp();
   const playerSafe = !!window._cbPlayerSafe;
-  const activeFactions = c.factions.filter(f => (f.status||'active') !== 'defeated');
-  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned');
-  const keyNpcs = c.npcs.filter(n => (n.type||'npc') !== 'pc' && n.status !== 'dead');
-  const sessionsInOrder = [...c.sessions].sort((a,b) => (a.number||0) - (b.number||0));
+  const excluded = c.cbExcluded || {};
+  const isExcluded = (type, id) => (excluded[type]||[]).includes(id);
+  const excludedCount = Object.values(excluded).reduce((n, arr) => n + (arr?.length||0), 0);
+
+  const activeFactions = c.factions.filter(f => (f.status||'active') !== 'defeated' && !isExcluded('faction', f.id));
+  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned' && !isExcluded('thread', t.id));
+  const keyNpcs = c.npcs.filter(n => (n.type||'npc') !== 'pc' && n.status !== 'dead' && !isExcluded('npc', n.id));
+  const bibleLocations = c.locations.filter(l => !isExcluded('location', l.id));
+  const sessionsInOrder = [...c.sessions].filter(s => !isExcluded('session', s.id)).sort((a,b) => (a.number||0) - (b.number||0));
+
+  // ✕ appears only in the on-screen toolbar area, not the printed page
+  // itself - hidden via the same @media print rule as .cb-toolbar.
+  const excludeBtn = (type, id) => `<span class="cb-exclude-btn" title="Exclude from this bible" onclick="cbExcludeEntity('${type}','${id}')">✕</span>`;
 
   const html = `
     <div id="campaign-bible-print">
       <div class="cb-toolbar">
         <label class="cb-toolbar-check">
-          <input type="checkbox" style="width:auto" ${playerSafe?'checked':''} onchange="window._cbPlayerSafe=this.checked;renderCampaignBible()">
+          <input type="checkbox" style="width:auto" ${playerSafe?'checked':''} onchange="window._cbPlayerSafe=this.checked;camp().cbPlayerSafe=this.checked;save();renderCampaignBible()">
           Player-safe version (hides GM secrets)
         </label>
+        ${excludedCount?`<button class="btn btn-ghost btn-sm" onclick="cbResetExclusions()">${excludedCount} excluded - Reset</button>`:''}
         <button class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
         <button class="btn btn-ghost" onclick="document.getElementById('campaign-bible-print').remove()">Close</button>
       </div>
@@ -5120,27 +5610,27 @@ function renderCampaignBible() {
         <h2>The Story So Far</h2>
         ${sessionsInOrder.map(s => `
           <div class="cb-entry">
-            <h3>Session ${s.number}${s.title?`: ${esc(s.title)}`:''}${s.date?` <span class="cb-tag">${esc(s.date)}</span>`:''}</h3>
+            <h3>Session ${s.number}${s.title?`: ${esc(s.title)}`:''}${s.date?` <span class="cb-tag">${esc(s.date)}</span>`:''} ${excludeBtn('session', s.id)}</h3>
             ${s.summary?`<p>${esc(s.summary)}</p>`:''}
-            ${!playerSafe && s.keyEvents?.length?`<ul>${s.keyEvents.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`:''}
+            ${!playerSafe && s[GM_SECRET_FIELDS.session]?.length?`<ul>${s[GM_SECRET_FIELDS.session].map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`:''}
           </div>`).join('')}` : ''}
 
         ${activeFactions.length?`
         <h2>Factions</h2>
         ${activeFactions.map(f => `
           <div class="cb-entry">
-            <h3>${esc(f.name)} <span class="cb-tag">${esc((FACTION_ATTITUDES.find(a=>a.value===f.attitude)||{}).label||'')}</span></h3>
+            <h3>${esc(f.name)} <span class="cb-tag">${esc((FACTION_ATTITUDES.find(a=>a.value===f.attitude)||{}).label||'')}</span> ${excludeBtn('faction', f.id)}</h3>
             ${f.description?`<p>${esc(f.description)}</p>`:''}
-            ${!playerSafe && f.goals?`<p><strong>Goals:</strong> ${esc(f.goals)}</p>`:''}
+            ${!playerSafe && f[GM_SECRET_FIELDS.faction]?`<p><strong>Goals:</strong> ${esc(f[GM_SECRET_FIELDS.faction])}</p>`:''}
           </div>`).join('')}` : ''}
 
         ${activeThreads.length?`
         <h2>Active Plot Threads</h2>
         ${activeThreads.map(t => `
           <div class="cb-entry">
-            <h3>${esc(t.title)} <span class="cb-tag">${esc((THREAD_STATUSES.find(s=>s.value===t.status)||{}).label||'')}</span></h3>
+            <h3>${esc(t.title)} <span class="cb-tag">${esc((THREAD_STATUSES.find(s=>s.value===t.status)||{}).label||'')}</span> ${excludeBtn('thread', t.id)}</h3>
             ${t.description?`<p>${esc(t.description)}</p>`:''}
-            ${!playerSafe && t.truth?`<p><strong>GM Truth:</strong> ${esc(t.truth)}</p>`:''}
+            ${!playerSafe && t[GM_SECRET_FIELDS.thread]?`<p><strong>GM Truth:</strong> ${esc(t[GM_SECRET_FIELDS.thread])}</p>`:''}
           </div>`).join('')}` : ''}
 
         ${keyNpcs.length?`
@@ -5149,17 +5639,17 @@ function renderCampaignBible() {
           <div class="cb-entry cb-entry-npc">
             ${n.image?`<img class="cb-portrait" src="${esc(resolveFoundryImgSrc(n.image))}" alt="">`:''}
             <div>
-              <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''}</h3>
-              ${!playerSafe && n.motivation?`<p><strong>Wants:</strong> ${esc(n.motivation)}</p>`:''}
+              <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''} ${excludeBtn('npc', n.id)}</h3>
+              ${!playerSafe && n[GM_SECRET_FIELDS.npc]?`<p><strong>Wants:</strong> ${esc(n[GM_SECRET_FIELDS.npc])}</p>`:''}
               ${n.notes?`<p>${esc(n.notes)}</p>`:''}
             </div>
           </div>`).join('')}` : ''}
 
-        ${c.locations.length?`
+        ${bibleLocations.length?`
         <h2>Locations</h2>
-        ${c.locations.map(l => `
+        ${bibleLocations.map(l => `
           <div class="cb-entry">
-            <h3>${esc(l.name)}</h3>
+            <h3>${esc(l.name)} ${excludeBtn('location', l.id)}</h3>
             ${l.description?`<p>${esc(l.description)}</p>`:''}
           </div>`).join('')}` : ''}
       </div>
@@ -5168,6 +5658,21 @@ function renderCampaignBible() {
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
   document.body.appendChild(wrap.firstElementChild);
+}
+
+function cbExcludeEntity(type, id) {
+  const c = camp();
+  if (!c.cbExcluded) c.cbExcluded = {};
+  if (!c.cbExcluded[type]) c.cbExcluded[type] = [];
+  if (!c.cbExcluded[type].includes(id)) c.cbExcluded[type].push(id);
+  save();
+  renderCampaignBible();
+}
+
+function cbResetExclusions() {
+  camp().cbExcluded = {};
+  save();
+  renderCampaignBible();
 }
 
 // ═══════════════════════════════════════════════
@@ -5181,13 +5686,26 @@ function openSearchModal() {
   overlay.id = 'search-overlay';
   overlay.innerHTML = `
     <div class="modal" style="max-width:520px;padding-top:18px">
-      <input type="text" id="search-input" placeholder="Search NPCs, locations, factions, threads, sessions…" style="font-size:1rem;margin-bottom:14px" oninput="runSearch(this.value)">
+      <input type="text" id="search-input" placeholder="Search NPCs, locations, factions, threads, sessions…" style="font-size:1rem;margin-bottom:14px" oninput="runSearch(this.value)" onkeydown="handleSearchKeydown(event)">
       <div id="search-results" style="max-height:60vh;overflow-y:auto"></div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
   setTimeout(() => document.getElementById('search-input')?.focus(), 50);
   runSearch('');
+}
+
+// Exact > starts-with > plain substring on the title itself; anything that
+// only matched via a secondary field (description, clue text, sub-label)
+// scores lowest - used both to order items within a group and to order which
+// group shows first, so a strong match can't get buried under 8 weak ones
+// from an earlier group.
+function _searchScore(q, title) {
+  const t = (title||'').toLowerCase();
+  if (t === q) return 3;
+  if (t.startsWith(q)) return 2;
+  if (t.includes(q)) return 1;
+  return 0.5;
 }
 
 function runSearch(qRaw) {
@@ -5197,6 +5715,17 @@ function runSearch(qRaw) {
   if (!q) { results.innerHTML = `<p class="text-xs text-dim" style="padding:8px 2px">Type to search across this campaign…</p>`; return; }
 
   const c = camp();
+  const mapMatches = [];
+  (c.maps||[]).forEach(m => {
+    if ((m.name||'').toLowerCase().includes(q)) mapMatches.push({ kind: 'map', map: m });
+    (m.pins||[]).forEach(p => {
+      let label = p.label || '';
+      if (p.linkedType==='npc') label = c.npcs.find(n=>n.id===p.linkedId)?.name || label;
+      if (p.linkedType==='location') label = c.locations.find(l=>l.id===p.linkedId)?.name || label;
+      if ((label||'').toLowerCase().includes(q)) mapMatches.push({ kind: 'pin', map: m, label });
+    });
+  });
+
   const groups = [
     { label: 'Characters',
       items: c.npcs.filter(n => (n.name||'').toLowerCase().includes(q) || (n.role||'').toLowerCase().includes(q)),
@@ -5226,21 +5755,53 @@ function runSearch(qRaw) {
         const sub = (entity ? `${entity[nameKey]} · ` : '') + n.timestamp;
         return { title: n.text.length > 70 ? n.text.slice(0,69) + '…' : n.text, sub, onClick: `jumpToFieldNote('${n.id}')` };
       } },
+    { label: 'Maps',
+      items: mapMatches,
+      render: item => item.kind === 'map'
+        ? { title: item.map.name, sub: `Map · ${(item.map.pins||[]).length} pin${(item.map.pins||[]).length!==1?'s':''}`, onClick: `openMapView('${item.map.id}')` }
+        : { title: item.label, sub: `Pin on ${item.map.name}`, onClick: `openMapView('${item.map.id}')` } },
   ];
 
-  const nonEmpty = groups.filter(g => g.items.length);
+  const nonEmpty = groups.map(g => {
+    const rendered = g.items.map(item => {
+      const r = g.render(item);
+      return { r, score: _searchScore(q, r.title) };
+    }).sort((a,b) => b.score - a.score);
+    return { label: g.label, rendered, bestScore: rendered.length ? rendered[0].score : 0 };
+  }).filter(g => g.rendered.length).sort((a,b) => b.bestScore - a.bestScore);
+
   if (!nonEmpty.length) { results.innerHTML = `<p class="text-xs text-dim" style="padding:8px 2px">No matches.</p>`; return; }
 
+  let idx = 0;
   results.innerHTML = nonEmpty.map(g => `
     <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;padding:8px 2px 4px">${g.label}</div>
-    ${g.items.slice(0,8).map(item => {
-      const r = g.render(item);
-      return `<div class="search-result-item" onclick="document.getElementById('search-overlay')?.remove();${r.onClick}">
+    ${g.rendered.slice(0,8).map(({r}) => {
+      const isFirst = idx++ === 0;
+      return `<div class="search-result-item${isFirst?' search-result-active':''}" onclick="document.getElementById('search-overlay')?.remove();${r.onClick}">
         <div style="font-weight:600;font-size:0.875rem">${esc(r.title)}</div>
         ${r.sub ? `<div class="text-xs text-dim mt-4">${esc(r.sub)}</div>` : ''}
       </div>`;
     }).join('')}
   `).join('');
+}
+
+// Arrow keys move a highlight across every visible result (flattened across
+// groups, not just within one), Enter opens whichever is highlighted -
+// search opens via a keyboard shortcut (/) so finishing with the mouse only
+// was an inconsistent way to end that interaction.
+function handleSearchKeydown(e) {
+  if (!['ArrowDown','ArrowUp','Enter'].includes(e.key)) return;
+  const items = [...document.querySelectorAll('.search-result-item')];
+  if (!items.length) return;
+  e.preventDefault();
+  let idx = items.findIndex(el => el.classList.contains('search-result-active'));
+  if (e.key === 'Enter') { (items[idx] || items[0]).click(); return; }
+  idx = e.key === 'ArrowDown'
+    ? (idx < items.length - 1 ? idx + 1 : 0)
+    : (idx > 0 ? idx - 1 : items.length - 1);
+  items.forEach(el => el.classList.remove('search-result-active'));
+  items[idx].classList.add('search-result-active');
+  items[idx].scrollIntoView({ block: 'nearest' });
 }
 
 document.addEventListener('keydown', e => {
@@ -5287,20 +5848,35 @@ function renderSettings() {
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:16px">
         <h3>Campaigns</h3>
-        <button class="btn btn-ghost btn-sm" onclick="openNewCampaignModal()">+ New Campaign</button>
+        <div class="flex gap-8">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('campaign-import-input').click()">Import…</button>
+          <input type="file" id="campaign-import-input" accept="application/json,.json" style="display:none" onchange="importCampaignJSON(this)">
+          <button class="btn btn-ghost btn-sm" onclick="openNewCampaignModal()">+ New Campaign</button>
+        </div>
       </div>
       ${state.campaigns.map(c => `
         <div class="campaign-list-item">
           <div class="cname">${esc(c.name)}</div>
           ${c.id===state.currentCampaignId?'<span class="active-tag">Active</span>':`<button class="btn btn-ghost btn-sm" onclick="switchCampaign('${c.id}')">Switch</button>`}
           <button class="btn btn-ghost btn-sm" onclick="renameCampaignModal('${c.id}')">Rename</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportCampaignJSON('${c.id}')">Export</button>
           ${state.campaigns.length>1?`<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">Delete</button>`:''}
         </div>`).join('')}
     </div>
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
+      <h3 style="margin-bottom:6px">Pacing</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">How many sessions can pass before Stale Callbacks and PC Spotlight start nagging you about something. Lower runs faster and chattier; higher fits a slower-paced table.</p>
+      <div class="form-row">
+        <div class="form-group"><label>Stale Callbacks (sessions)</label><input type="number" min="1" max="20" value="${getStaleThreshold()}" onchange="setPacingThreshold('stale',this.value)"></div>
+        <div class="form-group"><label>PC Spotlight (sessions)</label><input type="number" min="1" max="20" value="${getSpotlightThreshold()}" onchange="setPacingThreshold('spotlight',this.value)"></div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Tools</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
+      ${isFeatureEnabled('rollTableSync') && camp().rollTablesLastSynced?`<p class="text-xs text-dim" style="margin-bottom:12px">Roll Tables last synced: ${new Date(camp().rollTablesLastSynced).toLocaleString()}</p>`:''}
       <div class="flex gap-8" style="flex-wrap:wrap">
         ${isFeatureEnabled('campaignBible')?`<button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>`:''}
         ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>`:''}
@@ -5325,9 +5901,9 @@ function renderSettings() {
       <h3 style="margin-bottom:6px">Premium Features</h3>
       <div class="flex gap-10" style="align-items:flex-start;margin-bottom:16px">
         <img src="assets/patreonlogo.png" alt="" style="height:60px;width:auto;flex-shrink:0" onerror="this.style.display='none'">
-        <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (none yet - everything above is free). Log in below and paste back the token it gives you.</p>
+        <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (marked "Premium" in the Features list below). Log in below and paste back the token it gives you.</p>
       </div>
-      <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? '<span style="color:var(--green)">Linked - active pledge</span>' : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired - log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
+      <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? `<span style="color:var(--green)">Linked - active pledge${_patreonExpiry?` (renews ${new Date(_patreonExpiry).toLocaleDateString()})`:''}</span>` : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired - log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
       <div class="flex gap-8" style="flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-ghost" onclick="openPatreonLoginTab()">Log in with Patreon</button>
         ${getPatreonToken() ? `<button class="btn btn-ghost" onclick="unlinkPatreon()">Unlink</button>` : ''}
@@ -5341,18 +5917,102 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px">
+    <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Foundry World Backup</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Untangle mirrors your campaign data into this Foundry world's settings on every change, so a cleared browser cache or a new device doesn't lose it. This is a safety net alongside - not a replacement for - the export in Foundry Configure Settings above.</p>
       ${(() => {
         let backup = null;
         try { backup = window.parent?.game?.settings?.get('untangle', 'campaignBackup'); } catch {}
         return backup?.savedAt
-          ? `<p class="text-xs text-dim" style="margin-bottom:12px">Last synced: ${new Date(backup.savedAt).toLocaleString()}</p>
-             <button class="btn btn-ghost" onclick="restoreFromFoundryBackup()">Restore from world backup</button>`
-          : `<p class="text-xs text-dim">No backup synced yet - it'll appear here after your first change.</p>`;
+          ? `<p class="text-xs text-dim" style="margin-bottom:12px">Last synced: ${new Date(backup.savedAt).toLocaleString()}</p>`
+          : `<p class="text-xs text-dim" style="margin-bottom:12px">No backup synced yet - it'll appear here after your first change.</p>`;
       })()}
+      <div class="flex gap-8">
+        <button class="btn btn-ghost" onclick="syncBackupNow()">Sync backup now</button>
+        ${(() => { let backup=null; try { backup = window.parent?.game?.settings?.get('untangle','campaignBackup'); } catch {} return backup?.savedAt ? `<button class="btn btn-ghost" onclick="restoreFromFoundryBackup()">Restore from world backup</button>` : ''; })()}
+      </div>
+    </div>
+
+    <div class="card" style="max-width:560px">
+      <h3 style="margin-bottom:6px">About</h3>
+      <p class="text-sm text-dim" style="margin-bottom:12px">${untangleVersion() ? `Untangle v${esc(untangleVersion())}` : 'Untangle'}</p>
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="window.parent.open(untangleChangelogUrl(), '_blank')">View Changelog</button>
+        <button class="btn btn-ghost" onclick="replayOnboarding()">Replay Onboarding</button>
+      </div>
     </div>`;
+}
+
+function untangleVersion() {
+  try { return window.parent?.game?.modules?.get('untangle')?.version || ''; } catch { return ''; }
+}
+function untangleChangelogUrl() {
+  try { return window.parent.foundry?.utils?.getRoute ? window.parent.foundry.utils.getRoute('modules/untangle/CHANGELOG.md') : '/modules/untangle/CHANGELOG.md'; }
+  catch { return '/modules/untangle/CHANGELOG.md'; }
+}
+
+function replayOnboarding() {
+  state.settings.onboarded = false;
+  save();
+  maybeShowOnboarding();
+}
+
+function syncBackupNow() {
+  try {
+    const pgame = window.parent?.game;
+    if (!pgame?.settings || !pgame.user?.isGM) { toast('Only the GM can sync a backup.', 'error'); return; }
+    pgame.settings.set('untangle', 'campaignBackup', toFoundryPlain({ savedAt: Date.now(), state })).then(() => {
+      toast('Backup synced.', 'success');
+      render();
+    });
+  } catch (err) {
+    toast('Could not sync backup: ' + (err.message || String(err)), 'error');
+  }
+}
+
+function exportCampaignJSON(campaignId) {
+  const c = state.campaigns.find(x => x.id === campaignId);
+  if (!c) return;
+  const blob = new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(c.name||'campaign').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importCampaignJSON(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!imported || typeof imported !== 'object' || !imported.name) throw new Error('Not a valid campaign file.');
+      imported.id = uid();
+      state.campaigns.push(imported);
+      state.currentCampaignId = imported.id;
+      save();
+      renderNavLinks();
+      render();
+      toast(`Imported "${imported.name}".`, 'success');
+    } catch (err) {
+      toast('Could not import - ' + (err.message || 'invalid file.'), 'error');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function setPacingThreshold(kind, value) {
+  const fallback = kind === 'stale' ? STALE_THRESHOLD : SPOTLIGHT_THRESHOLD;
+  const n = Math.max(1, Math.min(20, parseInt(value, 10) || fallback));
+  if (kind === 'stale') state.settings.staleThreshold = n; else state.settings.spotlightThreshold = n;
+  save();
+  render();
 }
 
 const FEATURE_CATEGORIES = [...new Set(FEATURE_REGISTRY.map(f => f.category))];
@@ -6149,7 +6809,7 @@ function renderPlotThreads() {
     const si = threadStatusInfo(t.status);
     const involvedNpcs = (t.npcIds||[]).map(id => c.npcs.find(n=>n.id===id)).filter(Boolean);
     const avatars = involvedNpcs.slice(0,5).map(n =>
-      `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;${n.image?'':`background:rgba(var(--accent-rgb),0.1);`}flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(n.name[0]||'?').toUpperCase()}</div>`
+      `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;${n.image?'':`background:rgba(var(--accent-rgb),0.1);`}flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${esc((n.name[0]||'?').toUpperCase())}'">`:(n.name[0]||'?').toUpperCase()}</div>`
     ).join('');
     return `
       <div class="card" onclick="openEditThreadModal('${t.id}')" ${dragToHotbarAttrs('thread', t.id)} style="cursor:pointer;border-left:3px solid ${si.color}">
@@ -6397,6 +7057,11 @@ function mbZoom(factor) {
   _mbTransform = { tx: sp.x + (tx - sp.x) * (ns / scale), ty: sp.y + (ty - sp.y) * (ns / scale), scale: ns };
   _mbApplyTransform();
 }
+function dismissStaleFromPrep(type, id) {
+  dismissStaleEntity(type, id);
+  render();
+}
+
 function autoLayoutMysteryBoard() {
   const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
   if (!t) return;
@@ -6683,7 +7348,7 @@ function openThreadModal(t) {
         <div class="form-group" style="flex:2"><label>Title</label><input type="text" id="th-title" value="${esc(t?.title||'')}" placeholder="The Stolen Artefact, The Missing Duke…"></div>
         <div class="form-group"><label>Status</label><select id="th-status">${statusOpts}</select></div>
       </div>
-      <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea></div>
+      <div class="form-group"><label>What the players know</label><textarea id="th-desc" rows="3" placeholder="What's visible to the party…">${esc(t?.description||'')}</textarea>${dictateBtnHTML('th-desc')}${dictationUnsupportedNotice()}</div>
       <div class="form-group" id="thread-truth-block">${buildTruthBlockHTML()}</div>
       ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='thread'&&ck.linkedId===t.id).length?`
       <div class="form-group">
@@ -6780,7 +7445,8 @@ function buildTruthBlockHTML() {
         <label style="margin:0">GM Truth <span class="text-dim text-xs">(hidden - what's actually happening)</span></label>
         ${toggleBtn}
       </div>
-      <textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…" oninput="window._threadSingleTruth=this.value">${esc(window._threadSingleTruth||'')}</textarea>`;
+      <textarea id="th-truth" rows="3" placeholder="The real story behind the scenes…" oninput="window._threadSingleTruth=this.value">${esc(window._threadSingleTruth||'')}</textarea>
+      ${dictateBtnHTML('th-truth')}${dictationUnsupportedNotice()}`;
   }
 
   const truths = window._threadTruths || [];
@@ -6988,7 +7654,7 @@ function renderFactions() {
     const threads  = (f.threadIds||[]).map(id => c.plotThreads.find(t => t.id === id)).filter(Boolean);
     const col = f.color || '#888888';
     const avatars = members.slice(0,5).map(n =>
-      `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(n.name[0]||'?').toUpperCase()}</div>`
+      `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${esc((n.name[0]||'?').toUpperCase())}'">`:(n.name[0]||'?').toUpperCase()}</div>`
     ).join('');
     const statSt = FACTION_STATUSES.find(s=>s.value===(f.status||'active'));
     return `
@@ -7055,7 +7721,7 @@ function openFactionModal(id) {
         <div class="form-group"><label>Attitude toward party</label><select id="fc-attitude">${attOpts}</select></div>
         <div class="form-group"><label>Status</label><select id="fc-status">${statusOpts}</select></div>
       </div>
-      <div class="form-group"><label>Description</label><textarea id="fc-desc" rows="2" placeholder="Who are they? Who leads them?">${esc(f?.description||'')}</textarea></div>
+      <div class="form-group"><label>Description</label><textarea id="fc-desc" rows="2" placeholder="Who are they? Who leads them?">${esc(f?.description||'')}</textarea>${dictateBtnHTML('fc-desc')}${dictationUnsupportedNotice()}</div>
       <div class="form-group"><label>Goals <span class="text-dim text-xs">(what do they want?)</span></label><textarea id="fc-goals" rows="2" placeholder="Control the docks, restore the old religion…">${esc(f?.goals||'')}</textarea></div>
       <div class="form-group"><label>GM Secrets <span class="text-dim text-xs">(hidden from players)</span></label><textarea id="fc-secrets" rows="2" placeholder="Hidden agenda, internal conflicts…">${esc(f?.secrets||'')}</textarea></div>
       ${isEdit && (c.clocks||[]).filter(ck=>ck.linkedType==='faction'&&ck.linkedId===f.id).length?`
@@ -7306,6 +7972,9 @@ function questionRowHTML(q, i) {
 // the same way computeStaleEntities() derives staleness, rather than
 // maintaining a separate per-PC field that could drift out of sync.
 const SPOTLIGHT_THRESHOLD = 2;
+// Overridable via the Settings page (state.settings.spotlightThreshold);
+// falls back to the constant above for anyone who's never touched it.
+function getSpotlightThreshold() { return state.settings.spotlightThreshold || SPOTLIGHT_THRESHOLD; }
 
 function computeSpotlightNeed() {
   const c = camp();
@@ -7326,8 +7995,9 @@ function computeSpotlightNeed() {
 // moment a PC is checked off again - the "heatmap" the creator asked for,
 // without needing an actual grid across 100+ sessions.
 function spotlightHeatColor(sessionsSince) {
+  const threshold = getSpotlightThreshold();
   if (sessionsSince <= 1) return 'var(--green)';
-  if (sessionsSince === SPOTLIGHT_THRESHOLD) return '#ccaa22';
+  if (sessionsSince === threshold) return '#ccaa22';
   return 'var(--red)';
 }
 
@@ -7380,10 +8050,11 @@ function renderSessionPrep() {
           </div>
           ${staleEntities.slice(0,8).map(e => {
             const openFn = { npc:'openNPCModal', location:'openLocationModal', thread:'openEditThreadModal', faction:'openFactionModal' }[e.type];
-            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="${openFn}('${e.id}')">
-              <span style="width:8px;height:8px;border-radius:50%;background:${e.color};flex-shrink:0;display:inline-block"></span>
-              <span class="text-sm" style="font-weight:500;flex:1">${esc(e.name)}</span>
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span style="width:8px;height:8px;border-radius:50%;background:${e.heatColor||e.color};flex-shrink:0;display:inline-block;cursor:pointer" onclick="${openFn}('${e.id}')"></span>
+              <span class="text-sm" style="font-weight:500;flex:1;cursor:pointer" onclick="${openFn}('${e.id}')">${esc(e.name)}</span>
               <span class="text-xs text-dim">${e.sessionsSince} session${e.sessionsSince!==1?'s':''} ago</span>
+              <button class="btn btn-ghost btn-sm" style="flex-shrink:0;padding:2px 8px" title="Stop reminding me until this comes up again" onclick="dismissStaleFromPrep('${e.type}','${e.id}')">Shelve</button>
             </div>`;
           }).join('')}
         </div>`:''}
@@ -7400,7 +8071,7 @@ function renderSessionPrep() {
               <span style="width:10px;height:10px;border-radius:50%;background:${spotlightHeatColor(p.sessionsSince)};flex-shrink:0;display:inline-block;cursor:pointer" onclick="openNPCModal('${p.id}')"></span>
               <span class="text-sm" style="font-weight:500;flex:1;cursor:pointer" onclick="openNPCModal('${p.id}')">${esc(p.name)}</span>
               <span class="text-xs text-dim">${p.everHadSpotlight ? `${p.sessionsSince} session${p.sessionsSince!==1?'s':''} ago` : 'never yet'}</span>
-              ${p.sessionsSince>=SPOTLIGHT_THRESHOLD?`<span class="text-xs" style="color:var(--red);font-weight:600">needs it soon</span>`:''}
+              ${p.sessionsSince>=getSpotlightThreshold()?`<span class="text-xs" style="color:var(--red);font-weight:600">needs it soon</span>`:''}
             </div>`).join('')}
         </div>`:''}
         ${clocksNearTipping.length?`
@@ -7576,6 +8247,8 @@ function maybeShowOnboarding() {
         <li>Everything works with no setup - log entries manually any time.</li>
         <li>Paid API keys in Foundry's Configure Settings unlock session transcription (Whisper) and AI extraction (Claude), but they're optional.</li>
         <li>Quick field notes and name rolls are one click away above the macro bar, even when this window is closed.</li>
+        <li>The Relationship Web maps how everyone connects, and Plot Threads track rumors and mysteries as they unfold - both with their own GM-only truths players never see.</li>
+        <li>The Player Companion is a separate window you publish to, showing players only what you've revealed - a printable Campaign Bible and Foundry Roll Tables work the same way, built from your own data.</li>
         <li>All data lives in this browser's storage, mirrored into the Foundry world as a backup. Export a backup occasionally from Foundry's Configure Settings to be extra safe.</li>
       </ul>
       <div class="flex gap-8" style="justify-content:flex-end">
@@ -7596,7 +8269,7 @@ function onExternalStateChange() { render(); }
 
 navigate('dashboard');
 maybeShowOnboarding();
-verifyPatreonToken().then(() => renderNavLinks()); // re-check Patreon entitlement once on load; no-op today (no premium features yet)
+verifyPatreonToken().then(() => renderNavLinks()); // re-check Patreon entitlement once on load, in case it changed since the last session
 
 // If the Quick Access widget asked us to open a specific clock/NPC/location/
 // thread/faction (see openInPlanner() in state.js), jump straight to it.

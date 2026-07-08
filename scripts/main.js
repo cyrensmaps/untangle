@@ -587,13 +587,16 @@ window.addEventListener('storage', (e) => {
 // never touch the document at all, so there's nothing on the Actor for
 // either module to read in that case - only the token-image fallback below
 // is something we can reliably pull).
+// Wildcard paths (e.g. "npc-*.webp", used by core wildcard tokens and some
+// art-pool modules) are never usable as a literal <img src> - browsers don't
+// glob - so those are rejected too rather than returned as a guaranteed-404 URL.
 function _resolveActorImgMain(actor) {
-  const isPlaceholder = (p) => !p || p.includes('mystery-man');
+  const isUsable = (p) => !!p && !p.includes('mystery-man') && !p.includes('*');
   const toRoute = (p) => foundry.utils?.getRoute ? foundry.utils.getRoute(p) : (p.startsWith('http') ? p : '/' + p.replace(/^\/+/, ''));
-  if (!isPlaceholder(actor.img)) return toRoute(actor.img);
+  if (isUsable(actor.img)) return toRoute(actor.img);
   const tokenSrc = actor.prototypeToken?.texture?.src;
-  if (!isPlaceholder(tokenSrc)) return toRoute(tokenSrc);
-  return actor.img ? toRoute(actor.img) : null;
+  if (isUsable(tokenSrc)) return toRoute(tokenSrc);
+  return null;
 }
 
 function addActorToUntangle(actor) {
@@ -671,23 +674,44 @@ function addFieldNoteFromChat(text) {
   }
   const campaign = state.campaigns.find(c => c.id === state.currentCampaignId) || state.campaigns[0];
   if (!campaign.quickNotes) campaign.quickNotes = [];
+
+  // Optional "@[Name]" tag at the start links the note the same way the full
+  // Field Notes UI does - matched by exact case-insensitive name against
+  // NPCs, then Locations, Factions, and Plot Threads, in that order. If
+  // nothing matches, the tag text is left in the note rather than silently
+  // dropped, so the GM can still see what they typed.
+  let aboutType = null, aboutId = null, linkedName = '';
+  const tagMatch = text.match(/^@\[([^\]]+)\]\s*/);
+  if (tagMatch) {
+    const name = tagMatch[1].trim().toLowerCase();
+    const lists = [
+      ['npc', campaign.npcs], ['location', campaign.locations],
+      ['faction', campaign.factions], ['thread', campaign.plotThreads],
+    ];
+    for (const [type, list] of lists) {
+      const found = (list||[]).find(x => (type === 'thread' ? x.title : x.name)?.toLowerCase() === name);
+      if (found) { aboutType = type; aboutId = found.id; linkedName = tagMatch[1].trim(); break; }
+    }
+    if (aboutType) text = text.slice(tagMatch[0].length);
+  }
+
   const now = new Date();
   const timestamp = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     + ' ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   campaign.quickNotes.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    text, timestamp, aboutType: null, aboutId: null,
+    text, timestamp, aboutType, aboutId,
   });
   localStorage.setItem('cp_v1', JSON.stringify(state));
   _untangleStateCacheLoaded = false; // this window's own write - no 'storage' event fires for it
-  ui.notifications.info('Untangle | Field note saved.');
+  ui.notifications.info(linkedName ? `Untangle | Field note saved, linked to "${linkedName}".` : 'Untangle | Field note saved.');
 }
 
 Hooks.on('chatMessage', (chatLog, message) => {
   if (!/^\/fdn\b/i.test(message)) return true; // not our command - let Foundry handle it normally
   if (!game.user.isGM) { ui.notifications.warn('Untangle | Only the GM can add field notes this way.'); return false; }
   const text = message.replace(/^\/fdn\s*/i, '').trim();
-  if (!text) { ui.notifications.warn('Untangle | Usage: /fdn <text>'); return false; }
+  if (!text) { ui.notifications.warn('Untangle | Usage: /fdn [@[Name]] <text>'); return false; }
   addFieldNoteFromChat(text);
   return false; // swallow the message - never post "/fdn ..." to chat
 });
@@ -723,7 +747,11 @@ Hooks.on('hoverToken', (token, hovered) => {
     if (!npc) return;
 
     const lines = [];
+    const statusLabels = { dead: 'Dead', unknown: 'Unknown / Missing', fled: 'Fled', imprisoned: 'Imprisoned' };
+    if (npc.status && statusLabels[npc.status]) lines.push(`<div class="untangle-tt-status">${_escHtml(statusLabels[npc.status])}</div>`);
     if (npc.role) lines.push(`<div class="untangle-tt-role">${_escHtml(npc.role)}</div>`);
+    const faction = campaign.factions?.find(f => (f.memberIds||[]).includes(npc.id));
+    if (faction) lines.push(`<div class="untangle-tt-faction">${_escHtml(faction.name)}</div>`);
     if (npc.voiceDescription) lines.push(`<div class="untangle-tt-voice">${_escHtml(npc.voiceDescription)}</div>`);
     const detail = npc.motivation || npc.notes;
     if (detail) lines.push(`<div class="untangle-tt-detail">${_escHtml(detail.slice(0, 160))}</div>`);
@@ -738,8 +766,25 @@ Hooks.on('hoverToken', (token, hovered) => {
     const worldPos = token.center || { x: token.x, y: token.y };
     const globalPos = canvas.stage.toGlobal(new PIXI.Point(worldPos.x, worldPos.y));
     const rect = canvas.app.view.getBoundingClientRect();
-    el.style.left = `${rect.left + globalPos.x}px`;
-    el.style.top = `${rect.top + globalPos.y - 16}px`;
+    let left = rect.left + globalPos.x;
+    let top = rect.top + globalPos.y - 16;
+
+    // Clamp to the viewport - the element has a translate(-50%,-100%) CSS
+    // transform (centered horizontally, anchored above its left/top point),
+    // so the actual rendered box is offset from left/top by half its width
+    // and its full height. Measured after insertion since size depends on
+    // content length.
+    const margin = 8;
+    const tw = el.offsetWidth, th = el.offsetHeight;
+    const visLeft = left - tw / 2, visRight = left + tw / 2;
+    const visTop = top - th, visBottom = top;
+    if (visLeft < margin) left += margin - visLeft;
+    if (visRight > window.innerWidth - margin) left -= visRight - (window.innerWidth - margin);
+    if (visTop < margin) top += margin - visTop;
+    if (visBottom > window.innerHeight - margin) top -= visBottom - (window.innerHeight - margin);
+
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
     _untangleTokenTooltip = el;
   } catch (err) { console.error('Untangle | Token tooltip failed', err); }
 });
@@ -762,6 +807,8 @@ const HOTBAR_FALLBACK_ICON = {
   map: 'icons/svg/map.svg',
 };
 
+const HOTBAR_ENTITY_LIST_KEY = { npc: 'npcs', location: 'locations', thread: 'plotThreads', faction: 'factions', clock: 'clocks', map: 'maps' };
+
 Hooks.on('hotbarDrop', (_bar, data, slot) => {
   if (!game.user.isGM || data?.type !== 'untangle-entity' || !_isFeatureEnabledMain('hotbarMacros')) return;
   const { entityType, entityId, name, image } = data;
@@ -769,7 +816,22 @@ Hooks.on('hotbarDrop', (_bar, data, slot) => {
     try {
       let macro = game.macros.find(m => m.getFlag(MODULE_ID, 'entityId') === entityId && m.getFlag(MODULE_ID, 'entityType') === entityType);
       if (!macro) {
-        const command = `localStorage.setItem('cp_pending_nav', JSON.stringify(${JSON.stringify({ type: entityType, id: entityId })}));\nif (window.openCampaignPlanner) window.openCampaignPlanner();`;
+        // Checks the underlying entity still exists before jumping to it -
+        // if the GM later deletes the NPC/Location/etc this macro points at,
+        // clicking it now cleans itself up with an explanation instead of
+        // silently opening the planner to nothing.
+        const listKey = HOTBAR_ENTITY_LIST_KEY[entityType] || 'npcs';
+        const command = [
+          `try {`,
+          `  const raw = localStorage.getItem('cp_v1');`,
+          `  const st = raw ? JSON.parse(raw) : null;`,
+          `  const campaign = st?.campaigns?.find(c => c.id === st.currentCampaignId);`,
+          `  const exists = campaign?.${listKey}?.some(x => x.id === '${entityId}');`,
+          `  if (!exists) { ui.notifications.warn('Untangle | This macro\\'s linked item no longer exists - deleting the macro.'); await this.delete(); return; }`,
+          `} catch (err) { console.error('Untangle | Macro existence check failed', err); }`,
+          `localStorage.setItem('cp_pending_nav', JSON.stringify(${JSON.stringify({ type: entityType, id: entityId })}));`,
+          `if (window.openCampaignPlanner) window.openCampaignPlanner();`,
+        ].join('\n');
         macro = await Macro.create({
           name: `Untangle: ${name || entityType}`,
           type: 'script',
@@ -982,6 +1044,48 @@ function untangleJumpToSessionPrep() {
   _withPlannerWindow(win => win.navigate('prep'));
 }
 
+// Same polling-for-the-iframe-to-load approach as _withPlannerWindow, but
+// for the (much smaller) Quick Access widget window instead - only opens it
+// if it isn't already showing, since this widget's own open button is a
+// toggle and re-triggering it here would just close what a GM already had open.
+function _withQuickAccessWindow(fn) {
+  if (!game.user.isGM) return;
+  if (!_quickAccessApp?.rendered) toggleQuickAccessWidget();
+  const tryRun = (attemptsLeft) => {
+    const iframe = _quickAccessApp?.element?.[0]?.querySelector?.('iframe');
+    const win = iframe?.contentWindow;
+    if (win && typeof win.qaSwitch === 'function') { fn(win); return; }
+    if (attemptsLeft <= 0) { console.warn('Untangle | Timed out waiting for Quick Access to load.'); return; }
+    setTimeout(() => tryRun(attemptsLeft - 1), 100);
+  };
+  tryRun(50);
+}
+function untangleRollAName() {
+  _withQuickAccessWindow(win => win.qaSwitch('names'));
+}
+
+// The macro-equivalent of the "/fdn" chat command, for GMs who'd rather
+// click a hotbar button mid-session than remember chat syntax - reuses the
+// exact same save path (and @[Name] tagging) as /fdn itself.
+function untangleQuickFieldNote() {
+  if (!game.user.isGM) return;
+  new Dialog({
+    title: 'Quick Field Note',
+    content: `<div class="form-group"><label>Note <span style="opacity:0.7">(start with @[Name] to link it to a character, location, faction, or thread)</span></label><textarea id="untangle-qfn-text" rows="4" style="width:100%"></textarea></div>`,
+    buttons: {
+      save: {
+        label: 'Save',
+        callback: html => {
+          const text = (html.find ? html.find('#untangle-qfn-text').val() : html.querySelector('#untangle-qfn-text')?.value)?.trim();
+          if (text) addFieldNoteFromChat(text);
+        },
+      },
+      cancel: { label: 'Cancel' },
+    },
+    default: 'save',
+  }).render(true);
+}
+
 const UNTANGLE_MACROS = [
   { key: 'showOnboarding', name: 'Untangle: Show Onboarding', command: 'untangleShowOnboarding();' },
   { key: 'openPlanner', name: 'Untangle: Open Planner', command: 'openCampaignPlanner();' },
@@ -989,8 +1093,9 @@ const UNTANGLE_MACROS = [
   { key: 'togglePlayerCompanion', name: 'Untangle: Toggle Player Companion', command: 'toggleWikiViewer();' },
   { key: 'newSession', name: 'Untangle: New Session', command: 'untangleNewSession();' },
   { key: 'publishPlayerCompanion', name: 'Untangle: Publish Player Companion', command: 'untanglePublishPlayerCompanion();' },
-  { key: 'rollAName', name: 'Untangle: Roll a Name', command: 'toggleQuickAccessWidget();' },
+  { key: 'rollAName', name: 'Untangle: Roll a Name', command: 'untangleRollAName();' },
   { key: 'sessionPrep', name: 'Untangle: Jump to Session Prep', command: 'untangleJumpToSessionPrep();' },
+  { key: 'quickFieldNote', name: 'Untangle: Quick Field Note', command: 'untangleQuickFieldNote();' },
 ];
 
 async function ensureUntangleMacros() {

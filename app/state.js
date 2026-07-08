@@ -150,10 +150,25 @@ function tickClockValue(clock, segIndex) {
 // Flags NPCs/Locations/Threads/Factions that had appeared in earlier sessions
 // but haven't come up in the last `threshold` sessions — resurfacing the
 // threads an improv-heavy GM is most likely to have forgotten about.
+// Overridable per-campaign pace via state.settings.staleThreshold (Settings
+// page), falling back to this default for anyone who's never touched it.
 const STALE_THRESHOLD = 3;
+// Overridable via the Settings page (state.settings.staleThreshold); falls
+// back to the constant above for anyone who's never touched it.
+function getStaleThreshold() { return state.settings.staleThreshold || STALE_THRESHOLD; }
+
+// Same "flat, low-saturation → warm → hot" 3-tier scale PC Spotlight already
+// uses (spotlightHeatColor in app/index.html) - Stale Callbacks previously
+// used one flat color per entity TYPE regardless of how overdue it was.
+function staleHeatColor(sessionsSince, threshold) {
+  threshold = threshold || STALE_THRESHOLD;
+  if (sessionsSince >= threshold * 2) return 'var(--red)';
+  if (sessionsSince > threshold) return '#ccaa22';
+  return 'var(--text-dim)';
+}
 
 function computeStaleEntities(threshold) {
-  threshold = threshold || STALE_THRESHOLD;
+  threshold = threshold || getStaleThreshold();
   const c = camp();
   const total = c.sessions.length;
   if (total <= threshold) return [];
@@ -165,20 +180,27 @@ function computeStaleEntities(threshold) {
     return (n !== undefined && n > m) ? n : m;
   }, 0);
 
+  // A dismissal only suppresses staleness until the entity is actually used
+  // again - stored as the session number it had AT dismissal time, so once
+  // `last` moves past that (a new session touches it), it naturally becomes
+  // eligible to go stale again instead of being silenced forever.
+  const dismissed = c.dismissedStale || {};
   const out = [];
+  const pushIfStale = (type, id, name, last, color) => {
+    const key = type + ':' + id;
+    if (dismissed[key] !== undefined && last <= dismissed[key]) return;
+    const since = total - last;
+    if (since >= threshold) out.push({ type, id, name, sessionsSince: since, color, heatColor: staleHeatColor(since, threshold) });
+  };
 
   (c.npcs||[]).forEach(n => {
     if (!n.sessions || !n.sessions.length) return;
-    const last = maxSessionNumber(n.sessions);
-    const since = total - last;
-    if (since >= threshold) out.push({ type: 'npc', id: n.id, name: n.name, sessionsSince: since, color: 'var(--accent)' });
+    pushIfStale('npc', n.id, n.name, maxSessionNumber(n.sessions), 'var(--accent)');
   });
 
   (c.locations||[]).forEach(l => {
     if (!l.sessionIds || !l.sessionIds.length) return;
-    const last = maxSessionNumber(l.sessionIds);
-    const since = total - last;
-    if (since >= threshold) out.push({ type: 'location', id: l.id, name: l.name, sessionsSince: since, color: 'var(--green)' });
+    pushIfStale('location', l.id, l.name, maxSessionNumber(l.sessionIds), 'var(--green)');
   });
 
   (c.plotThreads||[]).forEach(t => {
@@ -187,21 +209,30 @@ function computeStaleEntities(threshold) {
     const locSessions = (t.locationIds||[]).flatMap(id => (c.locations.find(l=>l.id===id)?.sessionIds)||[]);
     const linked = [...npcSessions, ...locSessions];
     if (!linked.length) return;
-    const last = maxSessionNumber(linked);
-    const since = total - last;
-    if (since >= threshold) out.push({ type: 'thread', id: t.id, name: t.title, sessionsSince: since, color: '#dd8800' });
+    pushIfStale('thread', t.id, t.title, maxSessionNumber(linked), '#dd8800');
   });
 
   (c.factions||[]).forEach(f => {
     if (f.status === 'defeated') return;
     const memberSessions = (f.memberIds||[]).flatMap(id => (c.npcs.find(n=>n.id===id)?.sessions)||[]);
     if (!memberSessions.length) return;
-    const last = maxSessionNumber(memberSessions);
-    const since = total - last;
-    if (since >= threshold) out.push({ type: 'faction', id: f.id, name: f.name, sessionsSince: since, color: f.color || '#888888' });
+    pushIfStale('faction', f.id, f.name, maxSessionNumber(memberSessions), f.color || '#888888');
   });
 
   return out.sort((a,b) => b.sessionsSince - a.sessionsSince);
+}
+
+// Shelves a stale entity so it stops nagging until it's actually used again
+// (see the dismissed-map comment in computeStaleEntities above) - stores the
+// session number it currently has, not a permanent flag.
+function dismissStaleEntity(type, id) {
+  const c = camp();
+  const entry = computeStaleEntities().find(e => e.type === type && e.id === id);
+  if (!entry) return;
+  const last = c.sessions.length - entry.sessionsSince;
+  if (!c.dismissedStale) c.dismissedStale = {};
+  c.dismissedStale[type + ':' + id] = last;
+  save();
 }
 
 // ── Cross-window navigation ──
@@ -339,9 +370,8 @@ function toggleDictation(textareaId, btn) {
 // Locations/Factions/Plot-Threads tracking, which is never gated.
 //
 // `premium` marks a feature as requiring an active Patreon pledge (see
-// isPatreonEntitled() below) in addition to being manually enabled. Nothing
-// is premium yet — flipping one to `true` later is a one-line change, not a
-// rearchitecture.
+// isPatreonEntitled() below) in addition to being manually enabled. Gating a
+// new feature is a one-line change here, not a rearchitecture.
 const FEATURE_REGISTRY = [
   { key: 'sessionPrep',       label: 'Session Prep',              category: 'At the Table',       premium: false },
   { key: 'timeline',          label: 'Timeline',                  category: 'At the Table',       premium: true  },

@@ -1,8 +1,9 @@
 /* Untangle — shared component base styles
-   Loaded by both app/index.html and app/widget.html. Holds only the
-   properties that are identical in both places; page-specific sizing
-   (padding, font-size) stays local to each file's own <style> block since
-   the widget uses a more compact scale throughout. */
+   Loaded by app/index.html, app/widget.html, and app/wiki-viewer.html. Holds
+   only the properties that are identical everywhere; page-specific sizing
+   (padding, font-size, max-width) stays local to each file's own <style>
+   block since the widget and Player Companion both use a more compact scale
+   than the main window. */
 
 .btn {
   border: none;
@@ -36,3 +37,27 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 3px; }
+
+/* ── MODAL (shared base) ──
+   The main window's .modal-overlay/.modal/.modal-header/.modal-close family
+   and the Player Companion's .wv-modal-overlay/.wv-modal/.wv-modal-header/
+   .wv-modal-close family used to each define their own copy of this from
+   scratch - close enough to drift apart unnoticed, never quite identical.
+   This holds the properties that already matched; each file's own <style>
+   block layers its own sizing (padding, max-width/height, animation) on top. */
+.modal-overlay, .wv-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 20px;
+}
+.modal, .wv-modal {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  width: 100%; overflow-y: auto;
+}
+.modal-header, .wv-modal-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.modal-close, .wv-modal-close {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 1.1rem; flex-shrink: 0;
+}

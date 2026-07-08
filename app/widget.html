@@ -152,7 +152,22 @@ function qaSetStyle(styleKey) {
 function qaRegenerateNames() {
   const container = document.getElementById('qa-names-list');
   const names = Array.from({ length: 8 }, () => generateStyledName(qaStyle));
-  container.innerHTML = names.map(n => `<button class="qa-name-btn" onclick="qaCopyName('${esc(n)}')">${esc(n)}</button>`).join('');
+  container.innerHTML = names.map(n => `
+    <div class="qa-name-btn" style="display:flex;align-items:stretch;padding:0">
+      <span onclick="qaCopyName('${esc(n)}')" title="Copy" style="flex:1;min-width:0;padding:7px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>
+      <span onclick="qaCreateCharacterFromName('${esc(n)}')" title="Add as new Character" style="flex-shrink:0;padding:7px 8px;border-left:1px solid var(--border);cursor:pointer;color:var(--accent);font-weight:700">+</span>
+    </div>`).join('');
+}
+
+// Creates the character straight from this tiny window, then hands off to
+// the main planner to open its full edit modal - matches how stale-callback
+// and clock rows here already jump into the planner via openInPlanner().
+function qaCreateCharacterFromName(name) {
+  const c = camp();
+  c.npcs.push({ id: uid(), name, role: '', motivation: '', goals: [], notes: '', secrets: '', locationId: null, status: 'alive', type: 'npc', voiceDescription: '', sessions: [], events: [], image: null, imageOffsetX: 50, imageOffsetY: 50, playerVisible: false });
+  save();
+  const newId = c.npcs[c.npcs.length-1].id;
+  openInPlanner('npc', newId);
 }
 
 // A token guard, rather than each call snapshotting/restoring whatever the
@@ -203,6 +218,7 @@ function qaRenderCallbacks() {
     ? `<div class="qa-empty">Nothing stale right now.</div>`
     : stale.slice(0, 10).map(e => `
       <div class="qa-callback-row">
+        <span style="width:7px;height:7px;border-radius:50%;background:${e.heatColor||e.color};flex-shrink:0;display:inline-block"></span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openInPlanner('${e.type}','${e.id}')">${esc(e.name)}</span>
         <span style="flex-shrink:0;color:var(--text-dim)">${e.sessionsSince}s ago</span>
       </div>`).join('');
@@ -216,6 +232,9 @@ function onExternalStateChange() {
   qaRenderTabs();
 }
 
+if (!speechRecognitionSupported() && isFeatureEnabled('voiceDictation')) {
+  document.getElementById('qa-dictate-btn')?.insertAdjacentHTML('afterend', `<div class="qa-hint" style="text-align:left;height:auto;margin-top:4px">Voice dictation isn't supported in this browser.</div>`);
+}
 if (!isFeatureEnabled('voiceDictation') || !speechRecognitionSupported()) document.getElementById('qa-dictate-btn')?.remove();
 
 qaRenderTabs();
