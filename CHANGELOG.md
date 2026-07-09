@@ -4,6 +4,39 @@ All notable changes to this module are documented here. Format loosely follows [
 
 ## [Unreleased]
 
+## [0.15.0]
+
+### Added
+- **AI-assisted session logging is much smarter**: reviewing a processed session can now also surface Plot Thread clue suggestions, Clock tick suggestions, and new Relationship/Faction-membership connections, on top of the existing NPC/Location/Faction/Hook extraction - all still reviewed and approved per-item before anything saves.
+- **Choice of AI provider for session analysis**: pick Claude or ChatGPT (OpenAI) from a new selector on Log New Session. Your choice persists and applies to Transcribe & Process, Transcribe Locally, Process with AI, and Re-analyse with AI alike.
+- **GM Notes** on Plot Threads, Factions, and Locations - a running, GM-only scratchpad for anything that isn't a clue, a secret, or the truth itself, styled like NPC Session Events.
+- **Answer button on Open Questions** (Session Prep) - write or dictate a resolution and file it straight onto the relevant Plot Thread's GM Notes. No AI required.
+- **Custom List Values** (Settings) - add your own entries to Character Type, Relationship Type, Plot Thread Status, Faction Attitude, Faction Status, and NPC Status. Built-in entries stay protected since parts of the module depend on their exact values.
+- **Mystery Board**: a full draggable, pannable, zoomable corkboard per Plot Thread (Premium), reached via a button on Plot Threads - drop one piece on another to connect them, red string shows which clues support which truth.
+- **Drag-and-drop-to-connect** on the Relationship Web too - drop one character on another to open a connection modal pre-filled with both.
+- **Field Notes**: tag a note to a Character/Location/Faction/Thread inline with `@[Name]` from the `/fdn` chat command; Field Notes and Plot Thread clues are now indexed by Global Search.
+- Global Search: relevance-ranked results, arrow-key navigation, and Maps/pins are now indexed too.
+- Voice dictation is now available on nearly every free-text field across the module, not just Field Notes.
+- Session Prep gained a "Clocks Near Tipping" card and a spotlight-aware Recap.
+- Settings: Export/Import a campaign as JSON, Pacing thresholds for Stale Callbacks/PC Spotlight, and an About card with version/changelog/replay-onboarding.
+- Onboarding has a proper visual header with the Untangle logo, and a short Patreon mention.
+- Every button that spends Claude/OpenAI credits now shows a small icon so it's clear at a glance which ones cost money.
+
+### Changed
+- Pull from Foundry now groups characters by whatever Actor types your game system actually defines, instead of a hardcoded PC/NPC split.
+- Settings page is reorganized into a fixed two-column layout.
+- Player Companion window widened so all 8 tabs fit on one row; its management page now shows the correct linked-entity name for map pins instead of "Unlabeled pin".
+- Name Generator: rolling a name from Add Character now opens its own modal instead of a style-picker sitting next to the Type field, where it read like a race picker.
+- Session Prep's Active Threads card moved into the left column, next to Planned Scenes; Open Questions' Answer/Delete buttons are stacked instead of spread across the row.
+- Character Type lost Settlement/City and NPC Status lost Fled, now that you can add your own equivalents via Custom List Values - existing data using these is migrated automatically (Character Type falls back to NPC, NPC Status falls back to Alive).
+
+### Fixed
+- A wildcard Foundry token-art path could produce a guaranteed-broken portrait image; now falls back to an initials avatar.
+- Several index-based fallback bugs in Relationship Type/Thread Status/Faction Attitude lookups that only worked correctly by accident.
+- Cropped logo rendering in the nav sidebar, onboarding, and Settings, traced to CSS sizing rather than the underlying image assets.
+- A real gate bug on Log New Session where Transcribe Locally always checked for a Claude key regardless of the selected AI provider.
+- A broad sweep of 44 smaller UX/functionality issues across Timeline, Maps, Search, Campaign Bible, Roll Table Sync, Recap, and Settings.
+
 ## [0.14.1]
 
 ### Added
