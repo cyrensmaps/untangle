@@ -55,6 +55,14 @@
     /* ── CARDS ── */
     .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    /* Settings' cards vary wildly in height (a two-line Theme card next to a
+       long Custom List Values panel) - a strict grid pairs them row-by-row
+       and stretches the whole row to the tallest one, leaving a huge gap
+       under every short card. CSS multi-column flows cards down one column
+       and only wraps to the next when full, like newspaper text, so short
+       cards stack back-to-back instead of leaving dead space. */
+    .settings-columns { column-count: 2; column-gap: 16px; }
+    .settings-columns > .card { break-inside: avoid; margin-bottom: 16px; }
 
     /* ── BUTTONS (shared base in components.css; sizing here) ── */
     .btn { padding: 8px 18px; font-size: 0.85rem; }
@@ -834,12 +842,12 @@ function renderNewSession() {
           Works with recordings from Craig, Discord, or any other session recorder - not Craig-specific. <strong style="color:var(--text)">MP3, MP4, MPEG, M4A, WAV, and WEBM</strong> are OpenAI's own officially supported formats; other formats your browser can decode (OGG, FLAC, Opus) are automatically converted before upload. Large files are automatically split and transcribed in chunks - no size limit.
         </p>
         <p class="text-xs" style="margin-top:8px;line-height:1.6;padding:10px 12px;background:rgba(var(--red-rgb),0.08);border:1px solid rgba(var(--red-rgb),0.25);border-radius:6px;color:var(--text)">
-          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
+          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your ${aiProviderLabel()} API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
           <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>${aiIconHTML()}Transcribe &amp; Process</button>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + Claude (analysis)</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + ${aiProviderLabel()} (analysis)</div>
       </div>
 
       <!-- LOCAL WHISPER MODE -->
@@ -912,7 +920,7 @@ The AI will extract:
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">${aiIconHTML()}Process with AI</button>
           </div>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your Claude API key</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your ${aiProviderLabel()} API key</div>
       </div>
 
       <div id="status-box" style="display:none" class="status-box">
@@ -1156,15 +1164,16 @@ async function transcribeLocal() {
     const transcript = (result.text || '').trim();
     if (!transcript) throw new Error('Transcription returned empty text.');
 
-    if (!getClaudeKey()) {
-      // No Claude key — put transcript in paste mode so user can still save/use it
+    const _provider = state.settings.aiProvider || 'claude';
+    if (!(_provider === 'openai' ? getOpenAIKey() : getClaudeKey())) {
+      // No key for the selected provider — put transcript in paste mode so user can still save/use it
       setMode('paste');
       const ta = document.getElementById('s-transcript');
       if (ta) ta.value = transcript;
       hideChunkProgress();
       setStatus(null);
       lockUI(false);
-      toast('Transcription done - add your Claude key to extract NPCs, or save manually.', 'success');
+      toast(`Transcription done - add your ${aiProviderLabel()} key to extract NPCs, or save manually.`, 'success');
       return;
     }
 
@@ -5990,7 +5999,7 @@ function renderSettings() {
       <div><h2>Settings</h2><p class="subtitle">Campaign management</p></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <div class="settings-columns">
     <div class="card">
       <h3 style="margin-bottom:6px">Theme</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget and Player Companion.</p>
@@ -8628,7 +8637,7 @@ function maybeShowOnboarding() {
       </p>
       <ul class="text-sm text-dim" style="line-height:2;margin:0 0 18px 18px">
         <li>Everything works with no setup - log entries manually any time.</li>
-        <li>Paid API keys in Foundry's Configure Settings unlock session transcription (Whisper) and AI extraction (Claude), but they're optional.</li>
+        <li>Paid API keys in Foundry's Configure Settings unlock session transcription (Whisper) and AI extraction (Claude or ChatGPT, your choice), but they're optional.</li>
         <li>Quick field notes and name rolls are one click away above the macro bar, even when this window is closed.</li>
         <li>The Relationship Web maps how everyone connects, and Plot Threads track rumors and mysteries as they unfold - both with their own GM-only truths players never see.</li>
         <li>The Player Companion is a separate window you publish to, showing players only what you've revealed - a printable Campaign Bible and Foundry Roll Tables work the same way, built from your own data.</li>
