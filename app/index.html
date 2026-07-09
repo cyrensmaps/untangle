@@ -842,12 +842,12 @@ function renderNewSession() {
           Works with recordings from Craig, Discord, or any other session recorder - not Craig-specific. <strong style="color:var(--text)">MP3, MP4, MPEG, M4A, WAV, and WEBM</strong> are OpenAI's own officially supported formats; other formats your browser can decode (OGG, FLAC, Opus) are automatically converted before upload. Large files are automatically split and transcribed in chunks - no size limit.
         </p>
         <p class="text-xs" style="margin-top:8px;line-height:1.6;padding:10px 12px;background:rgba(var(--red-rgb),0.08);border:1px solid rgba(var(--red-rgb),0.25);border-radius:6px;color:var(--text)">
-          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your ${aiProviderLabel()} API key and costs money too.
+          <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your <span class="ai-provider-label">${aiProviderLabel()}</span> API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
           <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>${aiIconHTML()}Transcribe &amp; Process</button>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + ${aiProviderLabel()} (analysis)</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + <span class="ai-provider-label">${aiProviderLabel()}</span> (analysis)</div>
       </div>
 
       <!-- LOCAL WHISPER MODE -->
@@ -920,7 +920,7 @@ The AI will extract:
             <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">${aiIconHTML()}Process with AI</button>
           </div>
         </div>
-        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your ${aiProviderLabel()} API key</div>
+        <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your <span class="ai-provider-label">${aiProviderLabel()}</span> API key</div>
       </div>
 
       <div id="status-box" style="display:none" class="status-box">
@@ -1714,6 +1714,12 @@ async function processWithAI() {
 function setAiProvider(value) {
   state.settings.aiProvider = value === 'openai' ? 'openai' : 'claude';
   save();
+  // Patch the cost-notice text in place rather than a full render() - a
+  // fresh render() would reset the audio drop zone / enabled state of the
+  // Transcribe buttons back to their initial template values, since those
+  // are flipped by direct DOM manipulation in onAudioSelected() rather than
+  // driven from data the template re-reads.
+  document.querySelectorAll('.ai-provider-label').forEach(el => el.textContent = aiProviderLabel());
 }
 function aiProviderLabel() { return (state.settings.aiProvider === 'openai') ? 'ChatGPT' : 'Claude'; }
 
