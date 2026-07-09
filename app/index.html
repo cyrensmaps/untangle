@@ -55,14 +55,6 @@
     /* ── CARDS ── */
     .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-    /* Settings' cards vary wildly in height (a two-line Theme card next to a
-       long Custom List Values panel) - a strict grid pairs them row-by-row
-       and stretches the whole row to the tallest one, leaving a huge gap
-       under every short card. CSS multi-column flows cards down one column
-       and only wraps to the next when full, like newspaper text, so short
-       cards stack back-to-back instead of leaving dead space. */
-    .settings-columns { column-count: 2; column-gap: 16px; }
-    .settings-columns > .card { break-inside: avoid; margin-bottom: 16px; }
 
     /* ── BUTTONS (shared base in components.css; sizing here) ── */
     .btn { padding: 8px 18px; font-size: 0.85rem; }
@@ -6005,83 +5997,13 @@ function renderSettings() {
       <div><h2>Settings</h2><p class="subtitle">Campaign management</p></div>
     </div>
 
-    <div class="settings-columns">
-    <div class="card">
-      <h3 style="margin-bottom:6px">Theme</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget and Player Companion.</p>
-      <div class="form-group" style="margin-bottom:0;max-width:240px">
-        <select id="theme-select" onchange="setTheme(this.value)">
-          ${THEMES.map(t => `<option value="${t.value}" ${t.value===currentTheme?'selected':''}>${t.label}</option>`).join('')}
-        </select>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-bottom:6px">Custom List Values</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Add your own options to the dropdowns used throughout Untangle (Character Type, Relationship Type, Plot Thread Status, Faction Attitude, Faction Status, NPC Status). Built-in options stay fixed since parts of Untangle depend on them, but you can add as many extras as you like.</p>
-      <div class="form-group" style="max-width:280px;margin-bottom:0">
-        <select id="clv-list-select" onchange="window._clvSelectedList=this.value;window._clvColor=null;render()">
-          ${CUSTOM_LIST_REGISTRY.map(r => `<option value="${r.key}" ${(window._clvSelectedList||CUSTOM_LIST_REGISTRY[0].key)===r.key?'selected':''}>${r.label}</option>`).join('')}
-        </select>
-      </div>
-      ${renderCustomListValuesPanel(window._clvSelectedList || CUSTOM_LIST_REGISTRY[0].key)}
-    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:16px">
 
     <div class="card">
       <h3 style="margin-bottom:6px">API keys &amp; data</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Claude/OpenAI keys, and exporting or clearing all campaign data, live in Foundry's own settings menu.</p>
       <button class="btn btn-ghost" onclick="window.parent.game.settings.sheet.render(true)">Open Foundry Configure Settings</button>
-    </div>
-
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:16px">
-        <h3>Campaigns</h3>
-        <div class="flex gap-8">
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('campaign-import-input').click()">Import…</button>
-          <input type="file" id="campaign-import-input" accept="application/json,.json" style="display:none" onchange="importCampaignJSON(this)">
-          <button class="btn btn-ghost btn-sm" onclick="openNewCampaignModal()">+ New Campaign</button>
-        </div>
-      </div>
-      ${state.campaigns.map(c => `
-        <div class="campaign-list-item">
-          <div class="cname">${esc(c.name)}</div>
-          ${c.id===state.currentCampaignId?'<span class="active-tag">Active</span>':`<button class="btn btn-ghost btn-sm" onclick="switchCampaign('${c.id}')">Switch</button>`}
-          <button class="btn btn-ghost btn-sm" onclick="renameCampaignModal('${c.id}')">Rename</button>
-          <button class="btn btn-ghost btn-sm" onclick="exportCampaignJSON('${c.id}')">Export</button>
-          ${state.campaigns.length>1?`<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">Delete</button>`:''}
-        </div>`).join('')}
-    </div>
-
-    <div class="card">
-      <h3 style="margin-bottom:6px">Pacing</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">How many sessions can pass before Stale Callbacks and PC Spotlight start nagging you about something. Lower runs faster and chattier; higher fits a slower-paced table.</p>
-      <div class="form-row">
-        <div class="form-group"><label>Stale Callbacks (sessions)</label><input type="number" min="1" max="20" value="${getStaleThreshold()}" onchange="setPacingThreshold('stale',this.value)"></div>
-        <div class="form-group"><label>PC Spotlight (sessions)</label><input type="number" min="1" max="20" value="${getSpotlightThreshold()}" onchange="setPacingThreshold('spotlight',this.value)"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-bottom:6px">Tools</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
-      ${isFeatureEnabled('rollTableSync') && camp().rollTablesLastSynced?`<p class="text-xs text-dim" style="margin-bottom:12px">Roll Tables last synced: ${new Date(camp().rollTablesLastSynced).toLocaleString()}</p>`:''}
-      <div class="flex gap-8" style="flex-wrap:wrap">
-        ${isFeatureEnabled('campaignBible')?`<button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>`:''}
-        ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>`:''}
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-bottom:6px">Features</h3>
-      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way - flipping one back on later picks up right where you left it.</p>
-      ${FEATURE_CATEGORIES.map(cat => `
-        <div style="margin-bottom:14px">
-          <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${esc(cat)}</div>
-          ${FEATURE_REGISTRY.filter(f=>f.category===cat).map(f => `
-            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
-              <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${isFeatureEnabled(f.key)?'checked':''} ${f.premium && !isPatreonEntitled() ? 'disabled' : ''} onchange="onToggleFeature('${f.key}', this.checked)">
-              <span>${esc(f.label)}${f.premium?' <span class="text-xs text-dim">(Premium)</span>':''}</span>
-            </label>`).join('')}
-        </div>`).join('')}
     </div>
 
     <div class="card">
@@ -6121,12 +6043,90 @@ function renderSettings() {
     </div>
 
     <div class="card">
+      <h3 style="margin-bottom:6px">Tools</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
+      ${isFeatureEnabled('rollTableSync') && camp().rollTablesLastSynced?`<p class="text-xs text-dim" style="margin-bottom:12px">Roll Tables last synced: ${new Date(camp().rollTablesLastSynced).toLocaleString()}</p>`:''}
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        ${isFeatureEnabled('campaignBible')?`<button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>`:''}
+        ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>`:''}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <h3>Campaigns</h3>
+        <div class="flex gap-8">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('campaign-import-input').click()">Import…</button>
+          <input type="file" id="campaign-import-input" accept="application/json,.json" style="display:none" onchange="importCampaignJSON(this)">
+          <button class="btn btn-ghost btn-sm" onclick="openNewCampaignModal()">+ New Campaign</button>
+        </div>
+      </div>
+      ${state.campaigns.map(c => `
+        <div class="campaign-list-item">
+          <div class="cname">${esc(c.name)}</div>
+          ${c.id===state.currentCampaignId?'<span class="active-tag">Active</span>':`<button class="btn btn-ghost btn-sm" onclick="switchCampaign('${c.id}')">Switch</button>`}
+          <button class="btn btn-ghost btn-sm" onclick="renameCampaignModal('${c.id}')">Rename</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportCampaignJSON('${c.id}')">Export</button>
+          ${state.campaigns.length>1?`<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">Delete</button>`:''}
+        </div>`).join('')}
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:6px">Theme</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget and Player Companion.</p>
+      <div class="form-group" style="margin-bottom:0;max-width:240px">
+        <select id="theme-select" onchange="setTheme(this.value)">
+          ${THEMES.map(t => `<option value="${t.value}" ${t.value===currentTheme?'selected':''}>${t.label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+    <div class="card">
+      <h3 style="margin-bottom:6px">Features</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way - flipping one back on later picks up right where you left it.</p>
+      ${FEATURE_CATEGORIES.map(cat => `
+        <div style="margin-bottom:14px">
+          <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${esc(cat)}</div>
+          ${FEATURE_REGISTRY.filter(f=>f.category===cat).map(f => `
+            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer">
+              <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${isFeatureEnabled(f.key)?'checked':''} ${f.premium && !isPatreonEntitled() ? 'disabled' : ''} onchange="onToggleFeature('${f.key}', this.checked)">
+              <span>${esc(f.label)}${f.premium?' <span class="text-xs text-dim">(Premium)</span>':''}</span>
+            </label>`).join('')}
+        </div>`).join('')}
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:6px">Custom List Values</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Add your own options to the dropdowns used throughout Untangle (Character Type, Relationship Type, Plot Thread Status, Faction Attitude, Faction Status, NPC Status). Built-in options stay fixed since parts of Untangle depend on them, but you can add as many extras as you like.</p>
+      <div class="form-group" style="max-width:280px;margin-bottom:0">
+        <select id="clv-list-select" onchange="window._clvSelectedList=this.value;window._clvColor=null;render()">
+          ${CUSTOM_LIST_REGISTRY.map(r => `<option value="${r.key}" ${(window._clvSelectedList||CUSTOM_LIST_REGISTRY[0].key)===r.key?'selected':''}>${r.label}</option>`).join('')}
+        </select>
+      </div>
+      ${renderCustomListValuesPanel(window._clvSelectedList || CUSTOM_LIST_REGISTRY[0].key)}
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:6px">Pacing</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">How many sessions can pass before Stale Callbacks and PC Spotlight start nagging you about something. Lower runs faster and chattier; higher fits a slower-paced table.</p>
+      <div class="form-row">
+        <div class="form-group"><label>Stale Callbacks (sessions)</label><input type="number" min="1" max="20" value="${getStaleThreshold()}" onchange="setPacingThreshold('stale',this.value)"></div>
+        <div class="form-group"><label>PC Spotlight (sessions)</label><input type="number" min="1" max="20" value="${getSpotlightThreshold()}" onchange="setPacingThreshold('spotlight',this.value)"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 style="margin-bottom:6px">About</h3>
       <p class="text-sm text-dim" style="margin-bottom:12px">${untangleVersion() ? `Untangle v${esc(untangleVersion())}` : 'Untangle'}</p>
       <div class="flex gap-8" style="flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="window.parent.open(untangleChangelogUrl(), '_blank')">View Changelog</button>
         <button class="btn btn-ghost" onclick="replayOnboarding()">Replay Onboarding</button>
       </div>
+    </div>
+
     </div>
     </div>`;
 }
