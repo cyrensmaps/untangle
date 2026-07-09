@@ -383,7 +383,7 @@ save();
 
 const BALANCE_LINKS = {
   claude: { label: 'Anthropic (Claude)', url: 'https://console.anthropic.com/settings/billing' },
-  openai: { label: 'OpenAI (Whisper)', url: 'https://platform.openai.com/settings/organization/billing/overview' },
+  openai: { label: 'OpenAI', url: 'https://platform.openai.com/settings/organization/billing/overview' },
 };
 
 function confirmPaidAction(serviceKeys, actionLabel) {
@@ -802,6 +802,13 @@ function renderNewSession() {
           <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Set Simple Calendar's current date to whatever was last pulled here" onclick="pushSimpleCalendarDate('s-inworld-date')">Set as Current Date</button>`:''}
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:4px;max-width:220px">
+        <label>Analyze with <span class="text-dim text-xs">(applies below, whichever tab you use)</span></label>
+        <select id="ai-provider-select" onchange="setAiProvider(this.value)">
+          <option value="claude" ${(state.settings.aiProvider||'claude')==='claude'?'selected':''}>Claude</option>
+          <option value="openai" ${state.settings.aiProvider==='openai'?'selected':''}>ChatGPT (OpenAI)</option>
+        </select>
+      </div>
 
       <div class="mode-tabs">
         <button class="mode-tab ${inputMode==='audio'?'active':''}" onclick="setMode('audio')">Whisper (OpenAI)</button>
@@ -1161,9 +1168,9 @@ async function transcribeLocal() {
       return;
     }
 
-    setStatus('Analysing with Claude…');
+    setStatus(`Analysing with ${aiProviderLabel()}…`);
     hideChunkProgress();
-    await runClaudeExtraction(transcript);
+    await runAIExtraction(transcript);
 
   } catch (err) {
     const msg = err?.message || String(err);
@@ -1207,9 +1214,9 @@ async function transcribeAndProcess() {
   try {
     const transcript = await transcribeChunked(window._audioFile);
     if (!transcript) throw new Error('Transcription returned empty text');
-    setStatus('Analyzing with Claude…');
+    setStatus(`Analyzing with ${aiProviderLabel()}…`);
     hideChunkProgress();
-    await runClaudeExtraction(transcript);
+    await runAIExtraction(transcript);
   } catch (err) {
     console.error('[transcribeAndProcess] caught:', err);
     const msg = err?.message || err?.name || String(err) || 'Unknown error - check the browser console (F12) for details.';
@@ -1677,13 +1684,13 @@ async function processWithAI() {
     }
   }
 
-  if (!(await confirmPaidAction(['claude'], 'Processing this session with AI'))) return;
+  if (!(await confirmPaidAction([state.settings.aiProvider || 'claude'], 'Processing this session with AI'))) return;
 
   lockUI(true);
-  setStatus('Analyzing with Claude…');
+  setStatus(`Analyzing with ${aiProviderLabel()}…`);
 
   try {
-    await runClaudeExtraction(transcript, undefined, playerNames);
+    await runAIExtraction(transcript, undefined, playerNames);
   } catch (err) {
     toast('Error: ' + err.message, 'error');
     lockUI(false);
@@ -1691,10 +1698,63 @@ async function processWithAI() {
   }
 }
 
-// ── Shared Claude extraction logic ──
-async function runClaudeExtraction(transcript, existingSession, playerNames = []) {
-  if (!getClaudeKey()) throw new Error('Claude API key missing - add it in Foundry Configure Settings.');
+// ── AI provider choice for session-log analysis ──
+// Only covers this extraction pipeline (Transcribe & Process, Transcribe
+// Locally, Process with AI, Re-analyse with AI) - Find Duplicates, Voice
+// Coach, and Spark are separate call sites and stay Claude-only for now.
+function setAiProvider(value) {
+  state.settings.aiProvider = value === 'openai' ? 'openai' : 'claude';
+  save();
+}
+function aiProviderLabel() { return (state.settings.aiProvider === 'openai') ? 'ChatGPT' : 'Claude'; }
 
+// Sends the already-built prompt to whichever provider is currently
+// selected, normalizing both responses back to a plain string containing
+// the JSON blob - everything downstream (regex-extract + JSON.parse) stays
+// identical regardless of provider.
+async function callAIProvider(prompt) {
+  const provider = state.settings.aiProvider || 'claude';
+  if (provider === 'openai') {
+    const key = getOpenAIKey();
+    if (!key) throw new Error('OpenAI API key missing - add it in Foundry Configure Settings.');
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `OpenAI API error ${res.status}`);
+    }
+    const data = await res.json();
+    return data.choices[0].message.content;
+  }
+  const key = getClaudeKey();
+  if (!key) throw new Error('Claude API key missing - add it in Foundry Configure Settings.');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+// ── Shared AI extraction logic (Claude or ChatGPT, per the picker above) ──
+async function runAIExtraction(transcript, existingSession, playerNames = []) {
   const c = camp();
   // Short detail per entity (not just names) so Claude has enough to spot a
   // contradiction (e.g. a restated name/role/description that conflicts with
@@ -1805,24 +1865,7 @@ For openQuestions: things the party asked about, wondered about, or that were le
 Transcript:
 ${condensed}`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': getClaudeKey(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Claude API error ${res.status}`);
-  }
-
-  const data = await res.json();
-  const raw = data.content[0].text;
+  const raw = await callAIProvider(prompt);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Could not parse AI response');
   const extracted = JSON.parse(match[0]);
@@ -2821,10 +2864,11 @@ function saveSessionEdits(id) {
 }
 
 async function reanalyseSession(id) {
-  if (!getClaudeKey()) { toast('Add your Claude API key in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
+  const provider = state.settings.aiProvider || 'claude';
+  if (!(provider === 'openai' ? getOpenAIKey() : getClaudeKey())) { toast(`Add your ${aiProviderLabel()} API key in Foundry Configure Settings.`, 'error'); navigate('settings'); return; }
   const s = camp().sessions.find(x => x.id === id);
   if (!s?.rawTranscript) { toast('No transcript stored for this session.', 'error'); return; }
-  if (!(await confirmPaidAction(['claude'], 'Re-analysing this session with AI'))) return;
+  if (!(await confirmPaidAction([provider], 'Re-analysing this session with AI'))) return;
 
   // Close the session modal
   document.querySelector('.modal-overlay')?.remove();
@@ -2836,7 +2880,7 @@ async function reanalyseSession(id) {
   loadingEl.innerHTML = `
     <div style="width:48px;height:48px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--accent);border-radius:50%;animation:spin 0.9s linear infinite"></div>
     <div style="text-align:center">
-      <div style="color:#fff;font-size:1rem;font-weight:600;margin-bottom:6px">Re-analysing with Claude</div>
+      <div style="color:#fff;font-size:1rem;font-weight:600;margin-bottom:6px">Re-analysing with ${esc(aiProviderLabel())}</div>
       <div id="reanalyse-status" style="color:rgba(255,255,255,0.5);font-size:0.82rem">${esc(s.title)}</div>
     </div>`;
   document.body.appendChild(loadingEl);
@@ -2859,7 +2903,7 @@ async function reanalyseSession(id) {
   window._reanalyseId = id;
 
   try {
-    await runClaudeExtraction(s.rawTranscript, s);
+    await runAIExtraction(s.rawTranscript, s);
   } catch (err) {
     window._reanalyseId = null;
     toast('Error: ' + (err.message || String(err)), 'error');
@@ -5368,7 +5412,7 @@ function dictateBtnHTML(textareaId) {
 // since the source asset is black-on-transparent and most buttons here sit
 // on dark backgrounds.
 function aiIconHTML() {
-  return `<img src="assets/generative.png" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:5px;filter:invert(1);opacity:0.9">`;
+  return `<img src="assets/generative.png" alt="" width="18" height="18" style="width:18px;height:18px;vertical-align:-5px;margin-right:6px;filter:invert(1);opacity:0.9">`;
 }
 
 // Shown next to a Dictate button's usual spot when the feature is enabled in
@@ -5946,7 +5990,8 @@ function renderSettings() {
       <div><h2>Settings</h2><p class="subtitle">Campaign management</p></div>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <div class="card">
       <h3 style="margin-bottom:6px">Theme</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Applies immediately and everywhere Untangle shows up, including the Quick Access widget and Player Companion.</p>
       <div class="form-group" style="margin-bottom:0;max-width:240px">
@@ -5956,7 +6001,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Custom List Values</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Add your own options to the dropdowns used throughout Untangle (Character Type, Relationship Type, Plot Thread Status, Faction Attitude, Faction Status, NPC Status). Built-in options stay fixed since parts of Untangle depend on them, but you can add as many extras as you like.</p>
       <div class="form-group" style="max-width:280px;margin-bottom:0">
@@ -5967,12 +6012,12 @@ function renderSettings() {
       ${renderCustomListValuesPanel(window._clvSelectedList || CUSTOM_LIST_REGISTRY[0].key)}
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">API keys &amp; data</h3>
       <button class="btn btn-ghost" onclick="window.parent.game.settings.sheet.render(true)">Open Foundry Configure Settings</button>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <div class="flex-between" style="margin-bottom:16px">
         <h3>Campaigns</h3>
         <div class="flex gap-8">
@@ -5991,7 +6036,7 @@ function renderSettings() {
         </div>`).join('')}
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Pacing</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">How many sessions can pass before Stale Callbacks and PC Spotlight start nagging you about something. Lower runs faster and chattier; higher fits a slower-paced table.</p>
       <div class="form-row">
@@ -6000,7 +6045,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Tools</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">A printable summary of your campaign, and Foundry Roll Tables built from your own NPCs and Locations for on-the-fly random picks.</p>
       ${isFeatureEnabled('rollTableSync') && camp().rollTablesLastSynced?`<p class="text-xs text-dim" style="margin-bottom:12px">Roll Tables last synced: ${new Date(camp().rollTablesLastSynced).toLocaleString()}</p>`:''}
@@ -6010,7 +6055,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Features</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Turn off anything you don't use to simplify the nav. Your data stays intact either way - flipping one back on later picks up right where you left it.</p>
       ${FEATURE_CATEGORIES.map(cat => `
@@ -6024,7 +6069,7 @@ function renderSettings() {
         </div>`).join('')}
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Premium Features</h3>
       <div class="flex gap-10" style="align-items:flex-start;margin-bottom:16px">
         <img src="assets/patreonlogo.png" alt="" width="96" height="60" style="width:96px !important;height:60px !important;max-width:none !important;object-fit:contain !important;flex-shrink:0" onerror="this.style.display='none'">
@@ -6044,7 +6089,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card">
       <h3 style="margin-bottom:6px">Foundry World Backup</h3>
       <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Untangle mirrors your campaign data into this Foundry world's settings on every change, so a cleared browser cache or a new device doesn't lose it. This is a safety net alongside - not a replacement for - the export in Foundry Configure Settings above.</p>
       ${(() => {
@@ -6060,13 +6105,14 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="card" style="max-width:560px">
+    <div class="card">
       <h3 style="margin-bottom:6px">About</h3>
       <p class="text-sm text-dim" style="margin-bottom:12px">${untangleVersion() ? `Untangle v${esc(untangleVersion())}` : 'Untangle'}</p>
       <div class="flex gap-8" style="flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="window.parent.open(untangleChangelogUrl(), '_blank')">View Changelog</button>
         <button class="btn btn-ghost" onclick="replayOnboarding()">Replay Onboarding</button>
       </div>
+    </div>
     </div>`;
 }
 

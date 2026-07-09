@@ -106,7 +106,7 @@ class PlayerWikiApp extends Application {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-wiki-viewer',
       title: 'Player Companion',
-      width: 720,
+      width: 880,
       height: 640,
       resizable: true,
       minimizable: true,

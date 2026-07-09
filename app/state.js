@@ -9,7 +9,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], timelineEvents: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
 
 const DEFAULT_STATE = () => ({
-  settings: { onboarded: false, theme: 'foundry-basic', customListValues: {} },
+  settings: { onboarded: false, theme: 'foundry-basic', customListValues: {}, aiProvider: 'claude' },
   currentCampaignId: null,
   campaigns: [],
 });
@@ -38,6 +38,7 @@ if (!state) {
   if (state.settings.onboarded === undefined) state.settings.onboarded = true; // existing users aren't "first run"
   if (!state.settings.theme) state.settings.theme = 'foundry-basic';
   if (!state.settings.customListValues) state.settings.customListValues = {};
+  if (!state.settings.aiProvider) state.settings.aiProvider = 'claude';
   if (!state.campaigns) state.campaigns = [];
 }
 
