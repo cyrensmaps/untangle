@@ -747,7 +747,12 @@ Hooks.on('hoverToken', (token, hovered) => {
     if (!npc) return;
 
     const lines = [];
+    // Deliberately no 'alive' entry - alive is the common/default case and
+    // isn't worth flagging in a hover tooltip, only the exceptions are.
+    // Custom NPC Statuses added via Settings (state.settings.customListValues)
+    // merge in here so a GM-added status shows up the same way built-ins do.
     const statusLabels = { dead: 'Dead', unknown: 'Unknown / Missing', fled: 'Fled', imprisoned: 'Imprisoned' };
+    (state?.settings?.customListValues?.npcStatuses||[]).forEach(s => statusLabels[s.value] = s.label);
     if (npc.status && statusLabels[npc.status]) lines.push(`<div class="untangle-tt-status">${_escHtml(statusLabels[npc.status])}</div>`);
     if (npc.role) lines.push(`<div class="untangle-tt-role">${_escHtml(npc.role)}</div>`);
     const faction = campaign.factions?.find(f => (f.memberIds||[]).includes(npc.id));

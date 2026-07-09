@@ -334,7 +334,7 @@ function wvSectionHome() {
   // session's "featuring" list (Story So Far) rather than tracking a
   // separate "current location" concept that doesn't otherwise exist.
   const lastLocations = latest ? (latest.featuring || []).filter(f => f.type === 'locations') : [];
-  const activeThreads = (wvData.rumors || []).filter(t => t.status === 'active' || t.status === 'dormant');
+  const activeThreads = (wvData.rumors || []).filter(t => t.tracked);
   const hotFactions = (wvData.factions || []).filter(f => f.attitude === 'hostile' || f.attitude === 'allied');
   const tickingClocks = (wvData.clocks || []).filter(ck => ck.segments && (ck.filled / ck.segments) >= 0.6);
 

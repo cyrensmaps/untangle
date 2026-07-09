@@ -1711,7 +1711,7 @@ async function runClaudeExtraction(transcript, existingSession, playerNames = []
   // under their own API key against their own transcript, so there's no
   // exposure risk, and Claude being able to see the truth is exactly what
   // lets it tell a real clue apart from an unrelated line of dialogue.
-  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned').slice(0, 30);
+  const activeThreads = c.plotThreads.filter(isThreadOngoing).slice(0, 30);
   const existingThreads = activeThreads.length ? activeThreads.map(t => {
     const truthText = t.truth || (t.truths||[]).map(tr => tr.text).filter(Boolean).join(' / ');
     const cluesText = (t.clues||[]).map(cl => cl.text).join('; ');
@@ -1995,7 +1995,7 @@ function showReviewModal(session, extracted) {
           <div class="review-item">
             <input type="checkbox" id="rs-${i}" checked>
             <div class="review-item-content">
-              <h4>${esc(rs.fromName||'')} ↔ ${esc(rs.toName||'')} <span class="text-dim" style="font-weight:400">${esc((REL_TYPES.find(rt=>rt.value===rs.type)||{}).label||rs.type||'')}</span></h4>
+              <h4>${esc(rs.fromName||'')} ↔ ${esc(rs.toName||'')} <span class="text-dim" style="font-weight:400">${esc((getRelTypes().find(rt=>rt.value===rs.type)||{}).label||rs.type||'')}</span></h4>
               <p>${esc(rs.reason||'')}</p>
             </div>
           </div>`).join('')}
@@ -2150,7 +2150,7 @@ function confirmSave() {
     if (!from || !to || from.id === to.id) return;
     const dup = c.relationships.some(r => (r.fromId===from.id && r.toId===to.id) || (r.fromId===to.id && r.toId===from.id));
     if (dup) return;
-    const type = REL_TYPES.some(rt => rt.value === rs.type) ? rs.type : 'neutral';
+    const type = getRelTypes().some(rt => rt.value === rs.type) ? rs.type : 'neutral';
     c.relationships.push({ id: uid(), fromId: from.id, fromType: 'npc', toId: to.id, toType: 'npc', type, label: rs.label||'', notes: '' });
     relsChk++;
   });
@@ -2307,7 +2307,7 @@ async function syncFoundryRollTables() {
     // so "roll on the enemies table" is possible without pulling in PCs.
     if (!c.rollTableIdsByGroup) c.rollTableIdsByGroup = {};
     for (const group of TYPE_GROUPS) {
-      const names = c.npcs.filter(n => group.types.includes(n.type || 'npc')).map(n => n.name);
+      const names = npcsInGroup(group, c.npcs).map(n => n.name);
       if (!names.length) continue;
       c.rollTableIdsByGroup[group.label] = tally(await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names));
     }
@@ -2478,7 +2478,7 @@ function renderPlayerWiki() {
   // of one flat list — a long campaign's roster reads a lot better broken up
   // the way the GM already thinks about it there.
   const charRows = TYPE_GROUPS.map(g => {
-    const members = c.npcs.filter(n => g.types.includes(n.type || 'npc'));
+    const members = npcsInGroup(g, c.npcs);
     if (!members.length) return '';
     return `<div data-pw-group style="margin-bottom:10px">
       <div class="text-xs text-dim" style="margin-bottom:4px;font-weight:600">${esc(g.label)}</div>
@@ -2501,11 +2501,16 @@ function renderPlayerWiki() {
         <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${m.playerVisible?'checked':''} onchange="toggleEntityVisible('map','${m.id}',this.checked)">
         <span>${esc(m.name)}</span>
       </label>
-      ${(m.pins||[]).length ? `<div style="margin-left:30px">${m.pins.map(p => `
+      ${(m.pins||[]).length ? `<div style="margin-left:30px">${m.pins.map(p => {
+        let linkedEntity = null;
+        if (p.linkedType==='npc') linkedEntity = c.npcs.find(n=>n.id===p.linkedId);
+        if (p.linkedType==='location') linkedEntity = c.locations.find(l=>l.id===p.linkedId);
+        const pinLabel = linkedEntity ? linkedEntity.name : (p.label || 'Unlabeled pin');
+        return `
         <label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem;color:var(--text-dim);cursor:pointer">
           <input type="checkbox" style="width:auto;flex-shrink:0;padding:0;margin:0;accent-color:var(--accent)" ${p.playerVisible?'checked':''} onchange="togglePinVisible('${m.id}','${p.id}',this.checked)">
-          <span>${esc(p.label || 'Unlabeled pin')}</span>
-        </label>`).join('')}</div>` : ''}
+          <span>${esc(pinLabel)}</span>
+        </label>`;}).join('')}</div>` : ''}
     </div>`).join('');
 
   const lastPublished = c.playerWikiLastPublished ? new Date(c.playerWikiLastPublished).toLocaleString() : null;
@@ -2570,8 +2575,6 @@ function togglePinVisible(mapId, pinId, checked) {
 // except here that exclusion is unconditional, layered underneath the
 // opt-in `playerVisible` whitelist rather than behind a toggle.
 
-const WIKI_NPC_STATUS_LABELS = { alive: 'Alive', dead: 'Dead', unknown: 'Unknown / Missing', fled: 'Fled', imprisoned: 'Imprisoned' };
-
 // Everything the Player Wiki window (app/wiki-viewer.html) will ever see —
 // resolved to plain data at publish time, since that window has no access to
 // c.npcs/c.locations/game.scenes/etc at all, only this one snapshot. Cross
@@ -2614,7 +2617,7 @@ function buildPlayerWikiSnapshot(c) {
     const faction = c.factions.find(f => f.memberIds?.includes(n.id));
     return {
       id: n.id, name: n.name, role: n.role || '', type: n.type || 'npc',
-      status: n.status || 'alive', statusLabel: WIKI_NPC_STATUS_LABELS[n.status] || '',
+      status: n.status || 'alive', statusLabel: getNpcStatuses().find(s=>s.value===n.status)?.label || '',
       image: n.image ? resolveFoundryImgSrc(n.image) : '',
       notes: n.notes || '',
       locationId: loc?.playerVisible ? loc.id : null, locationName: loc?.playerVisible ? loc.name : '',
@@ -2632,7 +2635,7 @@ function buildPlayerWikiSnapshot(c) {
   }));
 
   const factions = c.factions.filter(f => f.playerVisible).map(f => {
-    const att = FACTION_ATTITUDES.find(a => a.value === f.attitude);
+    const att = getFactionAttitudes().find(a => a.value === f.attitude);
     return {
       id: f.id, name: f.name, description: f.description || '',
       attitude: f.attitude || '', attitudeLabel: att?.label || '', attitudeColor: att?.color || '',
@@ -2659,6 +2662,12 @@ function buildPlayerWikiSnapshot(c) {
       ...c.locations.filter(l => t.locationIds?.includes(l.id) && l.playerVisible).map(locRef),
     ],
     revealedAt: t.revealedAt || null,
+    // Pre-resolved here since the wiki viewer only ever sees this plain
+    // snapshot, never live state/settings - lets a custom Thread Status
+    // (with its own `ongoing` flag) correctly show/hide in the Player
+    // Companion home widget without that window knowing anything about
+    // customListValues.
+    tracked: isThreadTracked(t),
   }));
 
   // Clocks are a Home-tab "ticking countdown" widget only (no dedicated
@@ -2881,12 +2890,29 @@ const TYPE_GROUPS = [
   { label: 'Deities',             types: ['deity'],                    tint: '#a07820' },
   { label: 'Settlements & Cities',types: ['settlement','city'],        tint: '#6b5638' },
   { label: 'Unknown',             types: ['unknown'],                  tint: '#555'    },
+  // Catch-all for any GM-added custom Character Type (see CUSTOM_LIST_REGISTRY
+  // further down) - types:null means "whatever isn't claimed by another
+  // group above", so it needs no advance knowledge of what custom values
+  // exist. Without this, a custom type would silently vanish from the
+  // Characters page, Roll Table Sync, and the Publish-Wiki visibility list,
+  // since none of those whitelists would ever match it.
+  { label: 'Other',               types: null,                         tint: '#555'    },
 ];
 const TYPE_BADGE = {
   pc:'#5a3fa0', ally:'#2a6e4a', companion:'#2a6e4a', contact:'#2c5f7a',
   npc:null, neutral:'#555', enemy:'#7a2020', villain:'#7a2020', deity:'#a07820',
   settlement:'#6b5638', city:'#6b5638', unknown:'#555',
 };
+
+// Shared by buildNPCSections(), syncFoundryRollTables()'s group loop, and
+// the Publish-Wiki charRows builder - all three used to repeat the same
+// `g.types.includes(n.type||'npc')` idiom, which silently drops any
+// character whose type isn't in one of the fixed whitelists above.
+function npcsInGroup(g, npcs) {
+  if (g.types) return npcs.filter(n => g.types.includes(n.type||'npc'));
+  const claimed = new Set(TYPE_GROUPS.filter(x=>x.types).flatMap(x=>x.types));
+  return npcs.filter(n => !claimed.has(n.type||'npc'));
+}
 
 // Shared by renderNPCs() and filterNPCCards() - previously each kept its own
 // copy of this card template, and they drifted: the search-filtered version
@@ -2922,7 +2948,7 @@ function npcCard(n) {
 
 function buildNPCSections(filtered) {
   const sections = TYPE_GROUPS.map(g => {
-    const chars = filtered.filter(n => g.types.includes(n.type||'npc'));
+    const chars = npcsInGroup(g, filtered);
     if (!chars.length) return '';
     return `<div style="margin-bottom:28px">
       <h3 style="margin:0 0 12px;font-size:0.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)">${g.label}</h3>
@@ -3136,8 +3162,30 @@ const CHAR_TYPES = [
   { value: 'city',       label: 'City'                   },
   { value: 'unknown',   label: 'Unknown / Mysterious'   },
 ];
-function charTypeLabel(t) { return (CHAR_TYPES.find(x=>x.value===t)||{label:'NPC'}).label; }
-function charTypeOptions(sel) { return CHAR_TYPES.map(t=>`<option value="${t.value}" ${sel===t.value?'selected':''}>${t.label}</option>`).join(''); }
+// Merges in GM-added custom entries from Settings (state.settings.customListValues) -
+// see CUSTOM_LIST_REGISTRY further down for the add/delete UI. Built-in
+// values above are never editable/removable since ~10 places elsewhere
+// branch on the exact string 'pc'.
+function getCharTypes() { return [...CHAR_TYPES, ...(state.settings.customListValues.charTypes||[])]; }
+function charTypeLabel(t) { return (getCharTypes().find(x=>x.value===t)||{label:'NPC'}).label; }
+function charTypeOptions(sel) { return getCharTypes().map(t=>`<option value="${t.value}" ${sel===t.value?'selected':''}>${t.label}</option>`).join(''); }
+
+// ── NPC status definitions ──
+// Was three independently-maintained copies (inline <option> tags here,
+// WIKI_NPC_STATUS_LABELS, and a third copy in scripts/main.js for the
+// Foundry token tooltip) that could silently drift out of sync. This is now
+// the one source of truth on the app/index.html side; scripts/main.js keeps
+// its own copy (separate script context, no shared code) but reads custom
+// entries out of the same saved state.
+const NPC_STATUSES = [
+  { value: 'alive',      label: 'Alive' },
+  { value: 'dead',       label: 'Dead' },
+  { value: 'unknown',    label: 'Unknown / Missing' },
+  { value: 'fled',       label: 'Fled' },
+  { value: 'imprisoned', label: 'Imprisoned' },
+];
+function getNpcStatuses() { return [...NPC_STATUSES, ...(state.settings.customListValues.npcStatuses||[])]; }
+function npcStatusOptions(sel) { return getNpcStatuses().map(s=>`<option value="${s.value}" ${(sel||'alive')===s.value?'selected':''}>${s.label}</option>`).join(''); }
 
 // ── Find & merge duplicate characters ──
 async function findDuplicateCharacters() {
@@ -3742,13 +3790,7 @@ function openNPCModal(id) {
           <select id="en-type" onchange="toggleNpcGoalsVisibility(this.value)">${charTypeOptions(n.type||'npc')}</select>
         </div>
         <div class="form-group"><label>Status</label>
-          <select id="en-status">
-            <option value="alive"   ${(n.status||'alive')==='alive'      ?'selected':''}>Alive</option>
-            <option value="dead"    ${n.status==='dead'     ?'selected':''}>Dead</option>
-            <option value="unknown" ${n.status==='unknown'  ?'selected':''}>Unknown / Missing</option>
-            <option value="fled"    ${n.status==='fled'     ?'selected':''}>Fled</option>
-            <option value="imprisoned" ${n.status==='imprisoned'?'selected':''}>Imprisoned</option>
-          </select>
+          <select id="en-status">${npcStatusOptions(n.status)}</select>
         </div>
       </div>
       <div class="form-group"><label>Home Location</label>
@@ -3845,8 +3887,7 @@ function openAddNPC() {
         <div class="form-group"><label>Name</label>
           <div style="display:flex;gap:6px">
             <input type="text" id="an-name" placeholder="Character name">
-            <select id="an-name-style" style="flex-shrink:0;max-width:112px" title="Name style">${Object.entries(NAME_STYLES).map(([k,v])=>`<option value="${k}" ${k===(window._nameGenStyle||'human')?'selected':''}>${v.label}</option>`).join('')}</select>
-            <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="window._nameGenStyle=document.getElementById('an-name-style').value;document.getElementById('an-name').value=generateStyledName(window._nameGenStyle)" title="Random name">Roll</button>
+            <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="openNameGenPickerModal('an-name')" title="Roll a random name">Roll a Name</button>
           </div>
         </div>
         <div class="form-group"><label>Type</label>
@@ -5435,6 +5476,68 @@ function regenerateNames() {
   `).join('');
 }
 
+// Rolling a name from inside a form (e.g. Add Character) used to be an
+// inline style-select + Roll button sitting right next to the Name field -
+// which, next to the Type dropdown right after it, read as if you were
+// picking the character's own race rather than just a name style. This
+// reuses the full Name Generator's style-picker + results-grid layout in
+// its own modal instead, but writes the pick into a target input rather
+// than copying to clipboard or creating a whole new character outright
+// (openNameGeneratorModal()'s "+" button assumes it's the only thing open,
+// not layered on top of a form that's already mid-fill).
+function openNameGenPickerModal(targetInputId) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'namegen-picker-overlay';
+
+  const styleButtons = Object.entries(NAME_STYLES).map(([k,v]) =>
+    `<button type="button" class="btn btn-ghost btn-sm namegen-picker-style-btn" data-style="${k}" onclick="setNameGenPickerStyle('${k}','${targetInputId}')" style="border-radius:20px">${v.label}</button>`
+  ).join('');
+
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <div><h3>Roll a Name</h3><div class="text-xs text-dim mt-4">Click a name to use it</div></div>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px">${styleButtons}</div>
+      <div id="namegen-picker-results" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px"></div>
+      <div class="flex gap-8" style="justify-content:space-between;align-items:center">
+        <span class="text-xs text-dim" id="namegen-picker-hint">Pick a style above</span>
+        <button type="button" class="btn btn-ghost" id="namegen-picker-more-btn" onclick="regeneratePickerNames('${targetInputId}')" style="display:none">↺ More</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setNameGenPickerStyle(window._nameGenStyle || 'human', targetInputId);
+}
+
+function setNameGenPickerStyle(styleKey, targetInputId) {
+  window._nameGenStyle = styleKey;
+  document.querySelectorAll('.namegen-picker-style-btn').forEach(btn => {
+    btn.style.background = btn.dataset.style === styleKey ? 'var(--accent)' : '';
+    btn.style.color = btn.dataset.style === styleKey ? '#000' : '';
+  });
+  const hint = document.getElementById('namegen-picker-hint');
+  if (hint) hint.textContent = NAME_STYLES[styleKey]?.label || '';
+  const moreBtn = document.getElementById('namegen-picker-more-btn');
+  if (moreBtn) moreBtn.style.display = '';
+  regeneratePickerNames(targetInputId);
+}
+
+function regeneratePickerNames(targetInputId) {
+  const styleKey = window._nameGenStyle || 'human';
+  const container = document.getElementById('namegen-picker-results');
+  if (!container) return;
+  const names = Array.from({length: 12}, () => generateStyledName(styleKey));
+  container.innerHTML = names.map(n => `<button type="button" onclick="pickGeneratedName('${esc(n)}','${targetInputId}')" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:9px 10px;font-size:0.9rem;font-weight:500;cursor:pointer;color:var(--text);text-align:left">${esc(n)}</button>`).join('');
+}
+
+function pickGeneratedName(name, targetInputId) {
+  const input = document.getElementById(targetInputId);
+  if (input) input.value = name;
+  document.getElementById('namegen-picker-overlay')?.remove();
+}
+
 function copyNameFromGen(name) {
   navigator.clipboard.writeText(name).catch(()=>{});
   // Flash the hint text
@@ -5583,8 +5686,8 @@ function renderCampaignBible() {
   const isExcluded = (type, id) => (excluded[type]||[]).includes(id);
   const excludedCount = Object.values(excluded).reduce((n, arr) => n + (arr?.length||0), 0);
 
-  const activeFactions = c.factions.filter(f => (f.status||'active') !== 'defeated' && !isExcluded('faction', f.id));
-  const activeThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned' && !isExcluded('thread', t.id));
+  const activeFactions = c.factions.filter(f => isFactionOngoing(f) && !isExcluded('faction', f.id));
+  const activeThreads = c.plotThreads.filter(t => isThreadOngoing(t) && !isExcluded('thread', t.id));
   const keyNpcs = c.npcs.filter(n => (n.type||'npc') !== 'pc' && n.status !== 'dead' && !isExcluded('npc', n.id));
   const bibleLocations = c.locations.filter(l => !isExcluded('location', l.id));
   const sessionsInOrder = [...c.sessions].filter(s => !isExcluded('session', s.id)).sort((a,b) => (a.number||0) - (b.number||0));
@@ -5621,7 +5724,7 @@ function renderCampaignBible() {
         <h2>Factions</h2>
         ${activeFactions.map(f => `
           <div class="cb-entry">
-            <h3>${esc(f.name)} <span class="cb-tag">${esc((FACTION_ATTITUDES.find(a=>a.value===f.attitude)||{}).label||'')}</span> ${excludeBtn('faction', f.id)}</h3>
+            <h3>${esc(f.name)} <span class="cb-tag">${esc((getFactionAttitudes().find(a=>a.value===f.attitude)||{}).label||'')}</span> ${excludeBtn('faction', f.id)}</h3>
             ${f.description?`<p>${esc(f.description)}</p>`:''}
             ${!playerSafe && f[GM_SECRET_FIELDS.faction]?`<p><strong>Goals:</strong> ${esc(f[GM_SECRET_FIELDS.faction])}</p>`:''}
           </div>`).join('')}` : ''}
@@ -5630,7 +5733,7 @@ function renderCampaignBible() {
         <h2>Active Plot Threads</h2>
         ${activeThreads.map(t => `
           <div class="cb-entry">
-            <h3>${esc(t.title)} <span class="cb-tag">${esc((THREAD_STATUSES.find(s=>s.value===t.status)||{}).label||'')}</span> ${excludeBtn('thread', t.id)}</h3>
+            <h3>${esc(t.title)} <span class="cb-tag">${esc((getThreadStatuses().find(s=>s.value===t.status)||{}).label||'')}</span> ${excludeBtn('thread', t.id)}</h3>
             ${t.description?`<p>${esc(t.description)}</p>`:''}
             ${!playerSafe && t[GM_SECRET_FIELDS.thread]?`<p><strong>GM Truth:</strong> ${esc(t[GM_SECRET_FIELDS.thread])}</p>`:''}
           </div>`).join('')}` : ''}
@@ -5840,6 +5943,17 @@ function renderSettings() {
           ${THEMES.map(t => `<option value="${t.value}" ${t.value===currentTheme?'selected':''}>${t.label}</option>`).join('')}
         </select>
       </div>
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <h3 style="margin-bottom:6px">Custom List Values</h3>
+      <p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">Add your own options to the dropdowns used throughout Untangle (Character Type, Relationship Type, Plot Thread Status, Faction Attitude, Faction Status, NPC Status). Built-in options stay fixed since parts of Untangle depend on them, but you can add as many extras as you like.</p>
+      <div class="form-group" style="max-width:280px;margin-bottom:0">
+        <select id="clv-list-select" onchange="window._clvSelectedList=this.value;window._clvColor=null;render()">
+          ${CUSTOM_LIST_REGISTRY.map(r => `<option value="${r.key}" ${(window._clvSelectedList||CUSTOM_LIST_REGISTRY[0].key)===r.key?'selected':''}>${r.label}</option>`).join('')}
+        </select>
+      </div>
+      ${renderCustomListValuesPanel(window._clvSelectedList || CUSTOM_LIST_REGISTRY[0].key)}
     </div>
 
     <div class="card" style="max-width:560px;margin-bottom:16px">
@@ -6127,7 +6241,8 @@ const REL_TYPES = [
   { value: 'neutral',  label: 'Neutral',  color: '#888888', dash: '' },
 ];
 
-function relTypeInfo(value) { return REL_TYPES.find(r => r.value === value) || REL_TYPES[6]; }
+function getRelTypes() { return [...REL_TYPES, ...(state.settings.customListValues.relTypes||[])]; }
+function relTypeInfo(value) { const types = getRelTypes(); return types.find(r => r.value === value) || types.find(r => r.value === 'neutral'); }
 
 function renderRelationshipWeb() {
   const c = camp();
@@ -6223,7 +6338,7 @@ function renderRelationshipWeb() {
     </g>`;
   }).join('');
 
-  const legend = REL_TYPES.map(rt => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:${rt.color}">
+  const legend = getRelTypes().map(rt => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:${rt.color}">
     <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="${rt.color}" stroke-width="2" ${rt.dash?`stroke-dasharray="${rt.dash}"`:''}/></svg>${rt.label}</span>`).join('');
 
   return `
@@ -6547,7 +6662,7 @@ function openAddRelModal(presetFromVal, presetToVal) {
   if (c.npcs.length + c.factions.length < 2) { toast('Need at least 2 characters or factions to create a relationship.', 'error'); return; }
   const [presetFromType, presetFromId] = presetFromVal ? presetFromVal.split(':') : ['', ''];
   const [presetToType, presetToId] = presetToVal ? presetToVal.split(':') : ['', ''];
-  const typeOpts = REL_TYPES.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
+  const typeOpts = getRelTypes().map(r => `<option value="${r.value}">${r.label}</option>`).join('');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -6593,7 +6708,7 @@ function openEditRelModal(relId) {
   const rel = c.relationships.find(r => r.id === relId);
   if (!rel) return;
   const ft = rel.fromType || 'npc', tt = rel.toType || 'npc';
-  const typeOpts = REL_TYPES.map(r => `<option value="${r.value}" ${r.value===rel.type?'selected':''}>${r.label}</option>`).join('');
+  const typeOpts = getRelTypes().map(r => `<option value="${r.value}" ${r.value===rel.type?'selected':''}>${r.label}</option>`).join('');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -6714,7 +6829,7 @@ async function generateSparkConnection() {
   document.body.appendChild(loadingEl);
 
   try {
-    const typeList = REL_TYPES.map(r => r.value).join(', ');
+    const typeList = getRelTypes().map(r => r.value).join(', ');
     const aDetail = _sparkDetail(a, fromType), bDetail = _sparkDetail(b, toType);
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -6747,7 +6862,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 
 function showSparkReviewModal(fromType, fromId, toType, toId, result) {
   const a = _sparkEntity(fromId, fromType), b = _sparkEntity(toId, toType);
-  const typeOpts = REL_TYPES.map(r => `<option value="${r.value}" ${r.value===result.type?'selected':''}>${r.label}</option>`).join('');
+  const typeOpts = getRelTypes().map(r => `<option value="${r.value}" ${r.value===result.type?'selected':''}>${r.label}</option>`).join('');
   window._sparkPending = { fromType, fromId, toType, toId };
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -6793,7 +6908,13 @@ const THREAD_STATUSES = [
   { value: 'abandoned',label: 'Abandoned',color: '#cc4444' },
 ];
 
-function threadStatusInfo(v) { return THREAD_STATUSES.find(s => s.value === v) || THREAD_STATUSES[0]; }
+function getThreadStatuses() { return [...THREAD_STATUSES, ...(state.settings.customListValues.threadStatuses||[])]; }
+function threadStatusInfo(v) { const s = getThreadStatuses(); return s.find(x => x.value === v) || s.find(x => x.value === 'rumor'); }
+
+// "Actively being tracked at the table" - narrower than isThreadOngoing()
+// (app/state.js): also excludes 'rumor'-stage threads, a deliberate existing
+// distinction (nothing to prep for a rumor nobody's engaged yet).
+function isThreadTracked(t) { return isThreadOngoing(t) && (t.status||'rumor') !== 'rumor'; }
 
 function renderPlotThreads() {
   const c = camp();
@@ -6801,9 +6922,9 @@ function renderPlotThreads() {
 
   const filtered = filter === 'all' ? c.plotThreads : c.plotThreads.filter(t => t.status === filter);
   const counts = {};
-  THREAD_STATUSES.forEach(s => { counts[s.value] = c.plotThreads.filter(t => t.status === s.value).length; });
+  getThreadStatuses().forEach(s => { counts[s.value] = c.plotThreads.filter(t => t.status === s.value).length; });
 
-  const filterBtns = [{ value:'all', label:'All', color:'var(--text)' }, ...THREAD_STATUSES].map(s =>
+  const filterBtns = [{ value:'all', label:'All', color:'var(--text)' }, ...getThreadStatuses()].map(s =>
     `<button class="btn ${(filter===s.value)?'btn-primary':'btn-ghost'} btn-sm" onclick="window._threadFilter='${s.value}';render()" style="${filter===s.value&&s.color?`background:${s.color};border-color:${s.color};`:''}">${s.label}${s.value!=='all'&&counts[s.value]?` (${counts[s.value]})`:''}</button>`
   ).join('');
 
@@ -6850,7 +6971,7 @@ function renderPlotThreads() {
 // can position them near whatever they're relevant to, same as a real board.
 function renderMysteryBoard() {
   const c = camp();
-  const liveThreads = c.plotThreads.filter(t => t.status !== 'resolved' && t.status !== 'abandoned');
+  const liveThreads = c.plotThreads.filter(isThreadOngoing);
 
   if (!liveThreads.length) {
     return `
@@ -7336,7 +7457,7 @@ function buildCheckboxTable(items, nameKey, selectedIds, cbClass) {
 function openThreadModal(t) {
   const c = camp();
   const isEdit = !!t;
-  const statusOpts = THREAD_STATUSES.map(s => `<option value="${s.value}" ${t?.status===s.value?'selected':''}>${s.label}</option>`).join('');
+  const statusOpts = getThreadStatuses().map(s => `<option value="${s.value}" ${t?.status===s.value?'selected':''}>${s.label}</option>`).join('');
   const npcCheckboxes = buildCheckboxTable(c.npcs, 'name', t?.npcIds||[]);
   const locationCheckboxes = buildCheckboxTable(c.locations, 'name', t?.locationIds||[]);
   const hookCheckboxes = buildCheckboxTable(c.hooks, 'title', t?.hookIds||[]);
@@ -7716,17 +7837,87 @@ const FACTION_STATUSES = [
 ];
 const FACTION_COLORS = ['#7c93a8','#5c9077','#4a6acc','#8866cc','#c0524f','#cc7744','#44aacc','#888888'];
 
+function getFactionAttitudes() { return [...FACTION_ATTITUDES, ...(state.settings.customListValues.factionAttitudes||[])]; }
+function getFactionStatuses()  { return [...FACTION_STATUSES,  ...(state.settings.customListValues.factionStatuses||[])]; }
+
+// ── GM-Custom Pick-List Entries ──
+// Lets a GM append their own {value,label} (+ color/ongoing where the base
+// list already carries that concept) entries to any of these six lists from
+// Settings. Built-in entries are never editable/removable here - dozens of
+// call sites elsewhere branch on their exact string values (type==='pc',
+// status==='resolved', etc). A custom entry's `value` is a uid(), so it can
+// never collide with a current or future built-in literal.
+const CUSTOM_LIST_REGISTRY = [
+  { key: 'charTypes',        label: 'Character Type',      builtin: () => CHAR_TYPES,        hasColor: false, hasOngoing: false },
+  { key: 'relTypes',         label: 'Relationship Type',   builtin: () => REL_TYPES,         hasColor: true,  hasOngoing: false },
+  { key: 'threadStatuses',   label: 'Plot Thread Status',  builtin: () => THREAD_STATUSES,   hasColor: true,  hasOngoing: true  },
+  { key: 'factionAttitudes', label: 'Faction Attitude',    builtin: () => FACTION_ATTITUDES, hasColor: true,  hasOngoing: false },
+  { key: 'factionStatuses',  label: 'Faction Status',      builtin: () => FACTION_STATUSES,  hasColor: false, hasOngoing: true  },
+  { key: 'npcStatuses',      label: 'NPC Status',          builtin: () => NPC_STATUSES,      hasColor: false, hasOngoing: false },
+];
+
+function addCustomListValue(key) {
+  const label = document.getElementById('clv-label-input')?.value.trim();
+  if (!label) { toast('Enter a label first.', 'error'); return; }
+  const reg = CUSTOM_LIST_REGISTRY.find(r => r.key === key);
+  if (!reg) return;
+  const existingLabels = [...reg.builtin(), ...(state.settings.customListValues[key]||[])].map(x=>x.label.toLowerCase());
+  if (existingLabels.includes(label.toLowerCase())) { toast('That label already exists on this list.', 'error'); return; }
+  if (!state.settings.customListValues[key]) state.settings.customListValues[key] = [];
+  const entry = { value: uid(), label };
+  if (reg.hasColor) entry.color = window._clvColor || FACTION_COLORS[0];
+  if (reg.hasOngoing) entry.ongoing = document.getElementById('clv-ongoing-cb')?.checked !== false;
+  state.settings.customListValues[key].push(entry);
+  save();
+  toast('Added.', 'success');
+  render();
+}
+
+async function deleteCustomListValue(key, value) {
+  if (!(await confirmModal('Delete this custom entry? Anything already using it keeps the raw value but shows unlabeled.'))) return;
+  state.settings.customListValues[key] = (state.settings.customListValues[key]||[]).filter(e => e.value !== value);
+  save();
+  toast('Deleted.', 'success');
+  render();
+}
+
+function renderCustomListValuesPanel(key) {
+  const reg = CUSTOM_LIST_REGISTRY.find(r => r.key === key) || CUSTOM_LIST_REGISTRY[0];
+  const builtins = reg.builtin();
+  const customs = state.settings.customListValues[key] || [];
+  const dot = color => color ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0"></span>` : '';
+  return `
+    <div style="margin-top:14px">
+      <div class="text-xs text-dim" style="margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Built-in (locked)</div>
+      ${builtins.map(b => `<div style="display:flex;align-items:center;padding:4px 0;font-size:0.85rem">${dot(b.color)}${esc(b.label)}</div>`).join('')}
+      <div class="text-xs text-dim" style="margin:14px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Custom</div>
+      ${customs.length ? customs.map(cv => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:0.85rem">
+          <span style="display:flex;align-items:center">${dot(cv.color)}${esc(cv.label)}${reg.hasOngoing && cv.ongoing===false?' <span class="text-dim text-xs" style="margin-left:6px">(not ongoing)</span>':''}</span>
+          <button class="btn btn-danger btn-sm" onclick="deleteCustomListValue('${key}','${cv.value}')">Delete</button>
+        </div>`).join('') : `<p class="text-xs text-dim">No custom entries yet.</p>`}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="form-row" style="align-items:flex-end">
+          <div class="form-group" style="flex:2;margin-bottom:0"><label>New ${esc(reg.label)}</label><input type="text" id="clv-label-input" placeholder="Label…"></div>
+          <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="addCustomListValue('${key}')">+ Add</button>
+        </div>
+        ${reg.hasColor?`<div style="margin-top:10px">${colorSwatchPickerHTML('_clvColor', window._clvColor||null, 'clv-color-picker')}</div>`:''}
+        ${reg.hasOngoing?`<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:0.85rem;cursor:pointer"><input type="checkbox" id="clv-ongoing-cb" checked style="width:auto">Still counts as active/ongoing</label>`:''}
+      </div>
+    </div>`;
+}
+
 function renderFactions() {
   const c = camp();
   const cards = c.factions.map(f => {
-    const att = FACTION_ATTITUDES.find(a => a.value === f.attitude) || FACTION_ATTITUDES[1];
+    const att = getFactionAttitudes().find(a => a.value === f.attitude) || getFactionAttitudes().find(a => a.value === 'neutral');
     const members = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)).filter(Boolean);
     const threads  = (f.threadIds||[]).map(id => c.plotThreads.find(t => t.id === id)).filter(Boolean);
     const col = f.color || '#888888';
     const avatars = members.slice(0,5).map(n =>
       `<div class="npc-initial" style="width:26px;height:26px;font-size:0.7rem;margin-bottom:0;flex-shrink:0">${n.image?`<img src="${n.image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${esc((n.name[0]||'?').toUpperCase())}'">`:(n.name[0]||'?').toUpperCase()}</div>`
     ).join('');
-    const statSt = FACTION_STATUSES.find(s=>s.value===(f.status||'active'));
+    const statSt = getFactionStatuses().find(s=>s.value===(f.status||'active'));
     return `
       <div class="card faction-card" onclick="openFactionModal('${f.id}')" ${dragToHotbarAttrs('faction', f.id)} style="border-left:3px solid ${col}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
@@ -7769,8 +7960,8 @@ function openFactionModal(id) {
   const selectedColor = f?.color || FACTION_COLORS[0];
   window._factionColor = selectedColor;
 
-  const attOpts    = FACTION_ATTITUDES.map(a => `<option value="${a.value}" ${(f?.attitude||'neutral')===a.value?'selected':''}>${a.label}</option>`).join('');
-  const statusOpts = FACTION_STATUSES.map(s  => `<option value="${s.value}" ${(f?.status||'active')===s.value?'selected':''}>${s.label}</option>`).join('');
+  const attOpts    = getFactionAttitudes().map(a => `<option value="${a.value}" ${(f?.attitude||'neutral')===a.value?'selected':''}>${a.label}</option>`).join('');
+  const statusOpts = getFactionStatuses().map(s  => `<option value="${s.value}" ${(f?.status||'active')===s.value?'selected':''}>${s.label}</option>`).join('');
   const swatches   = FACTION_COLORS.map(col =>
     `<div class="fc-swatch" onclick="window._factionColor='${col}';document.querySelectorAll('.fc-swatch').forEach(s=>{s.style.outline='none';s.style.outlineOffset='0'});this.style.outline='2px solid white';this.style.outlineOffset='2px'" style="width:22px;height:22px;border-radius:50%;background:${col};cursor:pointer;flex-shrink:0;${col===selectedColor?'outline:2px solid white;outline-offset:2px':''}"></div>`
   ).join('');
@@ -8135,10 +8326,10 @@ function renderSessionPrep() {
   const scenes    = window._prepScenes    || prep.scenes    || [];
   const questions = window._prepQuestions || prep.questions || [];
 
-  const activeThreads     = c.plotThreads.filter(t => t.status === 'active' || t.status === 'dormant');
+  const activeThreads     = c.plotThreads.filter(isThreadTracked);
   const lastSession       = c.sessions[c.sessions.length - 1];
   const lastSessionNPCs   = lastSession ? c.npcs.filter(n => (n.sessions||[]).includes(lastSession.id)) : [];
-  const activeFactions    = c.factions.filter(f => (f.status||'active') === 'active');
+  const activeFactions    = c.factions.filter(isFactionOngoing);
   const staleEntities     = computeStaleEntities();
   const spotlightNeed     = computeSpotlightNeed();
   const clocksNearTipping = (c.clocks||[]).filter(ck => ck.filled > 0 && ck.filled >= ck.segments - 1);
@@ -8232,7 +8423,7 @@ function renderSessionPrep() {
             <button class="btn btn-ghost btn-sm" onclick="navigate('threads')">All →</button>
           </div>
           ${activeThreads.map(t => {
-            const si = THREAD_STATUSES.find(s=>s.value===t.status)||THREAD_STATUSES[1];
+            const si = getThreadStatuses().find(s=>s.value===t.status)||getThreadStatuses().find(s=>s.value==='active');
             return `<div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openEditThreadModal('${t.id}')">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="width:8px;height:8px;border-radius:50%;background:${si.color};flex-shrink:0;display:inline-block"></span>
@@ -8258,7 +8449,7 @@ function renderSessionPrep() {
             <button class="btn btn-ghost btn-sm" onclick="navigate('factions')">All →</button>
           </div>
           ${activeFactions.map(f => {
-            const att = FACTION_ATTITUDES.find(a=>a.value===f.attitude)||FACTION_ATTITUDES[1];
+            const att = getFactionAttitudes().find(a=>a.value===f.attitude)||getFactionAttitudes().find(a=>a.value==='neutral');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openFactionModal('${f.id}')">
               <span style="width:10px;height:10px;border-radius:50%;background:${f.color||'#888'};flex-shrink:0;display:inline-block"></span>
               <span class="text-sm" style="font-weight:500;flex:1">${esc(f.name)}</span>

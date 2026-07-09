@@ -9,7 +9,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], timelineEvents: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
 
 const DEFAULT_STATE = () => ({
-  settings: { onboarded: false, theme: 'foundry-basic' },
+  settings: { onboarded: false, theme: 'foundry-basic', customListValues: {} },
   currentCampaignId: null,
   campaigns: [],
 });
@@ -37,6 +37,7 @@ if (!state) {
   if (!state.settings) state.settings = {};
   if (state.settings.onboarded === undefined) state.settings.onboarded = true; // existing users aren't "first run"
   if (!state.settings.theme) state.settings.theme = 'foundry-basic';
+  if (!state.settings.customListValues) state.settings.customListValues = {};
   if (!state.campaigns) state.campaigns = [];
 }
 
@@ -167,6 +168,26 @@ function staleHeatColor(sessionsSince, threshold) {
   return 'var(--text-dim)';
 }
 
+// Shared "is this still open" checks for Plot Threads and Factions - used by
+// Stale Callbacks below, and by several places in app/index.html (AI prompt
+// context, Campaign Bible, Mystery Board, Session Prep). Built-in terminal
+// statuses are a fixed blocklist so a GM-added custom status is treated as
+// still-open by default; a custom status can opt out via `ongoing: false`
+// (see the Settings "Custom List Values" card in app/index.html).
+const THREAD_TERMINAL_STATUSES = ['resolved', 'abandoned'];
+function isThreadOngoing(t) {
+  if (THREAD_TERMINAL_STATUSES.includes(t.status)) return false;
+  const custom = (state.settings.customListValues.threadStatuses||[]).find(s => s.value === t.status);
+  return custom ? custom.ongoing !== false : true;
+}
+const FACTION_TERMINAL_STATUSES = ['defeated'];
+function isFactionOngoing(f) {
+  const st = f.status || 'active';
+  if (FACTION_TERMINAL_STATUSES.includes(st)) return false;
+  const custom = (state.settings.customListValues.factionStatuses||[]).find(s => s.value === st);
+  return custom ? custom.ongoing !== false : true;
+}
+
 function computeStaleEntities(threshold) {
   threshold = threshold || getStaleThreshold();
   const c = camp();
@@ -204,7 +225,7 @@ function computeStaleEntities(threshold) {
   });
 
   (c.plotThreads||[]).forEach(t => {
-    if (t.status === 'resolved' || t.status === 'abandoned') return;
+    if (!isThreadOngoing(t)) return;
     const npcSessions = (t.npcIds||[]).flatMap(id => (c.npcs.find(n=>n.id===id)?.sessions)||[]);
     const locSessions = (t.locationIds||[]).flatMap(id => (c.locations.find(l=>l.id===id)?.sessionIds)||[]);
     const linked = [...npcSessions, ...locSessions];
@@ -213,7 +234,7 @@ function computeStaleEntities(threshold) {
   });
 
   (c.factions||[]).forEach(f => {
-    if (f.status === 'defeated') return;
+    if (!isFactionOngoing(f)) return;
     const memberSessions = (f.memberIds||[]).flatMap(id => (c.npcs.find(n=>n.id===id)?.sessions)||[]);
     if (!memberSessions.length) return;
     pushIfStale('faction', f.id, f.name, maxSessionNumber(memberSessions), f.color || '#888888');
