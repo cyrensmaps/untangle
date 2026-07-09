@@ -60,6 +60,22 @@ if (!state.currentCampaignId || !state.campaigns.find(c => c.id === state.curren
   state.currentCampaignId = state.campaigns[0].id;
 }
 
+// One-time migration: 'settlement'/'city' (Character Type) and 'fled' (NPC
+// Status) were removed from the built-in lists now that GMs can add their
+// own custom entries instead - existing NPCs already set to one of these
+// fall back to a sane default rather than pointing at a value that no
+// longer exists anywhere in the UI.
+(() => {
+  let migrated = false;
+  (state.campaigns || []).forEach(c => {
+    (c.npcs || []).forEach(n => {
+      if (n.type === 'settlement' || n.type === 'city') { n.type = 'npc'; migrated = true; }
+      if (n.status === 'fled') { n.status = 'alive'; migrated = true; }
+    });
+  });
+  if (migrated) save();
+})();
+
 // Mirror state into a Foundry world setting (best-effort) so a campaign
 // survives a cleared browser cache. Debounced since save() can fire often.
 // Only meaningful when running inside the Foundry iframe — falls back to

@@ -2943,7 +2943,6 @@ const TYPE_GROUPS = [
   { label: 'NPCs',                types: ['npc','neutral'],            tint: null      },
   { label: 'Enemies',             types: ['enemy','villain'],          tint: '#7a2020' },
   { label: 'Deities',             types: ['deity'],                    tint: '#a07820' },
-  { label: 'Settlements & Cities',types: ['settlement','city'],        tint: '#6b5638' },
   { label: 'Unknown',             types: ['unknown'],                  tint: '#555'    },
   // Catch-all for any GM-added custom Character Type (see CUSTOM_LIST_REGISTRY
   // further down) - types:null means "whatever isn't claimed by another
@@ -2956,7 +2955,7 @@ const TYPE_GROUPS = [
 const TYPE_BADGE = {
   pc:'#5a3fa0', ally:'#2a6e4a', companion:'#2a6e4a', contact:'#2c5f7a',
   npc:null, neutral:'#555', enemy:'#7a2020', villain:'#7a2020', deity:'#a07820',
-  settlement:'#6b5638', city:'#6b5638', unknown:'#555',
+  unknown:'#555',
 };
 
 // Shared by buildNPCSections(), syncFoundryRollTables()'s group loop, and
@@ -3213,8 +3212,6 @@ const CHAR_TYPES = [
   { value: 'enemy',      label: 'Enemy'                  },
   { value: 'villain',    label: 'Villain'                },
   { value: 'deity',      label: 'Deity'                  },
-  { value: 'settlement', label: 'Settlement'             },
-  { value: 'city',       label: 'City'                   },
   { value: 'unknown',   label: 'Unknown / Mysterious'   },
 ];
 // Merges in GM-added custom entries from Settings (state.settings.customListValues) -
@@ -3236,7 +3233,6 @@ const NPC_STATUSES = [
   { value: 'alive',      label: 'Alive' },
   { value: 'dead',       label: 'Dead' },
   { value: 'unknown',    label: 'Unknown / Missing' },
-  { value: 'fled',       label: 'Fled' },
   { value: 'imprisoned', label: 'Imprisoned' },
 ];
 function getNpcStatuses() { return [...NPC_STATUSES, ...(state.settings.customListValues.npcStatuses||[])]; }
