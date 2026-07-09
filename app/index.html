@@ -6027,7 +6027,7 @@ function renderSettings() {
     <div class="card" style="max-width:560px;margin-bottom:16px">
       <h3 style="margin-bottom:6px">Premium Features</h3>
       <div class="flex gap-10" style="align-items:flex-start;margin-bottom:16px">
-        <img src="assets/patreonlogo.png" alt="" width="47" height="60" style="width:47px !important;height:60px !important;max-width:none !important;object-fit:contain !important;flex-shrink:0" onerror="this.style.display='none'">
+        <img src="assets/patreonlogo.png" alt="" width="96" height="60" style="width:96px !important;height:60px !important;max-width:none !important;object-fit:contain !important;flex-shrink:0" onerror="this.style.display='none'">
         <p class="text-sm text-dim" style="margin:0;line-height:1.6">Support development on Patreon to unlock premium features (marked "Premium" in the Features list below). Log in below and paste back the token it gives you.</p>
       </div>
       <div class="text-sm" style="margin-bottom:12px">Status: ${isPatreonEntitled() ? `<span style="color:var(--green)">Linked - active pledge${_patreonExpiry?` (renews ${new Date(_patreonExpiry).toLocaleDateString()})`:''}</span>` : (getPatreonToken() ? '<span style="color:var(--red)">Token invalid or expired - log in again</span>' : '<span class="text-dim">Not linked</span>')}</div>
@@ -8589,7 +8589,7 @@ function maybeShowOnboarding() {
         <li>All data lives in this browser's storage, mirrored into the Foundry world as a backup. Export a backup occasionally from Foundry's Configure Settings to be extra safe.</li>
       </ul>
       <div class="flex gap-10" style="align-items:center;padding:12px 14px;background:var(--bg-elevated);border-radius:8px;margin-bottom:18px">
-        <img src="assets/patreonlogo.png" alt="" width="24" height="30" style="width:24px !important;height:30px !important;max-width:none !important;object-fit:contain !important;flex-shrink:0" onerror="this.style.display='none'">
+        <img src="assets/patreonlogo.png" alt="" width="48" height="30" style="width:48px !important;height:30px !important;max-width:none !important;object-fit:contain !important;flex-shrink:0" onerror="this.style.display='none'">
         <p class="text-xs text-dim" style="margin:0;line-height:1.5">Features marked "Premium" support ongoing development via Patreon - everything else here stays free.</p>
       </div>
       <div class="flex gap-8" style="justify-content:flex-end">
