@@ -826,7 +826,7 @@ function renderNewSession() {
           <strong>Requires your own OpenAI API key</strong> (set in Foundry's Configure Settings) and costs real money - roughly $0.006 per minute of audio, billed by OpenAI directly to your account. The AI analysis step right after also uses your Claude API key and costs money too.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>Transcribe &amp; Process</button>
+          <button class="btn btn-primary" id="transcribe-btn" onclick="transcribeAndProcess()" disabled>${aiIconHTML()}Transcribe &amp; Process</button>
         </div>
         <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - OpenAI (transcription) + Claude (analysis)</div>
       </div>
@@ -874,7 +874,7 @@ function renderNewSession() {
           Local is only worth it if you have no API key or need full privacy.
         </p>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn btn-primary" id="local-transcribe-btn" onclick="transcribeLocal()" disabled>Transcribe Locally</button>
+          <button class="btn btn-primary" id="local-transcribe-btn" onclick="transcribeLocal()" disabled>${aiIconHTML()}Transcribe Locally</button>
         </div>
       </div>
 
@@ -898,7 +898,7 @@ The AI will extract:
             <div class="text-xs text-dim" style="text-align:center;line-height:1.3;max-width:130px">Only works with diarization-enabled transcription</div>
           </div>
           <div style="display:flex;gap:10px">
-            <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">Process with AI</button>
+            <button class="btn btn-primary" id="process-btn" onclick="processWithAI()">${aiIconHTML()}Process with AI</button>
           </div>
         </div>
         <div class="text-xs text-dim" style="text-align:right;margin-top:6px">This costs money - uses your Claude API key</div>
@@ -2234,7 +2234,7 @@ function openSessionModal(id) {
       ${isFeatureEnabled('postToJournal') && s.journalPostedAt?`<p class="text-xs text-dim" style="margin-top:12px">Last posted to Journal: ${new Date(s.journalPostedAt).toLocaleString()}</p>`:''}
       <div class="flex gap-8" style="justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
         <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')">Delete</button>
-        ${s.rawTranscript ? `<button class="btn btn-ghost" onclick="reanalyseSession('${s.id}')">Re-analyse with AI</button>` : ''}
+        ${s.rawTranscript ? `<button class="btn btn-ghost" onclick="reanalyseSession('${s.id}')">${aiIconHTML()}Re-analyse with AI</button>` : ''}
         ${isFeatureEnabled('postToJournal')?`<button class="btn btn-ghost" onclick="postSessionToJournal('${s.id}')">Post to Journal</button>`:''}
         <button class="btn btn-ghost" onclick="openEditSessionModal('${s.id}')">Edit</button>
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
@@ -2986,7 +2986,7 @@ function renderNPCs() {
       <div style="display:flex;gap:8px">
         ${isFeatureEnabled('nameGenerator')?`<button class="btn btn-ghost" onclick="openNameGeneratorModal()">Names</button>`:''}
         ${isFeatureEnabled('pullFromFoundry')?`<button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>`:''}
-        ${c.npcs.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateCharacters()">Find Duplicates</button>`:''}
+        ${c.npcs.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateCharacters()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddNPC()">+ Add</button>
       </div>
     </div>
@@ -3813,7 +3813,7 @@ function openNPCModal(id) {
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <label style="margin:0">Voice Coach <span class="text-dim text-xs">(how they sound, a tic, a sample line, a mannerism, a quirk)</span></label>
-          <button class="btn btn-ghost btn-sm" onclick="generateVoiceCoach('${n.id}')" id="voice-gen-btn">Generate</button>
+          <button class="btn btn-ghost btn-sm" onclick="generateVoiceCoach('${n.id}')" id="voice-gen-btn">${aiIconHTML()}Generate</button>
         </div>
         <textarea id="en-voice" rows="5" placeholder="Accent, speech rhythm, tone… (AI can generate a full cheat card here)">${esc(n.voiceDescription||'')}</textarea>
       </div>
@@ -4193,7 +4193,7 @@ function renderLocations() {
     <div class="page-header">
       <div><h2>Locations</h2><p class="subtitle">${c.locations.length} location${c.locations.length!==1?'s':''}</p></div>
       <div style="display:flex;gap:8px">
-        ${c.locations.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateLocations()">Find Duplicates</button>`:''}
+        ${c.locations.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateLocations()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddLocation()">+ Add Location</button>
       </div>
     </div>
@@ -5358,6 +5358,13 @@ function dictateBtnHTML(textareaId) {
   return isFeatureEnabled('voiceDictation') && speechRecognitionSupported()
     ? `<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="toggleDictation('${textareaId}', this)">Dictate</button>`
     : '';
+}
+
+// Marks any button that spends the user's Claude/OpenAI balance - inverted
+// since the source asset is black-on-transparent and most buttons here sit
+// on dark backgrounds.
+function aiIconHTML() {
+  return `<img src="assets/generative.png" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:5px;filter:invert(1);opacity:0.9">`;
 }
 
 // Shown next to a Dictate button's usual spot when the feature is enabled in
@@ -6790,7 +6797,7 @@ function openSparkModal(presetType, presetId) {
       </div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="generateSparkConnection()">Generate</button>
+        <button class="btn btn-primary" onclick="generateSparkConnection()">${aiIconHTML()}Generate</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -7942,7 +7949,7 @@ function renderFactions() {
     <div class="page-header">
       <div><h2>Factions</h2><p class="subtitle">${c.factions.length} faction${c.factions.length!==1?'s':''}</p></div>
       <div style="display:flex;gap:8px">
-        ${c.factions.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateFactions()">Find Duplicates</button>`:''}
+        ${c.factions.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateFactions()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddFactionModal()">+ New Faction</button>
       </div>
     </div>
@@ -8221,8 +8228,10 @@ function questionRowHTML(q, i) {
     <div data-question-idx="${i}" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <input type="checkbox" style="width:auto;margin-top:8px;accent-color:var(--accent)" ${q.done?'checked':''} onchange="window._prepQuestions[${i}].done=this.checked;this.nextElementSibling.style.textDecoration=this.checked?'line-through':'';this.nextElementSibling.style.color=this.checked?'var(--text-dim)':'';commitSessionPrep()">
       <textarea rows="1" placeholder="Question to resolve before the session…" oninput="window._prepQuestions[${i}].text=this.value;schedulePrepAutoSave();autoGrowTextarea(this)" style="flex:1;resize:none;overflow:hidden;${q.done?'text-decoration:line-through;color:var(--text-dim)':''}">${esc(q.text)}</textarea>
-      <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:6px" onclick="openAnswerQuestionModal(${i})">Answer</button>
-      <button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-top:6px" onclick="removePrepQuestion(${i})">✕</button>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" onclick="openAnswerQuestionModal(${i})">Answer</button>
+        <button class="btn btn-danger btn-sm" onclick="removePrepQuestion(${i})">✕</button>
+      </div>
     </div>`;
 }
 
@@ -8349,7 +8358,7 @@ function renderSessionPrep() {
           <h3 style="margin-bottom:12px">Plan for Next Session</h3>
           <textarea id="prep-notes" rows="10" placeholder="What happens? Where does the party go? Who shows up? What's the opening scene? What hooks are you pulling on?" style="resize:vertical" oninput="schedulePrepAutoSave()">${esc(prep.notes||'')}</textarea>
         </div>
-        <div class="card">
+        <div class="card" style="margin-bottom:16px">
           <div class="flex-between" style="margin-bottom:14px">
             <h3>Planned Scenes</h3>
             <button class="btn btn-ghost btn-sm" onclick="addPrepScene()">+ Add Scene</button>
@@ -8358,6 +8367,24 @@ function renderSessionPrep() {
             ${scenes.length===0?`<p class="text-xs text-dim" style="padding:4px 0">No scenes planned yet.</p>`:sceneRows}
           </div>
         </div>
+
+        ${activeThreads.length?`
+        <div class="card">
+          <div class="flex-between" style="margin-bottom:12px">
+            <h3>Active Threads</h3>
+            <button class="btn btn-ghost btn-sm" onclick="navigate('threads')">All →</button>
+          </div>
+          ${activeThreads.map(t => {
+            const si = getThreadStatuses().find(s=>s.value===t.status)||getThreadStatuses().find(s=>s.value==='active');
+            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openEditThreadModal('${t.id}')">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:8px;height:8px;border-radius:50%;background:${si.color};flex-shrink:0;display:inline-block"></span>
+                <span class="text-sm" style="font-weight:500">${esc(t.title)}</span>
+              </div>
+              ${t.description?`<div class="text-xs text-dim" style="margin-top:3px;padding-left:16px">${esc(t.description.slice(0,80))}${t.description.length>80?'…':''}</div>`:''}
+            </div>`;
+          }).join('')}
+        </div>`:''}
       </div>
 
       <div>
@@ -8415,24 +8442,6 @@ function renderSessionPrep() {
             ${questions.length===0?`<p class="text-xs text-dim">Things you need to figure out before the session.</p>`:qRows}
           </div>
         </div>
-
-        ${activeThreads.length?`
-        <div class="card" style="margin-bottom:16px">
-          <div class="flex-between" style="margin-bottom:12px">
-            <h3>Active Threads</h3>
-            <button class="btn btn-ghost btn-sm" onclick="navigate('threads')">All →</button>
-          </div>
-          ${activeThreads.map(t => {
-            const si = getThreadStatuses().find(s=>s.value===t.status)||getThreadStatuses().find(s=>s.value==='active');
-            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openEditThreadModal('${t.id}')">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="width:8px;height:8px;border-radius:50%;background:${si.color};flex-shrink:0;display:inline-block"></span>
-                <span class="text-sm" style="font-weight:500">${esc(t.title)}</span>
-              </div>
-              ${t.description?`<div class="text-xs text-dim" style="margin-top:3px;padding-left:16px">${esc(t.description.slice(0,80))}${t.description.length>80?'…':''}</div>`:''}
-            </div>`;
-          }).join('')}
-        </div>`:''}
 
         ${lastSessionNPCs.length?`
         <div class="card" style="margin-bottom:16px">
@@ -8555,10 +8564,15 @@ function maybeShowOnboarding() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:560px">
-      <div class="modal-header"><h3>Welcome to Untangle</h3></div>
+    <div class="modal" style="max-width:580px">
+      <div class="flex gap-14" style="align-items:center;justify-content:space-between;padding:6px 0 20px;margin-bottom:18px;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0 0 6px">Welcome to</h3>
+          <p class="text-sm text-dim" style="margin:0">A campaign tracker for GMs who discover their story at the table.</p>
+        </div>
+        <img src="assets/logo.png" alt="Untangle" style="flex-shrink:0;max-width:220px;max-height:70px;width:auto;height:auto;object-fit:contain" onerror="this.style.display='none'">
+      </div>
       <p class="text-sm" style="line-height:1.75;margin-bottom:14px">
-        Untangle is a campaign tracker for GMs who discover their story at the table.
         Log NPCs, locations, factions, sessions, and plot threads as they emerge - then
         map how they connect and walk into next session knowing exactly where things stand.
       </p>
@@ -8570,6 +8584,10 @@ function maybeShowOnboarding() {
         <li>The Player Companion is a separate window you publish to, showing players only what you've revealed - a printable Campaign Bible and Foundry Roll Tables work the same way, built from your own data.</li>
         <li>All data lives in this browser's storage, mirrored into the Foundry world as a backup. Export a backup occasionally from Foundry's Configure Settings to be extra safe.</li>
       </ul>
+      <div class="flex gap-10" style="align-items:center;padding:12px 14px;background:var(--bg-elevated);border-radius:8px;margin-bottom:18px">
+        <img src="assets/patreonlogo.png" alt="" style="height:30px;width:auto;flex-shrink:0" onerror="this.style.display='none'">
+        <p class="text-xs text-dim" style="margin:0;line-height:1.5">Features marked "Premium" support ongoing development via Patreon - everything else here stays free.</p>
+      </div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-primary" onclick="state.settings.onboarded=true;save();this.closest('.modal-overlay').remove()">Got it, let's go</button>
       </div>
