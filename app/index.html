@@ -7146,6 +7146,10 @@ function renderMysteryBoard() {
   if (positionsChanged) save();
 
   const _pos = key => t.boardPositions[key] || {x:cx,y:cy};
+  // Where string should actually tie on to a piece - the pin, not the raw
+  // center position _pos returns - so it reads as attached to the pin
+  // rather than floating to an arbitrary point in the middle of the card.
+  const _pinPos = key => { const p = _pos(key); return { x: p.x, y: p.y + _mbPinOffset(key) }; };
   const contradictions = (hasBranches && t.resolvedTruthId) ? findBranchContradictions(t.clues||[], t.resolvedTruthId) : [];
 
   // Red string, corkboard-style - only drawn where the GM actually tagged a
@@ -7158,15 +7162,15 @@ function renderMysteryBoard() {
   let edgeSvg = '';
   (t.clues||[]).forEach(cl => {
     const clueKey = 'clue:'+cl.id;
-    const pa = _pos(clueKey);
+    const pa = _pinPos(clueKey);
     if (hasBranches) {
       (cl.branchIds||[]).forEach(trId => {
         if (!t.truths.some(tr=>tr.id===trId)) return;
-        const pb = _pos('truth:'+trId);
+        const pb = _pinPos('truth:'+trId);
         edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:${trId}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.75" opacity="0.55" style="filter:${_mbStringShadow}"/>`;
       });
     } else if (t.truth) {
-      const pb = _pos('truth:single');
+      const pb = _pinPos('truth:single');
       edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:single" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.75" opacity="0.4" style="filter:${_mbStringShadow}"/>`;
     }
   });
@@ -7182,7 +7186,7 @@ function renderMysteryBoard() {
       <rect x="-54" y="-18" width="108" height="36" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-53" y="-17" width="106" height="34" rx="7" fill="${isResolved?'rgba(var(--accent-rgb),0.18)':'rgba(255,255,255,0.04)'}" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(letter)}: ${esc(shortLabel)}</text>
-      ${mbPinHeadSvg(-13)}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.truth)}
       <rect x="-54" y="-18" width="108" height="36" rx="8" fill="transparent"/>
     </g>`;
   }).join('') : (t.truth ? (() => {
@@ -7191,7 +7195,7 @@ function renderMysteryBoard() {
       <rect x="-58" y="-18" width="116" height="36" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-57" y="-17" width="114" height="34" rx="7" fill="rgba(255,255,255,0.04)" stroke="#999" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#ccc" font-family="var(--font)" pointer-events="none">GM Truth</text>
-      ${mbPinHeadSvg(-13)}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.truth)}
       <rect x="-58" y="-18" width="116" height="36" rx="8" fill="transparent"/>
     </g>`;
   })() : '');
@@ -7211,7 +7215,7 @@ function renderMysteryBoard() {
       <rect x="-72" y="-16" width="144" height="32" rx="6" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-71" y="-15" width="142" height="30" rx="5" fill="${fill}" stroke="${strokeColor}" stroke-width="1"${dash} pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="var(--text-dim)" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
-      ${mbPinHeadSvg(-11)}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.clue)}
       <rect x="-72" y="-16" width="144" height="32" rx="6" fill="transparent"/>
     </g>`;
   }).join('');
@@ -7222,14 +7226,18 @@ function renderMysteryBoard() {
     const pos = _pos(key);
     const letter = esc((n.name[0]||'?').toUpperCase());
     const shortName = n.name.length>14?n.name.slice(0,13)+'…':n.name;
+    // The transparent hit-circle at the end enlarges the grab target, but
+    // painting order in SVG doubles as hover/click stacking order - it has
+    // to come *before* the remove-x or it silently eats the click meant
+    // for the x wherever the two overlap.
     return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <circle r="22" fill="rgba(28,28,28,1)" pointer-events="none"/>
       <circle r="21" fill="rgba(var(--accent-rgb),0.1)" stroke="rgba(var(--accent-rgb),0.35)" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="var(--accent)" font-family="var(--font)" pointer-events="none">${letter}</text>
       <text y="34" text-anchor="middle" font-size="10" fill="var(--text)" font-family="var(--font)" pointer-events="none">${esc(shortName)}</text>
-      ${mbPinHeadSvg(-30)}
-      ${boardOnlyNpcIds.has(id) ? mbRemoveBtnSvg(16,-16,key) : ''}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.npc)}
       <circle r="25" fill="transparent"/>
+      ${boardOnlyNpcIds.has(id) ? mbRemoveBtnSvg(16,-16,key) : ''}
     </g>`;
   }).join('');
 
@@ -7242,9 +7250,9 @@ function renderMysteryBoard() {
       <rect x="-46" y="-15" width="92" height="30" rx="15" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-45" y="-14" width="90" height="28" rx="14" fill="rgba(120,180,120,0.08)" stroke="#6a9" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="600" fill="#8cb98c" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
-      ${mbPinHeadSvg(-10)}
-      ${boardOnlyLocIds.has(id) ? mbRemoveBtnSvg(38,-11,key) : ''}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.loc)}
       <rect x="-46" y="-15" width="92" height="30" rx="15" fill="transparent"/>
+      ${boardOnlyLocIds.has(id) ? mbRemoveBtnSvg(38,-11,key) : ''}
     </g>`;
   }).join('');
 
@@ -7259,9 +7267,9 @@ function renderMysteryBoard() {
       <rect x="-45" y="-15" width="90" height="30" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-44" y="-14" width="88" height="28" rx="7" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
-      ${mbPinHeadSvg(-10)}
-      ${mbRemoveBtnSvg(38,-10,key)}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.faction)}
       <rect x="-45" y="-15" width="90" height="30" rx="8" fill="transparent"/>
+      ${mbRemoveBtnSvg(38,-10,key)}
     </g>`;
   }).join('');
 
@@ -7275,9 +7283,9 @@ function renderMysteryBoard() {
       <rect x="-74" y="-18" width="148" height="36" rx="4" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-73" y="-17" width="146" height="34" rx="3" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
-      ${mbPinHeadSvg(-13)}
-      ${mbRemoveBtnSvg(64,-12,key)}
+      ${mbPinHeadSvg(MB_PIN_OFFSETS.custom)}
       <rect x="-74" y="-18" width="148" height="36" rx="4" fill="transparent"/>
+      ${mbRemoveBtnSvg(64,-12,key)}
     </g>`;
   }).join('');
 
@@ -7286,17 +7294,17 @@ function renderMysteryBoard() {
     return `<button class="btn ${lt.id===window._boardThreadId?'btn-primary':'btn-ghost'} btn-sm" onclick="window._boardThreadId='${lt.id}';render()" style="${lt.id===window._boardThreadId?`background:${si.color};border-color:${si.color};`:''}">${esc(lt.title)}</button>`;
   }).join('') + `<button class="btn ${isGeneral?'btn-primary':'btn-ghost'} btn-sm" onclick="window._boardThreadId='__general__';render()" title="Not tied to any one case - for cross-case scheming, faction politics, anything that doesn't belong to a single mystery">${liveThreads.length?'':'★ '}General Board</button>`;
 
-  // GM-drawn string, distinct from the auto clue<->truth string above - the
-  // GM can connect any two pins (people, places, clues, truths) to mark
-  // relationships the data model itself has no field for, same as pinning
-  // string between photos on a real board. Created by dropping one piece on
-  // another (see setupMysteryBoardEvents) rather than a separate mode.
+  // GM-drawn string - same red yarn as the auto clue<->truth string above,
+  // on purpose (a real corkboard doesn't have two colors of string; see the
+  // design-boundary comment above createBoardConnection for why these stay
+  // visually uniform even though they come from different data). The only
+  // remaining difference is the optional label and that this one's clickable.
   let customEdgeSvg = '';
   (t.boardConnections||[]).forEach(cn => {
-    const pa = _pos(cn.a), pb = _pos(cn.b);
+    const pa = _pinPos(cn.a), pb = _pinPos(cn.b);
     const mx = (pa.x+pb.x)/2, my = (pa.y+pb.y)/2;
     customEdgeSvg += `<g class="mb-custom-edge" style="cursor:pointer" onclick="openEditBoardConnectionModal('${cn.id}')">
-      <line id="mb-conn-line-${cn.id}" data-edge="${cn.a}|${cn.b}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="#ddd" stroke-width="1.75" stroke-dasharray="5,3" opacity="0.6" style="filter:${_mbStringShadow}"/>
+      <line id="mb-conn-line-${cn.id}" data-edge="${cn.a}|${cn.b}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.75" opacity="0.55" style="filter:${_mbStringShadow}"/>
       <line id="mb-conn-hit-${cn.id}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="transparent" stroke-width="14"/>
       ${cn.label?`<text id="mb-conn-label-${cn.id}" x="${mx}" y="${my}" text-anchor="middle" font-size="9.5" fill="#ddd" font-family="var(--font)" dy="-5" pointer-events="none">${esc(cn.label)}</text>`:''}
     </g>`;
@@ -7458,12 +7466,29 @@ function _mbTiltDeg(key) {
   return (h % 7) - 3; // -3..3 degrees
 }
 
-// A small metal pushpin head, drawn overlapping a node's own top edge (or
-// floating just above it, for the photo-like NPC circles where a pin
-// through the middle would sit on the portrait). One neutral color for
-// every piece, on purpose - the node's own border/fill already carries the
-// meaningful color (truth grey, faction's color, etc.); a second colored
-// channel on the pin itself would just be noise.
+// Single source of truth for how far each node kind's pushpin sits above
+// its own local origin (all pins are horizontally centered, cx=0, so only
+// a vertical offset is needed). Shared by mbPinHeadSvg (drawing the pin)
+// and _mbPinOffset (anchoring string endpoints to that same pin instead of
+// the node's raw center) so the two can't drift apart.
+const MB_PIN_OFFSETS = { truth: -13, clue: -11, npc: -17, loc: -10, faction: -10, custom: -13 };
+
+// Where a piece of string should attach - the pin, not the node's center -
+// so it reads as tied to the pin rather than floating to an arbitrary point
+// in the middle of the card. Rotation's effect on this is ignored: the tilt
+// is only +/-3 degrees, so the resulting sub-pixel horizontal shift isn't
+// visible, and skipping it keeps the drag-time DOM patching simple.
+function _mbPinOffset(key) {
+  const kind = key.slice(0, key.indexOf(':'));
+  return MB_PIN_OFFSETS[kind] || 0;
+}
+
+// A small metal pushpin head, drawn overlapping a node's own top edge (one
+// exception: NPC circles get the same overlapping treatment as every other
+// shape now too, rather than floating disconnected above the portrait).
+// One neutral color for every piece, on purpose - the node's own border/
+// fill already carries the meaningful color (truth grey, faction's color,
+// etc.); a second colored channel on the pin itself would just be noise.
 function mbPinHeadSvg(ry) {
   return `<g pointer-events="none">
     <circle cy="${ry}" r="4.5" fill="#c9c9c9"/>
@@ -7730,10 +7755,14 @@ function setupMysteryBoardEvents() {
       // 0deg for the duration of the drag and only snap back to its tilt
       // on the next full render.
       if (node) node.setAttribute('transform', `translate(${nx},${ny}) rotate(${_mbTiltDeg(_mbDrag.key)})`);
+      // String ties on to the pin, not the raw center - same offset used at
+      // render time (_mbPinOffset) - or it'd visibly detach from the pin
+      // for the duration of the drag.
+      const dragPinY = ny + _mbPinOffset(_mbDrag.key);
       svg.querySelectorAll('[data-edge]').forEach(line => {
         const [k1, k2] = line.dataset.edge.split('|');
-        if (k1 === _mbDrag.key) { line.setAttribute('x1', nx); line.setAttribute('y1', ny); }
-        if (k2 === _mbDrag.key) { line.setAttribute('x2', nx); line.setAttribute('y2', ny); }
+        if (k1 === _mbDrag.key) { line.setAttribute('x1', nx); line.setAttribute('y1', dragPinY); }
+        if (k2 === _mbDrag.key) { line.setAttribute('x2', nx); line.setAttribute('y2', dragPinY); }
       });
       // GM-drawn connections need both endpoints (and the label) recomputed,
       // not just the moving one - the generic [data-edge] pass above already
@@ -7743,9 +7772,10 @@ function setupMysteryBoardEvents() {
       (dragT?.boardConnections||[]).forEach(cn => {
         if (cn.a !== _mbDrag.key && cn.b !== _mbDrag.key) return;
         const otherKey = cn.a === _mbDrag.key ? cn.b : cn.a;
-        const otherPos = dragT.boardPositions?.[otherKey] || { x: 450, y: 280 };
-        const pa = cn.a === _mbDrag.key ? { x: nx, y: ny } : otherPos;
-        const pb = cn.b === _mbDrag.key ? { x: nx, y: ny } : otherPos;
+        const otherRaw = dragT.boardPositions?.[otherKey] || { x: 450, y: 280 };
+        const otherPos = { x: otherRaw.x, y: otherRaw.y + _mbPinOffset(otherKey) };
+        const pa = cn.a === _mbDrag.key ? { x: nx, y: dragPinY } : otherPos;
+        const pb = cn.b === _mbDrag.key ? { x: nx, y: dragPinY } : otherPos;
         const hit = document.getElementById(`mb-conn-hit-${cn.id}`);
         const label = document.getElementById(`mb-conn-label-${cn.id}`);
         if (hit) { hit.setAttribute('x1', pa.x); hit.setAttribute('y1', pa.y); hit.setAttribute('x2', pb.x); hit.setAttribute('y2', pb.y); }
