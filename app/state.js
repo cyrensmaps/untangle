@@ -6,7 +6,7 @@
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], timelineEvents: [], sessionPrep: { notes: '', scenes: [], questions: [] } }; }
+function blankCampaign(name) { return { id: uid(), name, sessions: [], npcs: [], locations: [], hooks: [], maps: [], quickNotes: [], relationships: [], npcPositions: {}, factionPositions: {}, plotThreads: [], factions: [], clocks: [], timelineEvents: [], sessionPrep: { notes: '', scenes: [], questions: [] }, debts: [], tableSafety: '' }; }
 
 const DEFAULT_STATE = () => ({
   settings: { onboarded: false, theme: 'foundry-basic', customListValues: {}, aiProvider: 'claude' },
@@ -415,6 +415,7 @@ const FEATURE_REGISTRY = [
   { key: 'timeline',          label: 'Timeline',                  category: 'At the Table',       premium: true  },
   { key: 'recap',             label: 'Session Recap',             category: 'At the Table',       premium: false },
   { key: 'staleCallbacks',    label: 'Stale Callback Surfacing',  category: 'At the Table',       premium: false },
+  { key: 'tableSafety',       label: 'Table Safety Reference',    category: 'At the Table',       premium: false },
   { key: 'maps',              label: 'Maps',                      category: 'World',              premium: false },
   { key: 'clocks',            label: 'Clocks',                    category: 'Story',               premium: false },
   { key: 'relationshipWeb',   label: 'Relationships & Spark',     category: 'Story',               premium: false },

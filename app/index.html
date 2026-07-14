@@ -597,7 +597,7 @@ function renderNavLinks() {
 // If a view was navigated to (or left active from before a feature was
 // toggled off) while its feature is now disabled, fall back to the dashboard
 // rather than rendering a page whose nav entry no longer exists.
-const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', fieldnotes: 'fieldNotes', playerwiki: 'playerWiki', mysteryboard: 'mysteryBoard' };
+const VIEW_FEATURE = { prep: 'sessionPrep', timeline: 'timeline', maps: 'maps', 'map-view': 'maps', clocks: 'clocks', web: 'relationshipWeb', debts: 'relationshipWeb', fieldnotes: 'fieldNotes', playerwiki: 'playerWiki', mysteryboard: 'mysteryBoard' };
 
 function navigate(v) {
   if (VIEW_FEATURE[v] && !isFeatureEnabled(VIEW_FEATURE[v])) v = 'dashboard';
@@ -611,7 +611,7 @@ function navigate(v) {
 function render() {
   const main = document.getElementById('main-content');
   document.getElementById('nav-campaign-name').textContent = camp().name;
-  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings, playerwiki: renderPlayerWiki, mysteryboard: renderMysteryBoard };
+  const views = { dashboard: renderDashboard, sessions: renderSessions, 'session-new': renderNewSession, npcs: renderNPCs, locations: renderLocations, maps: renderMaps, 'map-view': renderMapView, timeline: renderTimeline, fieldnotes: renderFieldNotes, web: renderRelationshipWeb, debts: renderDebtLedger, threads: renderPlotThreads, factions: renderFactions, clocks: renderClocks, prep: renderSessionPrep, settings: renderSettings, playerwiki: renderPlayerWiki, mysteryboard: renderMysteryBoard };
   if (VIEW_FEATURE[view] && !isFeatureEnabled(VIEW_FEATURE[view])) { view = 'dashboard'; renderNavLinks(); }
   if (view === 'prep') {
     window._prepScenes = JSON.parse(JSON.stringify(camp().sessionPrep?.scenes || []));
@@ -6442,9 +6442,10 @@ function renderRelationshipWeb() {
   return `
     <div class="page-header">
       <div><h2>Relationship Web</h2><p class="subtitle">${c.npcs.length} characters · ${c.relationships.length} relationship${c.relationships.length!==1?'s':''}${hasFactions?' · '+c.factions.length+' faction'+(c.factions.length!==1?'s':''):''}</p></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="autoLayoutWeb()">↺ Auto-arrange</button>
         <button class="btn btn-ghost" onclick="openSparkModal()">Spark</button>
+        <button class="btn btn-ghost" onclick="navigate('debts')">⇄ Debts &amp; Favors</button>
         <button class="btn btn-primary" onclick="openAddRelModal()">+ Add Relationship</button>
       </div>
     </div>
@@ -6992,6 +6993,157 @@ function approveSparkConnection() {
   document.getElementById('spark-review-overlay')?.remove();
   toast('Connection added to the Relationship Web.', 'success');
   navigate('web');
+}
+
+// ═══════════════════════════════════════════════
+// DEBTS & FAVORS
+// ═══════════════════════════════════════════════
+
+// A lightweight ledger of concrete, resolvable IOUs between Characters/
+// Factions - distinct from Relationships, which are static labels (Ally,
+// Rival...) rather than something with an outcome. Reached only via the
+// "Debts & Favors" button on Relationship Web (shares its feature toggle
+// in VIEW_FEATURE rather than getting its own Settings entry, since it's
+// a companion view, not a standalone page a GM would look for on its own).
+
+function _debtEntityOpts() {
+  const c = camp();
+  const groups = [
+    { label: 'Characters', items: c.npcs,     type: 'npc' },
+    { label: 'Factions',   items: c.factions, type: 'faction' },
+  ];
+  return groups.filter(g => g.items.length).map(g =>
+    `<optgroup label="${g.label}">${g.items.map(it => `<option value="${g.type}:${it.id}">${esc(it.name)}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+
+function _debtEntityName(type, id) {
+  const c = camp();
+  if (type === 'npc') return c.npcs.find(n => n.id === id)?.name || '(deleted character)';
+  if (type === 'faction') return c.factions.find(f => f.id === id)?.name || '(deleted faction)';
+  return '?';
+}
+
+function _debtEntityChip(type, id) {
+  const name = esc(_debtEntityName(type, id));
+  if (type === 'faction') {
+    const color = camp().factions.find(f => f.id === id)?.color || '#888';
+    return `<span class="faction-chip" style="background:${color}22;color:${color};border-color:${color}55">${name}</span>`;
+  }
+  return `<span class="npc-chip" style="cursor:default">${name}</span>`;
+}
+
+function renderDebtLedger() {
+  const c = camp();
+  const debts = c.debts || [];
+  if (!window._debtFilter) window._debtFilter = 'outstanding';
+  const filter = window._debtFilter;
+  const filtered = debts
+    .filter(d => filter === 'all' ? true : filter === 'outstanding' ? !d.resolved : d.resolved)
+    .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+
+  const cards = filtered.map(d => `
+    <div class="card" style="${d.resolved?'opacity:0.6':''}">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        ${_debtEntityChip(d.fromType, d.fromId)}
+        <span class="text-dim" style="font-size:0.75rem">owes</span>
+        ${_debtEntityChip(d.toType, d.toId)}
+      </div>
+      <p class="text-sm" style="margin-top:10px;${d.resolved?'text-decoration:line-through;color:var(--text-dim)':''}">${esc(d.description)}</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
+        <span class="text-xs" style="font-weight:700;letter-spacing:0.02em;text-transform:uppercase;color:${d.resolved?'var(--green)':'#dd8800'}">${d.resolved?'Resolved':'Outstanding'}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="toggleDebtResolved('${d.id}')">${d.resolved?'Reopen':'Resolve'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="openDebtModal('${d.id}')">Edit</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const filterBtns = [['outstanding','Outstanding'],['resolved','Resolved'],['all','All']].map(([key,label]) =>
+    `<button class="btn ${filter===key?'btn-primary':'btn-ghost'} btn-sm" onclick="window._debtFilter='${key}';render()">${label}</button>`
+  ).join('');
+
+  return `
+    <div class="page-header">
+      <div><h2>Debts &amp; Favors</h2><p class="subtitle">Who owes who, and what for - callbacks waiting to happen</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="navigate('web')">← Relationships</button>
+        <button class="btn btn-primary" onclick="openDebtModal(null)">+ Add Debt/Favor</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:20px">${filterBtns}</div>
+    ${filtered.length===0
+      ? `<div class="empty-state"><h3>${debts.length===0?'No debts or favors yet':'Nothing here'}</h3><p>${debts.length===0?'Track who owes who a favor, a debt, or worse - great fuel for a callback later.':'Try a different filter.'}</p></div>`
+      : `<div class="card-grid">${cards}</div>`}`;
+}
+
+function openDebtModal(id) {
+  const c = camp();
+  const d = id ? (c.debts||[]).find(x => x.id === id) : null;
+  const isEdit = !!d;
+  const opts = _debtEntityOpts();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header"><h3>${isEdit?'Edit':'Add'} Debt / Favor</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-row">
+        <div class="form-group"><label>Who owes</label><select id="debt-from">${opts}</select></div>
+        <div class="form-group"><label>To whom</label><select id="debt-to">${opts}</select></div>
+      </div>
+      <div class="form-group"><label>What's owed</label><input type="text" id="debt-desc" value="${isEdit?esc(d.description):''}" placeholder="a favor, 50 gold, his life…"></div>
+      <div class="flex gap-8" style="justify-content:space-between">
+        ${isEdit?`<button class="btn btn-danger" onclick="deleteDebt('${d.id}')">Delete</button>`:'<span></span>'}
+        <div class="flex gap-8">
+          <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveDebt(${isEdit?`'${d.id}'`:'null'})">${isEdit?'Save':'Add'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  if (isEdit) {
+    const fromSel = document.getElementById('debt-from'), toSel = document.getElementById('debt-to');
+    if (fromSel) fromSel.value = `${d.fromType}:${d.fromId}`;
+    if (toSel) toSel.value = `${d.toType}:${d.toId}`;
+  }
+}
+
+function saveDebt(id) {
+  const fromVal = document.getElementById('debt-from')?.value;
+  const toVal = document.getElementById('debt-to')?.value;
+  const description = document.getElementById('debt-desc')?.value.trim();
+  if (!fromVal || !toVal || !description) { toast("Fill in both parties and what's owed.", 'error'); return; }
+  const [fromType, fromId] = fromVal.split(':');
+  const [toType, toId] = toVal.split(':');
+  const c = camp();
+  if (!c.debts) c.debts = [];
+  if (id) {
+    const d = c.debts.find(x => x.id === id);
+    if (d) { d.fromType = fromType; d.fromId = fromId; d.toType = toType; d.toId = toId; d.description = description; }
+  } else {
+    c.debts.push({ id: uid(), fromType, fromId, toType, toId, description, resolved: false, createdAt: Date.now(), resolvedAt: null });
+  }
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+function toggleDebtResolved(id) {
+  const c = camp();
+  const d = (c.debts||[]).find(x => x.id === id);
+  if (!d) return;
+  d.resolved = !d.resolved;
+  d.resolvedAt = d.resolved ? Date.now() : null;
+  save();
+  render();
+}
+
+function deleteDebt(id) {
+  const c = camp();
+  c.debts = (c.debts||[]).filter(x => x.id !== id);
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
 }
 
 // ═══════════════════════════════════════════════

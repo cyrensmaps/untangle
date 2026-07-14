@@ -55,7 +55,7 @@ class QuickAccessApp extends Application {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'untangle-quick-access',
       title: 'Untangle - Quick Access',
-      width: 320,
+      width: 420,
       height: 440,
       resizable: true,
       minimizable: true,

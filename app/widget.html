@@ -71,6 +71,12 @@
   <div id="qa-callbacks-list"></div>
 </div>
 
+<div class="qa-panel" id="qa-panel-safety">
+  <textarea id="qa-safety-text" rows="9" placeholder="Lines &amp; veils, the X-card, house rules - whatever your table agreed on…"></textarea>
+  <button class="btn btn-primary" onclick="qaSaveTableSafety()">Save</button>
+  <div class="qa-hint" id="qa-safety-hint"></div>
+</div>
+
 <script src="state.js"></script>
 <script src="namegen.js"></script>
 <script>
@@ -84,6 +90,7 @@ const QA_TABS = [
   { id: 'names',     feature: 'nameGenerator',  label: 'Names' },
   { id: 'clocks',    feature: 'clocks',         label: 'Clocks' },
   { id: 'callbacks', feature: 'staleCallbacks', label: 'Callbacks' },
+  { id: 'safety',    feature: 'tableSafety',    label: 'Table Safety' },
 ];
 let qaActiveTab = null;
 
@@ -97,6 +104,7 @@ function qaRenderTabs() {
   if (!enabled.length) return;
   if (qaActiveTab === 'clocks') qaRenderClocks();
   if (qaActiveTab === 'callbacks') qaRenderCallbacks();
+  if (qaActiveTab === 'safety') qaRenderTableSafety();
 }
 
 function qaSwitch(tab) {
@@ -222,6 +230,24 @@ function qaRenderCallbacks() {
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openInPlanner('${e.type}','${e.id}')">${esc(e.name)}</span>
         <span style="flex-shrink:0;color:var(--text-dim)">${e.sessionsSince}s ago</span>
       </div>`).join('');
+}
+
+// ── Table safety ──
+// A static reference card, not a running log like Field Notes - one free-
+// text field the GM sets up once (safety tools, house rules) and glances
+// at during play, not something added to session over session.
+function qaRenderTableSafety() {
+  const c = camp();
+  const ta = document.getElementById('qa-safety-text');
+  if (ta) ta.value = c.tableSafety || '';
+}
+
+function qaSaveTableSafety() {
+  const c = camp();
+  c.tableSafety = document.getElementById('qa-safety-text')?.value || '';
+  save();
+  const hint = document.getElementById('qa-safety-hint');
+  if (hint) { hint.textContent = 'Saved!'; setTimeout(() => { hint.textContent = ''; }, 1500); }
 }
 
 // Called by state.js's storage-event listener whenever another window (the
