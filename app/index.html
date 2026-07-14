@@ -226,6 +226,27 @@
     .tl-color-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
     .tl-color-swatch:hover { transform: scale(1.15); }
 
+    /* ── MYSTERY BOARD ── */
+    .mb-node .mb-remove-btn { opacity: 0; transition: opacity 0.12s ease; }
+    .mb-node:hover .mb-remove-btn { opacity: 1; }
+    /* Deliberately a fixed cork-brown, not a theme variable - a corkboard
+       is physically brown regardless of the app's light/dark theme, and
+       the flat neutral canvas Relationship Web uses is the point of
+       contrast (see the design-boundary comments near REL_TYPES). Kept
+       subtle (low-opacity dots) so node text and string stay legible. */
+    .mb-canvas {
+      background-color: #4a3728;
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(0,0,0,0.16) 0%, transparent 3%),
+        radial-gradient(circle at 62% 68%, rgba(0,0,0,0.14) 0%, transparent 4%),
+        radial-gradient(circle at 82% 22%, rgba(255,255,255,0.05) 0%, transparent 3%),
+        radial-gradient(circle at 38% 86%, rgba(0,0,0,0.12) 0%, transparent 3%),
+        radial-gradient(circle at 8% 62%, rgba(255,255,255,0.04) 0%, transparent 2%),
+        radial-gradient(circle at 92% 78%, rgba(0,0,0,0.1) 0%, transparent 3%),
+        radial-gradient(circle at 50% 12%, rgba(255,255,255,0.03) 0%, transparent 2%);
+      background-size: 140px 140px, 160px 160px, 120px 120px, 150px 150px, 100px 100px, 130px 130px, 110px 110px;
+    }
+
     /* ── ENTITY LINKS ── */
     .session-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
     .session-pill { padding: 2px 8px; border-radius: 8px; font-size: 0.68rem; background: rgba(var(--accent-rgb),0.1); color: var(--accent); cursor: pointer; border: 1px solid rgba(var(--accent-rgb),0.2); transition: opacity 0.15s; }
@@ -6297,6 +6318,15 @@ function toast(msg, type = 'success') {
 // RELATIONSHIP WEB
 // ═══════════════════════════════════════════════
 
+// Design boundary vs. the Mystery Board: relationships here are always
+// anchored to one of these defined types (custom ones can be added via
+// Settings, but every edge still has a type) - this is the campaign's
+// canonical, exhaustive "who's connected to whom, and how" reference. The
+// Mystery Board's own string connections (see createBoardConnection below)
+// are deliberately the opposite: untyped, GM-authored free text, because
+// they represent an active working theory, not a settled fact. Don't blur
+// this - a future ask to "add relationship types to the Mystery Board" (or
+// vice versa, a preset/reusable label list here) belongs on the other tool.
 const REL_TYPES = [
   { value: 'ally',     label: 'Ally',     color: '#4a9966', dash: '' },
   { value: 'enemy',    label: 'Enemy',    color: '#cc4444', dash: '' },
@@ -7031,60 +7061,100 @@ function renderPlotThreads() {
       : `<div class="card-grid">${threadCards}</div>`}`;
 }
 
+// Resolves whatever the board is currently pointed at - either a real Plot
+// Thread (its own case, with truths/clues/red string) or the campaign-wide
+// "General Board" sentinel ('__general__'), a freeform corkboard that isn't
+// tied to any one case. The General Board is stored as a plain object with
+// only the fields a Thread's board half has (boardPositions/boardNpcIds/
+// boardFactionIds/boardLocationIds/boardCustomNodes/boardConnections) -
+// every other Thread field renderMysteryBoard reads (clues, truths, truth,
+// resolvedTruthId, npcIds, locationIds) is already guarded with `||[]`/
+// falsy checks throughout, so simply lacking those fields naturally makes
+// it render as "no truths, no clues, nothing tagged as involved" rather
+// than needing a parallel code path.
+function _mbGetBoardTargetById(id) {
+  if (id === '__general__') {
+    const c = camp();
+    if (!c.generalBoard) c.generalBoard = {};
+    return c.generalBoard;
+  }
+  return camp().plotThreads.find(x => x.id === id);
+}
+
 // Premium add-on to the always-free Plot Threads list: a draggable corkboard
 // for one thread ("case") at a time, reusing the Relationship Web's
 // canvas/drag/pan/zoom approach. Only the clue<->truth connections are drawn
 // as string - there's no data linking a specific NPC/location to a specific
 // truth, so those are pinned to the board without invented lines and the GM
 // can position them near whatever they're relevant to, same as a real board.
+// A campaign-wide "General Board" (window._boardThreadId === '__general__')
+// is also reachable from here - see _mbGetBoardTargetById - for freeform
+// cross-case pinning that isn't scoped to any single Plot Thread.
 function renderMysteryBoard() {
   const c = camp();
   const liveThreads = c.plotThreads.filter(isThreadOngoing);
 
-  if (!liveThreads.length) {
-    return `
-      <div class="page-header">
-        <div><h2>Mystery Board</h2><p class="subtitle">Pin up a case's truth(s) and clues, and see how they connect</p></div>
-        <button class="btn btn-ghost" onclick="navigate('threads')">← Plot Threads</button>
-      </div>
-      <div class="empty-state"><h3>No active mysteries</h3><p>Threads marked Rumor, Active, or Dormant show up here once you have some.</p></div>`;
+  // Default to the first live case, but fall back to the General Board if
+  // there are none - the General Board has no "case" prerequisite, so a GM
+  // with zero active threads can still use a freeform corkboard.
+  if (!window._boardThreadId || (window._boardThreadId !== '__general__' && !liveThreads.some(lt => lt.id === window._boardThreadId))) {
+    window._boardThreadId = liveThreads.length ? liveThreads[0].id : '__general__';
   }
+  const isGeneral = window._boardThreadId === '__general__';
+  const t = _mbGetBoardTargetById(window._boardThreadId);
 
-  if (!window._boardThreadId || !liveThreads.some(lt => lt.id === window._boardThreadId)) {
-    window._boardThreadId = liveThreads[0].id;
-  }
-  const t = liveThreads.find(lt => lt.id === window._boardThreadId) || liveThreads[0];
-
-  const W = 900, H = 560, cx = W/2, cy = H/2;
+  const W = 1000, H = 640, cx = W/2, cy = H/2;
   const hasBranches = (t.truths||[]).length > 0;
   if (!t.boardPositions) t.boardPositions = {};
 
   let positionsChanged = false;
-  const assignRing = (keys, radius) => {
+  // Elliptical rather than circular rings - a circular ring wide enough to
+  // clear the board horizontally pushed nodes above y=0 (clipped by the
+  // board's overflow:hidden) once a thread had more than a few involved
+  // NPCs/Locations, since H is much shorter than W.
+  const assignRing = (keys, radiusX, radiusY) => {
     keys.forEach((key, i) => {
       if (!t.boardPositions[key]) {
         const angle = (2 * Math.PI * i / Math.max(keys.length, 1)) - Math.PI/2;
-        t.boardPositions[key] = { x: Math.round(cx + radius * Math.cos(angle)), y: Math.round(cy + radius * Math.sin(angle)) };
+        t.boardPositions[key] = { x: Math.round(cx + radiusX * Math.cos(angle)), y: Math.round(cy + radiusY * Math.sin(angle)) };
         positionsChanged = true;
       }
     });
   };
   const truthKeys = hasBranches ? t.truths.map(tr => 'truth:'+tr.id) : (t.truth ? ['truth:single'] : []);
   const clueKeys  = (t.clues||[]).map(cl => 'clue:'+cl.id);
-  const npcKeys   = (t.npcIds||[]).filter(id => c.npcs.some(n=>n.id===id)).map(id => 'npc:'+id);
-  const locKeys   = (t.locationIds||[]).filter(id => c.locations.some(l=>l.id===id)).map(id => 'loc:'+id);
+  // Board membership for NPCs/Locations is the union of the thread's real
+  // "involved" tags (unchanged, legacy behaviour) and boardNpcIds/
+  // boardLocationIds - a separate list for entities freely pinned to this
+  // corkboard without being formally tagged as involved in the case.
+  const npcKeys     = Array.from(new Set([...(t.npcIds||[]), ...(t.boardNpcIds||[])])).filter(id => c.npcs.some(n=>n.id===id)).map(id => 'npc:'+id);
+  const locKeys     = Array.from(new Set([...(t.locationIds||[]), ...(t.boardLocationIds||[])])).filter(id => c.locations.some(l=>l.id===id)).map(id => 'loc:'+id);
+  const factionKeys = Array.from(new Set(t.boardFactionIds||[])).filter(id => c.factions.some(f=>f.id===id)).map(id => 'faction:'+id);
+  const customKeys  = (t.boardCustomNodes||[]).map(cn => 'custom:'+cn.id);
+  // Only board-only entries get a remove-x on the board (a piece that's
+  // also tagged as "involved" needs to be untagged via Edit This Case -
+  // removing it here would silently do nothing since it'd still qualify
+  // for npcKeys/locKeys through the tag).
+  const boardOnlyNpcIds = new Set((t.boardNpcIds||[]).filter(id => !(t.npcIds||[]).includes(id)));
+  const boardOnlyLocIds = new Set((t.boardLocationIds||[]).filter(id => !(t.locationIds||[]).includes(id)));
 
   if (truthKeys.length === 1) { if (!t.boardPositions[truthKeys[0]]) { t.boardPositions[truthKeys[0]] = {x:cx,y:cy}; positionsChanged = true; } }
-  else if (truthKeys.length > 1) assignRing(truthKeys, 90);
-  assignRing(clueKeys, 230);
-  assignRing([...npcKeys, ...locKeys], 340);
+  else if (truthKeys.length > 1) assignRing(truthKeys, 90, 90);
+  assignRing(clueKeys, 230, 160);
+  assignRing([...npcKeys, ...locKeys, ...factionKeys], 340, 230);
+  assignRing(customKeys, 400, 260);
   if (positionsChanged) save();
 
   const _pos = key => t.boardPositions[key] || {x:cx,y:cy};
+  const contradictions = (hasBranches && t.resolvedTruthId) ? findBranchContradictions(t.clues||[], t.resolvedTruthId) : [];
 
   // Red string, corkboard-style - only drawn where the GM actually tagged a
   // clue to a truth (or, in single-truth mode, from every clue to the one
   // hidden truth, since there's nothing else for a clue to point at there).
+  // The drop-shadow filter is part of the corkboard treatment (.mb-canvas) -
+  // gives the string a little lift off the board instead of a flat vector
+  // line, same reasoning as the pushpin heads and per-node tilt.
+  const _mbStringShadow = 'drop-shadow(1px 1.5px 1px rgba(0,0,0,0.5))';
   let edgeSvg = '';
   (t.clues||[]).forEach(cl => {
     const clueKey = 'clue:'+cl.id;
@@ -7093,11 +7163,11 @@ function renderMysteryBoard() {
       (cl.branchIds||[]).forEach(trId => {
         if (!t.truths.some(tr=>tr.id===trId)) return;
         const pb = _pos('truth:'+trId);
-        edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:${trId}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.5" opacity="0.55"/>`;
+        edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:${trId}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.75" opacity="0.55" style="filter:${_mbStringShadow}"/>`;
       });
     } else if (t.truth) {
       const pb = _pos('truth:single');
-      edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:single" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.5" opacity="0.4"/>`;
+      edgeSvg += `<line class="mb-edge" data-edge="${clueKey}|truth:single" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="var(--red)" stroke-width="1.75" opacity="0.4" style="filter:${_mbStringShadow}"/>`;
     }
   });
 
@@ -7108,18 +7178,20 @@ function renderMysteryBoard() {
     const color = isResolved ? 'var(--accent)' : '#999';
     const label = tr.label || ('Truth '+letter);
     const shortLabel = label.length>16?label.slice(0,15)+'…':label;
-    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y})" style="cursor:grab">
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <rect x="-54" y="-18" width="108" height="36" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-53" y="-17" width="106" height="34" rx="7" fill="${isResolved?'rgba(var(--accent-rgb),0.18)':'rgba(255,255,255,0.04)'}" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(letter)}: ${esc(shortLabel)}</text>
+      ${mbPinHeadSvg(-13)}
       <rect x="-54" y="-18" width="108" height="36" rx="8" fill="transparent"/>
     </g>`;
   }).join('') : (t.truth ? (() => {
     const key = 'truth:single', pos = _pos(key);
-    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y})" style="cursor:grab">
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <rect x="-58" y="-18" width="116" height="36" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-57" y="-17" width="114" height="34" rx="7" fill="rgba(255,255,255,0.04)" stroke="#999" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#ccc" font-family="var(--font)" pointer-events="none">GM Truth</text>
+      ${mbPinHeadSvg(-13)}
       <rect x="-58" y="-18" width="116" height="36" rx="8" fill="transparent"/>
     </g>`;
   })() : '');
@@ -7127,46 +7199,92 @@ function renderMysteryBoard() {
   const clueNodeSvg = (t.clues||[]).map(cl => {
     const key = 'clue:'+cl.id, pos = _pos(key);
     const short = cl.text.length>38?cl.text.slice(0,37)+'…':cl.text;
-    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y})" style="cursor:grab">
+    // Surfaces the same two flags the "Find Contradictions" summary line
+    // already tracks - directly on the pin, so a busy board doesn't force a
+    // trip into Edit This Case to see *which* clue is the problem.
+    const isContradiction = contradictions.some(cc => cc.id === cl.id);
+    const isRedHerring = !!cl.ackRedHerring;
+    const strokeColor = isContradiction ? 'var(--red)' : (isRedHerring ? 'var(--text-dim)' : 'var(--border)');
+    const fill = isContradiction ? 'rgba(var(--red-rgb),0.14)' : 'rgba(255,255,255,0.03)';
+    const dash = isRedHerring ? ' stroke-dasharray="3,2"' : '';
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <rect x="-72" y="-16" width="144" height="32" rx="6" fill="rgba(22,22,22,1)" pointer-events="none"/>
-      <rect x="-71" y="-15" width="142" height="30" rx="5" fill="rgba(255,255,255,0.03)" stroke="var(--border)" stroke-width="1" pointer-events="none"/>
+      <rect x="-71" y="-15" width="142" height="30" rx="5" fill="${fill}" stroke="${strokeColor}" stroke-width="1"${dash} pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="var(--text-dim)" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
+      ${mbPinHeadSvg(-11)}
       <rect x="-72" y="-16" width="144" height="32" rx="6" fill="transparent"/>
     </g>`;
   }).join('');
 
   const npcNodeSvg = npcKeys.map(key => {
-    const n = c.npcs.find(x=>x.id===key.slice(4));
+    const id = key.slice(4);
+    const n = c.npcs.find(x=>x.id===id);
     const pos = _pos(key);
     const letter = esc((n.name[0]||'?').toUpperCase());
     const shortName = n.name.length>14?n.name.slice(0,13)+'…':n.name;
-    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y})" style="cursor:grab">
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <circle r="22" fill="rgba(28,28,28,1)" pointer-events="none"/>
       <circle r="21" fill="rgba(var(--accent-rgb),0.1)" stroke="rgba(var(--accent-rgb),0.35)" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="var(--accent)" font-family="var(--font)" pointer-events="none">${letter}</text>
       <text y="34" text-anchor="middle" font-size="10" fill="var(--text)" font-family="var(--font)" pointer-events="none">${esc(shortName)}</text>
+      ${mbPinHeadSvg(-30)}
+      ${boardOnlyNpcIds.has(id) ? mbRemoveBtnSvg(16,-16,key) : ''}
       <circle r="25" fill="transparent"/>
     </g>`;
   }).join('');
 
   const locNodeSvg = locKeys.map(key => {
-    const l = c.locations.find(x=>x.id===key.slice(4));
+    const id = key.slice(4);
+    const l = c.locations.find(x=>x.id===id);
     const pos = _pos(key);
     const short = l.name.length>14?l.name.slice(0,13)+'…':l.name;
-    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y})" style="cursor:grab">
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
       <rect x="-46" y="-15" width="92" height="30" rx="15" fill="rgba(22,22,22,1)" pointer-events="none"/>
       <rect x="-45" y="-14" width="90" height="28" rx="14" fill="rgba(120,180,120,0.08)" stroke="#6a9" stroke-width="1.5" pointer-events="none"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="600" fill="#8cb98c" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
+      ${mbPinHeadSvg(-10)}
+      ${boardOnlyLocIds.has(id) ? mbRemoveBtnSvg(38,-11,key) : ''}
       <rect x="-46" y="-15" width="92" height="30" rx="15" fill="transparent"/>
+    </g>`;
+  }).join('');
+
+  // Factions have no "involved" tag concept on a Thread today, so every
+  // faction on the board arrived via boardFactionIds - always removable.
+  const factionNodeSvg = factionKeys.map(key => {
+    const f = c.factions.find(x=>x.id===key.slice(8));
+    const pos = _pos(key);
+    const color = f.color || '#888';
+    const short = f.name.length>14?f.name.slice(0,13)+'…':f.name;
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
+      <rect x="-45" y="-15" width="90" height="30" rx="8" fill="rgba(22,22,22,1)" pointer-events="none"/>
+      <rect x="-44" y="-14" width="88" height="28" rx="7" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
+      <text text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
+      ${mbPinHeadSvg(-10)}
+      ${mbRemoveBtnSvg(38,-10,key)}
+      <rect x="-45" y="-15" width="90" height="30" rx="8" fill="transparent"/>
+    </g>`;
+  }).join('');
+
+  // Freeform notes - the GM's own annotations, always removable, styled as
+  // a small colored index card rather than reusing any entity's shape.
+  const customNodeSvg = (t.boardCustomNodes||[]).map(cn => {
+    const key = 'custom:'+cn.id, pos = _pos(key);
+    const color = cn.color || '#999';
+    const short = cn.text.length>34?cn.text.slice(0,33)+'…':cn.text;
+    return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
+      <rect x="-74" y="-18" width="148" height="36" rx="4" fill="rgba(22,22,22,1)" pointer-events="none"/>
+      <rect x="-73" y="-17" width="146" height="34" rx="3" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
+      <text text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
+      ${mbPinHeadSvg(-13)}
+      ${mbRemoveBtnSvg(64,-12,key)}
+      <rect x="-74" y="-18" width="148" height="36" rx="4" fill="transparent"/>
     </g>`;
   }).join('');
 
   const threadTabs = liveThreads.map(lt => {
     const si = threadStatusInfo(lt.status);
-    return `<button class="btn ${lt.id===t.id?'btn-primary':'btn-ghost'} btn-sm" onclick="window._boardThreadId='${lt.id}';render()" style="${lt.id===t.id?`background:${si.color};border-color:${si.color};`:''}">${esc(lt.title)}</button>`;
-  }).join('');
-
-  const contradictions = (hasBranches && t.resolvedTruthId) ? findBranchContradictions(t.clues||[], t.resolvedTruthId) : [];
+    return `<button class="btn ${lt.id===window._boardThreadId?'btn-primary':'btn-ghost'} btn-sm" onclick="window._boardThreadId='${lt.id}';render()" style="${lt.id===window._boardThreadId?`background:${si.color};border-color:${si.color};`:''}">${esc(lt.title)}</button>`;
+  }).join('') + `<button class="btn ${isGeneral?'btn-primary':'btn-ghost'} btn-sm" onclick="window._boardThreadId='__general__';render()" title="Not tied to any one case - for cross-case scheming, faction politics, anything that doesn't belong to a single mystery">${liveThreads.length?'':'★ '}General Board</button>`;
 
   // GM-drawn string, distinct from the auto clue<->truth string above - the
   // GM can connect any two pins (people, places, clues, truths) to mark
@@ -7178,7 +7296,7 @@ function renderMysteryBoard() {
     const pa = _pos(cn.a), pb = _pos(cn.b);
     const mx = (pa.x+pb.x)/2, my = (pa.y+pb.y)/2;
     customEdgeSvg += `<g class="mb-custom-edge" style="cursor:pointer" onclick="openEditBoardConnectionModal('${cn.id}')">
-      <line id="mb-conn-line-${cn.id}" data-edge="${cn.a}|${cn.b}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="#ddd" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+      <line id="mb-conn-line-${cn.id}" data-edge="${cn.a}|${cn.b}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="#ddd" stroke-width="1.75" stroke-dasharray="5,3" opacity="0.6" style="filter:${_mbStringShadow}"/>
       <line id="mb-conn-hit-${cn.id}" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="transparent" stroke-width="14"/>
       ${cn.label?`<text id="mb-conn-label-${cn.id}" x="${mx}" y="${my}" text-anchor="middle" font-size="9.5" fill="#ddd" font-family="var(--font)" dy="-5" pointer-events="none">${esc(cn.label)}</text>`:''}
     </g>`;
@@ -7186,15 +7304,18 @@ function renderMysteryBoard() {
 
   return `
     <div class="page-header">
-      <div><h2>Mystery Board</h2><p class="subtitle">One case at a time - drag pieces around, string shows which clues back which truth</p></div>
-      <div style="display:flex;gap:8px">
+      <div><h2>Mystery Board</h2><p class="subtitle">${isGeneral?'Not tied to any one case - pin up whatever spans them all':'One case at a time - drag pieces around, string shows which clues back which truth'}</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="navigate('threads')">← Plot Threads</button>
-        <button class="btn btn-primary" onclick="openEditThreadModal('${t.id}')">Edit This Case</button>
+        <button class="btn btn-ghost" onclick="openAddToBoardModal()">+ Add to Board</button>
+        <button class="btn btn-ghost" onclick="openAddCustomNodeModal()">+ Add Note</button>
+        ${isGeneral?'':`<button class="btn btn-primary" onclick="openEditThreadModal('${t.id}')">Edit This Case</button>`}
       </div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">${threadTabs}</div>
-    ${contradictions.length?`<p class="text-xs" style="color:var(--red);margin-bottom:10px">${contradictions.length} told-to-players clue${contradictions.length!==1?'s':''} contradict${contradictions.length===1?'s':''} the resolved truth - review in the edit modal.</p>`:''}
-    <div style="position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg-elevated)">
+    ${(!liveThreads.length && isGeneral)?`<p class="text-xs text-dim" style="margin-bottom:10px">No active cases yet - mark a Plot Thread as Rumor, Active, or Dormant to give it its own board.</p>`:''}
+    ${contradictions.length?`<p class="text-xs" style="color:var(--red);margin-bottom:10px">${contradictions.length} told-to-players clue${contradictions.length!==1?'s':''} contradict${contradictions.length===1?'s':''} the resolved truth - flagged in red on the board below, or review in the edit modal.</p>`:''}
+    <div class="mb-canvas" style="position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden">
       <svg id="mb-svg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;min-height:400px;max-height:65vh;cursor:grab">
         <g id="mb-viewport">
           <g id="mb-edges">${edgeSvg}</g>
@@ -7203,16 +7324,44 @@ function renderMysteryBoard() {
           <g id="mb-clue-nodes">${clueNodeSvg}</g>
           <g id="mb-loc-nodes">${locNodeSvg}</g>
           <g id="mb-npc-nodes">${npcNodeSvg}</g>
+          <g id="mb-faction-nodes">${factionNodeSvg}</g>
+          <g id="mb-custom-nodes">${customNodeSvg}</g>
         </g>
       </svg>
+      ${window._mbLegendOpen ? mbLegendHTML(isGeneral) : ''}
       <div style="position:absolute;bottom:12px;right:12px;display:flex;flex-direction:column;gap:4px">
         <button onclick="mbZoom(1.25)" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
         <button onclick="centerMysteryBoard()" title="Reset view" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center">⌖</button>
         <button onclick="mbZoom(0.8)" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
         <button onclick="autoLayoutMysteryBoard()" title="Auto-arrange" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center">↺</button>
+        <button onclick="toggleMbLegend()" title="Toggle key" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center">?</button>
       </div>
     </div>
-    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag a piece to reposition, or drop it on another piece to connect them · Click a piece (without dragging) to edit this thread${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}${(t.boardConnections||[]).length?' · Click white string to relabel or remove it':''}</p>`;
+    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag a piece to reposition, or drop it on another piece to connect them · Click a piece (without dragging) to ${isGeneral?'open it':'edit this thread'}, or a note to edit it · Hover a freely-added piece for a × to unpin it${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}${(t.boardConnections||[]).length?' · Click white string to relabel or remove it':''}</p>`;
+}
+
+// Small always-available reference for what each pin shape/color on the
+// board means, once a busy board mixes truths, clues, characters, factions,
+// locations and freeform colored notes. Overlaid on the board itself (not
+// inside the SVG) since it doesn't need to pan/zoom with the pieces.
+function mbLegendHTML(isGeneral) {
+  const row = (swatch, label) => `<div style="display:flex;align-items:center;gap:8px;padding:2px 0">${swatch}<span class="text-xs text-dim">${label}</span></div>`;
+  const dot = color => `<span style="width:12px;height:12px;border-radius:50%;background:${color}22;border:1.5px solid ${color};flex-shrink:0;display:inline-block"></span>`;
+  const pill = color => `<span style="width:16px;height:10px;border-radius:5px;background:${color}22;border:1.5px solid ${color};flex-shrink:0;display:inline-block"></span>`;
+  const rect = color => `<span style="width:16px;height:10px;border-radius:2px;background:${color}22;border:1.5px solid ${color};flex-shrink:0;display:inline-block"></span>`;
+  return `<div style="position:absolute;top:12px;left:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-width:190px">
+    ${isGeneral?'':row(rect('#999'), 'Truth')}
+    ${isGeneral?'':row(rect('var(--border)'), 'Clue')}
+    ${isGeneral?'':row(rect('var(--red)'), 'Clue contradicts resolved truth')}
+    ${row(dot('var(--accent)'), 'Character')}
+    ${row(pill('#6a9'), 'Location')}
+    ${row(pill('#888'), 'Faction (own color)')}
+    ${row(rect('#999'), 'Your note (own color)')}
+  </div>`;
+}
+function toggleMbLegend() {
+  window._mbLegendOpen = !window._mbLegendOpen;
+  render();
 }
 
 let _mbDrag = null;
@@ -7254,7 +7403,7 @@ function dismissStaleFromPrep(type, id) {
 }
 
 function autoLayoutMysteryBoard() {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   if (!t) return;
   t.boardPositions = {};
   save();
@@ -7290,11 +7439,188 @@ function _mbNodeLabel(t, key) {
     if (id === 'single') return 'GM Truth';
     return (t.truths || []).find(x => x.id === id)?.label || 'Truth';
   }
+  if (kind === 'faction') return c.factions.find(f => f.id === id)?.name || 'Faction';
+  if (kind === 'custom') {
+    const cn = (t.boardCustomNodes || []).find(x => x.id === id);
+    return cn ? (cn.text.length > 24 ? cn.text.slice(0, 23) + '…' : cn.text) : 'Note';
+  }
   return 'Piece';
 }
 
+// Deterministic small tilt for a node, hashed from its own key rather than
+// Math.random() so it's stable across re-renders instead of jittering every
+// time the board redraws. Part of the corkboard treatment (see .mb-canvas)
+// that deliberately makes the Mystery Board look hand-pinned, in contrast
+// to Relationship Web's clean, untilted diagram nodes.
+function _mbTiltDeg(key) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000;
+  return (h % 7) - 3; // -3..3 degrees
+}
+
+// A small metal pushpin head, drawn overlapping a node's own top edge (or
+// floating just above it, for the photo-like NPC circles where a pin
+// through the middle would sit on the portrait). One neutral color for
+// every piece, on purpose - the node's own border/fill already carries the
+// meaningful color (truth grey, faction's color, etc.); a second colored
+// channel on the pin itself would just be noise.
+function mbPinHeadSvg(ry) {
+  return `<g pointer-events="none">
+    <circle cy="${ry}" r="4.5" fill="#c9c9c9"/>
+    <circle cy="${ry}" r="4.5" fill="none" stroke="#767676" stroke-width="0.75"/>
+    <circle cx="-1.3" cy="${ry-1.3}" r="1.3" fill="#fff" opacity="0.65"/>
+  </g>`;
+}
+
+// Small "x" badge drawn in a node's corner - only visible on hover (see the
+// .mb-remove-btn CSS rule) so a busy board of pinned pieces doesn't look
+// cluttered with dismiss buttons at rest. The child's own mousedown must
+// stop propagation or it would bubble to the node's drag-start listener.
+function mbRemoveBtnSvg(rx, ry, key) {
+  return `<g class="mb-remove-btn" transform="translate(${rx},${ry})" style="cursor:pointer" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();removeFromBoard('${key}')">
+    <circle r="8" fill="rgba(0,0,0,0.8)" stroke="var(--red)" stroke-width="1"/>
+    <text text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="700" fill="var(--red)" font-family="var(--font)" pointer-events="none">×</text>
+  </g>`;
+}
+
+// Unpins a freely-added piece from this thread's board - distinct from
+// deleting the underlying Character/Faction/Location/Note itself. Only
+// reachable via the hover-x on board-only entries (see boardOnlyNpcIds/
+// boardOnlyLocIds in renderMysteryBoard) or on factions/notes, which have
+// no other "involved" concept to fall back on.
+function removeFromBoard(key) {
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  if (!t) return;
+  const sep = key.indexOf(':');
+  const kind = key.slice(0, sep), id = key.slice(sep + 1);
+  if (kind === 'npc') t.boardNpcIds = (t.boardNpcIds || []).filter(x => x !== id);
+  else if (kind === 'faction') t.boardFactionIds = (t.boardFactionIds || []).filter(x => x !== id);
+  else if (kind === 'loc') t.boardLocationIds = (t.boardLocationIds || []).filter(x => x !== id);
+  else if (kind === 'custom') t.boardCustomNodes = (t.boardCustomNodes || []).filter(x => x.id !== id);
+  if (t.boardPositions) delete t.boardPositions[key];
+  t.boardConnections = (t.boardConnections || []).filter(cn => cn.a !== key && cn.b !== key);
+  save();
+  render();
+}
+
+// "+ Add to Board" - freely pin any Character/Faction/Location onto this
+// case's corkboard without needing to first tag it as "involved" on the
+// thread itself (that's still what npcIds/locationIds mean; this is a
+// separate, lighter-weight "it's up on the board" list).
+function openAddToBoardModal() {
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  if (!t) return;
+  const c = camp();
+  const onBoard = new Set([
+    ...(t.npcIds||[]), ...(t.boardNpcIds||[]),
+    ...(t.locationIds||[]), ...(t.boardLocationIds||[]),
+    ...(t.boardFactionIds||[]),
+  ]);
+  const groups = [
+    { label: 'Characters', items: c.npcs.filter(n=>!onBoard.has(n.id)),      type: 'npc',      nameKey: 'name' },
+    { label: 'Factions',   items: c.factions.filter(f=>!onBoard.has(f.id)),  type: 'faction',  nameKey: 'name' },
+    { label: 'Locations',  items: c.locations.filter(l=>!onBoard.has(l.id)), type: 'loc',      nameKey: 'name' },
+  ];
+  const options = groups.filter(g => g.items.length).map(g =>
+    `<optgroup label="${g.label}">${g.items.map(it => `<option value="${g.type}:${it.id}">${esc(it[g.nameKey])}</option>`).join('')}</optgroup>`
+  ).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Add to Board</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      ${options ? `
+      <div class="form-group"><label>Character, Faction, or Location</label><select id="mb-add-select"><option value="">Pick one…</option>${options}</select></div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="addEntityToBoard()">Add</button>
+      </div>` : `<p class="text-sm text-dim">Everything you have is already pinned to this board.</p>`}
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function addEntityToBoard() {
+  const val = document.getElementById('mb-add-select')?.value;
+  if (!val) return;
+  const [type, id] = val.split(':');
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  if (!t) return;
+  if (type === 'npc') { if (!t.boardNpcIds) t.boardNpcIds = []; if (!t.boardNpcIds.includes(id)) t.boardNpcIds.push(id); }
+  else if (type === 'faction') { if (!t.boardFactionIds) t.boardFactionIds = []; if (!t.boardFactionIds.includes(id)) t.boardFactionIds.push(id); }
+  else if (type === 'loc') { if (!t.boardLocationIds) t.boardLocationIds = []; if (!t.boardLocationIds.includes(id)) t.boardLocationIds.push(id); }
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+// "+ Add Note" - a freeform pinned card for red herrings, questions, or GM
+// reminders that aren't a real Character/Faction/Location. Reuses the same
+// color-swatch picker as Timeline/Faction colors for a consistent palette.
+function openAddCustomNodeModal() {
+  window._customNodeColor = null;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Add Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="3" placeholder="A red herring, a question, a reminder…"></textarea></div>
+      <div class="form-group"><label>Color</label>${colorSwatchPickerHTML('_customNodeColor', null, 'mb-custom-color-picker')}</div>
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCustomNode()">Add</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('mb-custom-text')?.focus(), 50);
+}
+
+function saveCustomNode() {
+  const text = document.getElementById('mb-custom-text')?.value.trim();
+  if (!text) return;
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  if (!t) return;
+  if (!t.boardCustomNodes) t.boardCustomNodes = [];
+  t.boardCustomNodes.push({ id: uid(), text, color: window._customNodeColor || null });
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
+function openEditCustomNodeModal(id) {
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  const cn = t?.boardCustomNodes?.find(x => x.id === id);
+  if (!cn) return;
+  window._customNodeColor = cn.color || null;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="3">${esc(cn.text)}</textarea></div>
+      <div class="form-group"><label>Color</label>${colorSwatchPickerHTML('_customNodeColor', cn.color||null, 'mb-custom-color-picker')}</div>
+      <div class="flex gap-8" style="justify-content:space-between">
+        <button class="btn btn-danger" onclick="removeFromBoard('custom:${id}')">Remove Note</button>
+        <button class="btn btn-primary" onclick="updateCustomNode('${id}')">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('mb-custom-text')?.focus(), 50);
+}
+
+function updateCustomNode(id) {
+  const t = _mbGetBoardTargetById(window._boardThreadId);
+  const cn = t?.boardCustomNodes?.find(x => x.id === id);
+  if (!cn) return;
+  const text = document.getElementById('mb-custom-text')?.value.trim();
+  if (text) cn.text = text;
+  cn.color = window._customNodeColor || null;
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
+
 function openCreateBoardConnectionModal(fromKey, toKey) {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   if (!t) return;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -7311,8 +7637,13 @@ function openCreateBoardConnectionModal(fromKey, toKey) {
   setTimeout(() => document.getElementById('mb-conn-label-input')?.focus(), 50);
 }
 
+// Deliberately untyped - see the comment above REL_TYPES. This is a `label`
+// string and nothing else, on purpose: a Mystery Board string is a GM's
+// working theory ("Owes him money," "Was seen there"), not a confirmed,
+// reusable relationship. If this ever grows a fixed vocabulary of its own,
+// it's duplicating Relationship Web, not complementing it.
 function createBoardConnection(a, b) {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   if (!t) return;
   if (!t.boardConnections) t.boardConnections = [];
   const label = document.getElementById('mb-conn-label-input')?.value.trim() || '';
@@ -7323,7 +7654,7 @@ function createBoardConnection(a, b) {
 }
 
 function openEditBoardConnectionModal(connId) {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   const cn = t?.boardConnections?.find(c => c.id === connId);
   if (!cn) return;
   const overlay = document.createElement('div');
@@ -7342,7 +7673,7 @@ function openEditBoardConnectionModal(connId) {
 }
 
 function saveBoardConnectionLabel(connId) {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   const cn = t?.boardConnections?.find(c => c.id === connId);
   if (!cn) return;
   cn.label = document.getElementById('mb-conn-label-input')?.value.trim() || '';
@@ -7352,7 +7683,7 @@ function saveBoardConnectionLabel(connId) {
 }
 
 function removeBoardConnection(connId) {
-  const t = camp().plotThreads.find(x => x.id === window._boardThreadId);
+  const t = _mbGetBoardTargetById(window._boardThreadId);
   if (!t?.boardConnections) return;
   t.boardConnections = t.boardConnections.filter(c => c.id !== connId);
   save();
@@ -7373,7 +7704,7 @@ function setupMysteryBoardEvents() {
       e.stopPropagation();
       const key = node.dataset.nodeKey;
       const vp = _mbScreenToViewport(e.clientX, e.clientY, svg);
-      const t = camp().plotThreads.find(x => x.id === threadId);
+      const t = _mbGetBoardTargetById(threadId);
       if (!t) return;
       const pos = t.boardPositions?.[key] || { x: 450, y: 280 };
       _mbDrag = { key, startX: vp.x, startY: vp.y, origX: pos.x, origY: pos.y, moved: false };
@@ -7395,7 +7726,10 @@ function setupMysteryBoardEvents() {
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _mbDrag.moved = true;
       const nx = _mbDrag.origX + dx, ny = _mbDrag.origY + dy;
       const node = svg.querySelector(`[data-node-key="${_mbDrag.key}"]`);
-      if (node) node.setAttribute('transform', `translate(${nx},${ny})`);
+      // Re-apply the same tilt the node renders with, or it'd flatten to
+      // 0deg for the duration of the drag and only snap back to its tilt
+      // on the next full render.
+      if (node) node.setAttribute('transform', `translate(${nx},${ny}) rotate(${_mbTiltDeg(_mbDrag.key)})`);
       svg.querySelectorAll('[data-edge]').forEach(line => {
         const [k1, k2] = line.dataset.edge.split('|');
         if (k1 === _mbDrag.key) { line.setAttribute('x1', nx); line.setAttribute('y1', ny); }
@@ -7405,7 +7739,7 @@ function setupMysteryBoardEvents() {
       // not just the moving one - the generic [data-edge] pass above already
       // moved this same <line>'s endpoint, this just also moves its
       // invisible hit-line and label in step.
-      const dragT = camp().plotThreads.find(x => x.id === threadId);
+      const dragT = _mbGetBoardTargetById(threadId);
       (dragT?.boardConnections||[]).forEach(cn => {
         if (cn.a !== _mbDrag.key && cn.b !== _mbDrag.key) return;
         const otherKey = cn.a === _mbDrag.key ? cn.b : cn.a;
@@ -7437,7 +7771,7 @@ function setupMysteryBoardEvents() {
       const vp = _mbScreenToViewport(e.clientX, e.clientY, svg);
       const dx = vp.x - _mbDrag.startX, dy = vp.y - _mbDrag.startY;
       if (_mbDrag.moved) {
-        const t = camp().plotThreads.find(x => x.id === threadId);
+        const t = _mbGetBoardTargetById(threadId);
         if (t) {
           const nx = _mbDrag.origX + dx, ny = _mbDrag.origY + dy;
           const dropKey = _mbFindDropTarget(t, _mbDrag.key, nx, ny);
@@ -7456,6 +7790,16 @@ function setupMysteryBoardEvents() {
             save();
           }
         }
+      } else if (_mbDrag.key.startsWith('custom:')) {
+        openEditCustomNodeModal(_mbDrag.key.slice(7));
+      } else if (threadId === '__general__') {
+        // No "case" to edit here - clicking a pinned entity opens that
+        // entity's own modal instead of a nonexistent Thread modal.
+        const sep = _mbDrag.key.indexOf(':');
+        const kind = _mbDrag.key.slice(0, sep), id = _mbDrag.key.slice(sep + 1);
+        if (kind === 'npc') openNPCModal(id);
+        else if (kind === 'faction') openFactionModal(id);
+        else if (kind === 'loc') openLocationModal(id);
       } else {
         openEditThreadModal(threadId);
       }
