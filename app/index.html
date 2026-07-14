@@ -7226,14 +7226,23 @@ function renderMysteryBoard() {
     const pos = _pos(key);
     const letter = esc((n.name[0]||'?').toUpperCase());
     const shortName = n.name.length>14?n.name.slice(0,13)+'…':n.name;
+    // Same portrait-or-initial treatment as Relationship Web's NPC nodes,
+    // just sized for this board's smaller circle (r=21 here vs r=26 there)
+    // and with its own clip-path id so the two boards never collide.
+    const imgEl = n.image
+      ? `<image href="${n.image}" x="-21" y="-21" width="42" height="42" clip-path="url(#mbclip-${id})" preserveAspectRatio="xMidYMid slice"/>`
+      : `<text text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="var(--accent)" font-family="var(--font)" pointer-events="none">${letter}</text>`;
+    const bgFill = n.image ? 'rgba(40,40,40,1)' : 'rgba(28,28,28,1)';
     // The transparent hit-circle at the end enlarges the grab target, but
     // painting order in SVG doubles as hover/click stacking order - it has
     // to come *before* the remove-x or it silently eats the click meant
     // for the x wherever the two overlap.
     return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
-      <circle r="22" fill="rgba(28,28,28,1)" pointer-events="none"/>
-      <circle r="21" fill="rgba(var(--accent-rgb),0.1)" stroke="rgba(var(--accent-rgb),0.35)" stroke-width="1.5" pointer-events="none"/>
-      <text text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="var(--accent)" font-family="var(--font)" pointer-events="none">${letter}</text>
+      <defs>${n.image?`<clipPath id="mbclip-${id}"><circle r="21"/></clipPath>`:''}</defs>
+      <circle r="22" fill="${bgFill}" pointer-events="none"/>
+      ${imgEl}
+      ${!n.image?`<circle r="21" fill="rgba(var(--accent-rgb),0.1)" stroke="rgba(var(--accent-rgb),0.35)" stroke-width="1.5" pointer-events="none"/>`:''}
+      <circle r="21" fill="none" stroke="rgba(var(--accent-rgb),0.5)" stroke-width="1.5" pointer-events="none"/>
       <text y="34" text-anchor="middle" font-size="10" fill="var(--text)" font-family="var(--font)" pointer-events="none">${esc(shortName)}</text>
       ${mbPinHeadSvg(MB_PIN_OFFSETS.npc)}
       <circle r="25" fill="transparent"/>
