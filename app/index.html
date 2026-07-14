@@ -7354,7 +7354,7 @@ function renderMysteryBoard() {
         <button onclick="toggleMbLegend()" title="Toggle key" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center">?</button>
       </div>
     </div>
-    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag a piece to reposition, or drop it on another piece to connect them · Click a piece (without dragging) to ${isGeneral?'open it':'edit this thread'}, or a note to edit it · Hover a freely-added piece for a × to unpin it${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}${(t.boardConnections||[]).length?' · Click white string to relabel or remove it':''}</p>`;
+    <p class="text-xs text-dim" style="margin-top:8px">Drag background to pan · Scroll to zoom · Drag a piece to reposition, or drop it on another piece to connect them · Click a piece (without dragging) to ${isGeneral?'open it':'edit this thread'}, or a note to edit it · Hover a freely-added piece for a × to unpin it${hasBranches?' · Red string shows which clues are tagged to which truth':(t.truth?' · Red string connects clues to the GM Truth':'')}${(t.boardConnections||[]).length?' · Click a string you drew to relabel or remove it':''}</p>`;
 }
 
 // Small always-available reference for what each pin shape/color on the
