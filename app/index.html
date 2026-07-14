@@ -7284,17 +7284,31 @@ function renderMysteryBoard() {
 
   // Freeform notes - the GM's own annotations, always removable, styled as
   // a small colored index card rather than reusing any entity's shape.
+  // Genuinely multi-line: the textarea always looked like it supported
+  // line breaks, but the old single <text> element silently collapsed
+  // them (SVG text doesn't honor \n) - up to 3 lines are now laid out as
+  // separate <tspan>s on a fixed-size card, so a note with fewer lines
+  // just has a little empty space rather than needing per-note sizing
+  // (which would've also complicated the pin/string anchoring math).
   const customNodeSvg = (t.boardCustomNodes||[]).map(cn => {
     const key = 'custom:'+cn.id, pos = _pos(key);
     const color = cn.color || '#999';
-    const short = cn.text.length>34?cn.text.slice(0,33)+'…':cn.text;
+    const maxLines = 3, maxLineLen = 30, lineHeight = 12;
+    const rawLines = (cn.text||'').split('\n');
+    const shownLines = rawLines.slice(0, maxLines).map(l => l.length>maxLineLen ? l.slice(0,maxLineLen-1)+'…' : l);
+    if (rawLines.length > maxLines) {
+      const last = shownLines[shownLines.length-1];
+      shownLines[shownLines.length-1] = (last.endsWith('…') ? last.slice(0,-1) : last) + '…';
+    }
+    const startDy = -((shownLines.length - 1) * lineHeight) / 2;
+    const tspans = shownLines.map((line, i) => `<tspan x="0" dy="${i===0?startDy:lineHeight}">${esc(line)}</tspan>`).join('');
     return `<g class="mb-node" data-node-key="${key}" transform="translate(${pos.x},${pos.y}) rotate(${_mbTiltDeg(key)})" style="cursor:grab">
-      <rect x="-74" y="-18" width="148" height="36" rx="4" fill="rgba(22,22,22,1)" pointer-events="none"/>
-      <rect x="-73" y="-17" width="146" height="34" rx="3" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
-      <text text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${esc(short)}</text>
+      <rect x="-75" y="-33" width="150" height="66" rx="4" fill="rgba(22,22,22,1)" pointer-events="none"/>
+      <rect x="-74" y="-32" width="148" height="64" rx="3" fill="${color}22" stroke="${color}" stroke-width="1.5" pointer-events="none"/>
+      <text text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="600" fill="${color}" font-family="var(--font)" pointer-events="none">${tspans}</text>
       ${mbPinHeadSvg(MB_PIN_OFFSETS.custom)}
-      <rect x="-74" y="-18" width="148" height="36" rx="4" fill="transparent"/>
-      ${mbRemoveBtnSvg(64,-12,key)}
+      <rect x="-75" y="-33" width="150" height="66" rx="4" fill="transparent"/>
+      ${mbRemoveBtnSvg(65,-26,key)}
     </g>`;
   }).join('');
 
@@ -7480,7 +7494,7 @@ function _mbTiltDeg(key) {
 // a vertical offset is needed). Shared by mbPinHeadSvg (drawing the pin)
 // and _mbPinOffset (anchoring string endpoints to that same pin instead of
 // the node's raw center) so the two can't drift apart.
-const MB_PIN_OFFSETS = { truth: -13, clue: -11, npc: -17, loc: -10, faction: -10, custom: -13 };
+const MB_PIN_OFFSETS = { truth: -13, clue: -11, npc: -17, loc: -10, faction: -10, custom: -26 };
 
 // Where a piece of string should attach - the pin, not the node's center -
 // so it reads as tied to the pin rather than floating to an arbitrary point
@@ -7597,7 +7611,7 @@ function openAddCustomNodeModal() {
   overlay.innerHTML = `
     <div class="modal" style="max-width:380px">
       <div class="modal-header"><h3>Add Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="3" placeholder="A red herring, a question, a reminder…"></textarea></div>
+      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="4" placeholder="A red herring, a question, a reminder…"></textarea></div>
       <div class="form-group"><label>Color</label>${colorSwatchPickerHTML('_customNodeColor', null, 'mb-custom-color-picker')}</div>
       <div class="flex gap-8" style="justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
@@ -7630,7 +7644,7 @@ function openEditCustomNodeModal(id) {
   overlay.innerHTML = `
     <div class="modal" style="max-width:380px">
       <div class="modal-header"><h3>Note</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="3">${esc(cn.text)}</textarea></div>
+      <div class="form-group"><label>Text</label><textarea id="mb-custom-text" rows="4">${esc(cn.text)}</textarea></div>
       <div class="form-group"><label>Color</label>${colorSwatchPickerHTML('_customNodeColor', cn.color||null, 'mb-custom-color-picker')}</div>
       <div class="flex gap-8" style="justify-content:space-between">
         <button class="btn btn-danger" onclick="removeFromBoard('custom:${id}')">Remove Note</button>
