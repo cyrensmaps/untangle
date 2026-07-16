@@ -2113,16 +2113,41 @@ function showReviewModal(session, extracted) {
   document.body.appendChild(overlay);
 }
 
+// Clicking "Review ->" used to call closeReview(), which permanently threw
+// away the Review AI Extraction modal - the GM had already paid for that
+// extraction call, and closeReview() gave no way back to it short of
+// re-running the (paid) extraction from scratch. window._pe/_ps (the
+// extracted data itself) actually survive closeReview() untouched, but
+// there was no UI left to reach them once the modal was gone.
+//
+// Fix: don't destroy the review - remove its overlay from the DOM (not
+// just hide it) so the entity modal becomes the *only* .modal-overlay
+// present, since most entity-modal close/save handlers grab '.modal-overlay'
+// via a bare document.querySelector rather than scoping to themselves -
+// with two overlays stacked, a Save click on the entity modal would have
+// silently removed the review overlay instead of itself. Once the entity
+// modal is confirmed gone (via a MutationObserver, since it can close
+// through several different code paths), the review is rebuilt from the
+// still-intact window._pe/_ps - no second AI call needed.
 function reviewContradiction(i) {
   const ct = (window._pe?.contradictions || [])[i];
   if (!ct) return;
   const c = camp();
   const finder = { npc: c.npcs, location: c.locations, faction: c.factions }[ct.entityType];
   const entity = finder?.find(x => x.name.toLowerCase() === (ct.name||'').toLowerCase());
-  closeReview();
   if (!entity) { toast('Could not find that entry - it may already have been renamed.', 'error'); return; }
   const openFn = { npc: 'openNPCModal', location: 'openLocationModal', faction: 'openFactionModal' }[ct.entityType];
-  if (openFn && typeof window[openFn] === 'function') window[openFn](entity.id);
+  if (!openFn || typeof window[openFn] !== 'function') return;
+
+  document.getElementById('review-overlay')?.remove();
+  window[openFn](entity.id);
+
+  const observer = new MutationObserver(() => {
+    if (document.querySelector('.modal-overlay')) return;
+    observer.disconnect();
+    if (window._pe) showReviewModal(window._ps, window._pe);
+  });
+  observer.observe(document.body, { childList: true });
 }
 
 function closeReview() {
