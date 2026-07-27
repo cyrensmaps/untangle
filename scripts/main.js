@@ -5,6 +5,23 @@
 
 const MODULE_ID = 'untangle';
 
+// Foundry v14 serves static .html files as text/plain so they can no longer
+// be rendered by pointing an iframe's `src` straight at them (a security
+// fix - direct rendering of served HTML was never an intended workflow).
+// fetch() ignores Content-Type, so we pull the file as text ourselves and
+// load it via `srcdoc`, which the browser always parses as HTML regardless
+// of how it was obtained. srcdoc documents have no base URL of their own,
+// so a <base> tag is injected to keep the relative theme.css/components.css
+// <link> and state.js/namegen.js <script src> references resolving into
+// this module's app/ folder.
+async function loadIframeDoc(iframe, relPath) {
+  const url = `modules/${MODULE_ID}/${relPath}`;
+  const dirUrl = new URL(relPath.slice(0, relPath.lastIndexOf('/') + 1), `${window.location.origin}/modules/${MODULE_ID}/`).href;
+  const res = await fetch(url);
+  const html = await res.text();
+  iframe.srcdoc = html.replace('<head>', `<head>\n  <base href="${dirUrl}">`);
+}
+
 // ── Application window (full planner) ────────────────────
 
 class CampaignPlannerApp extends Application {
@@ -22,14 +39,13 @@ class CampaignPlannerApp extends Application {
   // Render the planner HTML inside an iframe.
   // Same-origin as Foundry, so localStorage and API calls all work.
   async _renderInner(_data) {
-    const url = `modules/${MODULE_ID}/app/index.html`;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
     const iframe = document.createElement('iframe');
-    iframe.src = url;
     iframe.allow = 'microphone'; // for Field Notes voice dictation (Web Speech API)
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
     wrap.appendChild(iframe);
+    await loadIframeDoc(iframe, 'app/index.html');
     return $(wrap);
   }
 }
@@ -63,14 +79,13 @@ class QuickAccessApp extends Application {
   }
 
   async _renderInner(_data) {
-    const url = `modules/${MODULE_ID}/app/widget.html`;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
     const iframe = document.createElement('iframe');
-    iframe.src = url;
     iframe.allow = 'microphone'; // for Field Notes voice dictation (Web Speech API)
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
     wrap.appendChild(iframe);
+    await loadIframeDoc(iframe, 'app/widget.html');
     return $(wrap);
   }
 }
@@ -114,13 +129,12 @@ class PlayerWikiApp extends Application {
   }
 
   async _renderInner(_data) {
-    const url = `modules/${MODULE_ID}/app/wiki-viewer.html`;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'width:100%;height:100%;overflow:hidden;';
     const iframe = document.createElement('iframe');
-    iframe.src = url;
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
     wrap.appendChild(iframe);
+    await loadIframeDoc(iframe, 'app/wiki-viewer.html');
     return $(wrap);
   }
 }
