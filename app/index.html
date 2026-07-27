@@ -173,6 +173,16 @@
     .review-item-content h4 { font-size: 0.9rem; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
     .review-item-content p { font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; }
 
+    /* ── ROLL TABLE SYNC ── */
+    .rts-row { display: flex; align-items: flex-start; gap: 12px; background: var(--bg-elevated); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+    .rts-row:hover { background: rgba(255,255,255,0.04); }
+    .rts-row-disabled { opacity: 0.45; cursor: not-allowed; }
+    .rts-row input[type="checkbox"] { margin-top: 2px; width: auto; flex-shrink: 0; accent-color: var(--accent); }
+    .rts-row-text { flex: 1; }
+    .rts-row-title { font-size: 0.875rem; font-weight: 600; }
+    .rts-row-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+    .rts-row-count { font-size: 0.72rem; color: var(--text-dim); background: rgba(var(--accent-rgb),0.1); padding: 2px 9px; border-radius: 10px; flex-shrink: 0; align-self: center; min-width: 1.4em; text-align: center; }
+
     /* ── CAMPAIGN LIST ── */
     .campaign-list-item { background: var(--bg-elevated); border-radius: 8px; padding: 13px 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
     .campaign-list-item .cname { flex: 1; font-size: 0.9rem; font-weight: 500; }
@@ -2388,56 +2398,151 @@ async function postSessionToJournal(id) {
 // Locations, so "who's at the docks tonight" can be an actual roll in
 // Foundry's Rollable Tables sidebar instead of the GM picking. Find-or-
 // create + replace-results pattern, same as postSessionToJournal above.
-async function syncFoundryRollTables() {
+// The GM picks which categories to build via openRollTableSyncModal() below
+// rather than always syncing everything - a one-shot NPC roster doesn't
+// need six tables cluttering the sidebar.
+const ROLL_TABLE_SYNC_CATEGORIES = [
+  { key: 'allCharacters',  label: 'All Characters',   desc: 'One table listing every character in the campaign.' },
+  { key: 'groups',         label: 'Character Groups', desc: 'One table per type — Player Characters, Enemies, Contacts, etc.' },
+  { key: 'allLocations',   label: 'All Locations',    desc: 'One table listing every location.' },
+  { key: 'whosHere',       label: "Who's Here",       desc: 'One table per Location, listing characters based there.' },
+  { key: 'factionMembers', label: 'Faction Members',  desc: 'One table per Faction with tracked members.' },
+  { key: 'rumors',         label: 'Rumors & Hooks',   desc: 'One table drawing from active and rumored Plot Threads.' },
+];
+
+function _rollTableSyncCounts() {
+  const c = camp();
+  const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
+  return {
+    allCharacters: c.npcs.length,
+    groups: TYPE_GROUPS.filter(g => npcsInGroup(g, c.npcs).length).length,
+    allLocations: c.locations.length,
+    whosHere: c.locations.filter(loc => c.npcs.some(n => n.locationId === loc.id)).length,
+    factionMembers: c.factions.filter(f => (f.memberIds||[]).some(id => c.npcs.some(n => n.id === id))).length,
+    rumors: rumorThreads.length,
+  };
+}
+
+function openRollTableSyncModal() {
   const pgame = window.parent?.game;
   if (!pgame?.tables) { toast('Not running inside Foundry.', 'error'); return; }
   if (!pgame.user?.isGM) { toast('Only the GM can create Roll Tables.', 'error'); return; }
   const c = camp();
   if (!c.npcs.length && !c.locations.length) { toast('Add some characters or locations first.', 'error'); return; }
 
+  const counts = _rollTableSyncCounts();
+  const rowHTML = cat => {
+    const n = counts[cat.key];
+    const disabled = n === 0;
+    return `
+      <label class="rts-row ${disabled ? 'rts-row-disabled' : ''}">
+        <input type="checkbox" data-rts-key="${cat.key}" ${disabled ? 'disabled' : 'checked'}>
+        <div class="rts-row-text">
+          <div class="rts-row-title">${cat.label}</div>
+          <div class="rts-row-desc">${cat.desc}</div>
+        </div>
+        <div class="rts-row-count">${n}</div>
+      </label>`;
+  };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <div>
+          <h3>Sync Roll Tables to Foundry</h3>
+          <p class="text-xs text-dim mt-4">Choose what to build as Rollable Tables in the sidebar.</p>
+        </div>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="mt-16">${ROLL_TABLE_SYNC_CATEGORIES.map(rowHTML).join('')}</div>
+      <div class="flex-between mt-16" style="padding-top:16px; border-top:1px solid var(--border)">
+        <button class="btn btn-ghost text-xs" onclick="_rtsToggleAll(this)">Select All / None</button>
+        <div class="flex gap-8">
+          <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmRollTableSync()">Sync Selected</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function _rtsToggleAll(btn) {
+  const boxes = [...btn.closest('.modal-overlay').querySelectorAll('input[data-rts-key]:not(:disabled)')];
+  const allChecked = boxes.every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+}
+
+async function confirmRollTableSync() {
+  const overlay = document.querySelector('.modal-overlay');
+  const boxes = overlay ? [...overlay.querySelectorAll('input[data-rts-key]')] : [];
+  const selected = new Set(boxes.filter(b => b.checked).map(b => b.dataset.rtsKey));
+  if (!selected.size) { toast('Select at least one thing to sync.', 'error'); return; }
+  overlay?.remove();
+  await syncFoundryRollTables(selected);
+}
+
+async function syncFoundryRollTables(selected) {
+  const pgame = window.parent?.game;
+  if (!pgame?.tables) { toast('Not running inside Foundry.', 'error'); return; }
+  if (!pgame.user?.isGM) { toast('Only the GM can create Roll Tables.', 'error'); return; }
+  const c = camp();
+  if (!c.npcs.length && !c.locations.length) { toast('Add some characters or locations first.', 'error'); return; }
+  if (!selected) selected = new Set(ROLL_TABLE_SYNC_CATEGORIES.map(cat => cat.key));
+
   try {
+    const folderId = await _ensureRollTableFolder(pgame, c);
     let created = 0, updated = 0;
     const tally = r => { r.created ? created++ : updated++; return r.id; };
 
-    if (c.npcs.length) {
-      c.npcRollTableId = tally(await _upsertRollTable(pgame, c.npcRollTableId, `Untangle - ${c.name} - All Characters`, c.npcs.map(n => n.name)));
+    if (selected.has('allCharacters') && c.npcs.length) {
+      c.npcRollTableId = tally(await _upsertRollTable(pgame, c.npcRollTableId, `Untangle - ${c.name} - All Characters`, c.npcs.map(n => n.name), folderId));
     }
     // One table per character type group too (Player Characters, Enemies,
     // Contacts, etc — same grouping already used on the Characters page),
     // so "roll on the enemies table" is possible without pulling in PCs.
-    if (!c.rollTableIdsByGroup) c.rollTableIdsByGroup = {};
-    for (const group of TYPE_GROUPS) {
-      const names = npcsInGroup(group, c.npcs).map(n => n.name);
-      if (!names.length) continue;
-      c.rollTableIdsByGroup[group.label] = tally(await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names));
+    if (selected.has('groups')) {
+      if (!c.rollTableIdsByGroup) c.rollTableIdsByGroup = {};
+      for (const group of TYPE_GROUPS) {
+        const names = npcsInGroup(group, c.npcs).map(n => n.name);
+        if (!names.length) continue;
+        c.rollTableIdsByGroup[group.label] = tally(await _upsertRollTable(pgame, c.rollTableIdsByGroup[group.label], `Untangle - ${c.name} - ${group.label}`, names, folderId));
+      }
     }
-    if (c.locations.length) {
-      c.locationRollTableId = tally(await _upsertRollTable(pgame, c.locationRollTableId, `Untangle - ${c.name} - Locations`, c.locations.map(l => l.name)));
+    if (selected.has('allLocations') && c.locations.length) {
+      c.locationRollTableId = tally(await _upsertRollTable(pgame, c.locationRollTableId, `Untangle - ${c.name} - Locations`, c.locations.map(l => l.name), folderId));
     }
 
     // "Who's here right now" — one table per Location, listing NPCs based
     // there, for on-the-fly "who's hanging around the tavern" rolls.
-    if (!c.rollTableIdsByLocation) c.rollTableIdsByLocation = {};
     let skippedEmpty = 0;
-    for (const loc of c.locations) {
-      const names = c.npcs.filter(n => n.locationId === loc.id).map(n => n.name);
-      if (!names.length) { skippedEmpty++; continue; }
-      c.rollTableIdsByLocation[loc.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle - ${c.name} - At ${loc.name}`, names));
+    if (selected.has('whosHere')) {
+      if (!c.rollTableIdsByLocation) c.rollTableIdsByLocation = {};
+      for (const loc of c.locations) {
+        const names = c.npcs.filter(n => n.locationId === loc.id).map(n => n.name);
+        if (!names.length) { skippedEmpty++; continue; }
+        c.rollTableIdsByLocation[loc.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByLocation[loc.id], `Untangle - ${c.name} - At ${loc.name}`, names, folderId));
+      }
     }
 
     // Random faction member — one table per Faction with tracked members.
-    if (!c.rollTableIdsByFaction) c.rollTableIdsByFaction = {};
-    for (const f of c.factions) {
-      const names = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)?.name).filter(Boolean);
-      if (!names.length) { skippedEmpty++; continue; }
-      c.rollTableIdsByFaction[f.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle - ${c.name} - ${f.name} Members`, names));
+    if (selected.has('factionMembers')) {
+      if (!c.rollTableIdsByFaction) c.rollTableIdsByFaction = {};
+      for (const f of c.factions) {
+        const names = (f.memberIds||[]).map(id => c.npcs.find(n => n.id === id)?.name).filter(Boolean);
+        if (!names.length) { skippedEmpty++; continue; }
+        c.rollTableIdsByFaction[f.id] = tally(await _upsertRollTable(pgame, c.rollTableIdsByFaction[f.id], `Untangle - ${c.name} - ${f.name} Members`, names, folderId));
+      }
     }
 
     // Rumors & Hooks — one table drawing from active/rumor Plot Threads, for
     // "something's going on" improv moments.
-    const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
-    if (rumorThreads.length) {
-      c.rumorRollTableId = tally(await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle - ${c.name} - Rumors & Hooks`, rumorThreads.map(t => t.title)));
+    if (selected.has('rumors')) {
+      const rumorThreads = c.plotThreads.filter(t => t.status === 'active' || t.status === 'rumor');
+      if (rumorThreads.length) {
+        c.rumorRollTableId = tally(await _upsertRollTable(pgame, c.rumorRollTableId, `Untangle - ${c.name} - Rumors & Hooks`, rumorThreads.map(t => t.title), folderId));
+      }
     }
 
     c.rollTablesLastSynced = Date.now();
@@ -2453,7 +2558,27 @@ async function syncFoundryRollTables() {
   }
 }
 
-async function _upsertRollTable(pgame, existingId, tableName, names) {
+// Every campaign's tables live in one Foundry Folder (type "RollTable") named
+// after the campaign, so a sync doesn't dump a dozen tables loose into the
+// sidebar. The folder id is cached on the campaign (like the table ids
+// already were) so repeat syncs reuse the same folder instead of matching by
+// name every time; falls back to a by-name match (then create) if the cached
+// id was deleted out from under us, and keeps the folder's name in step with
+// campaign renames.
+async function _ensureRollTableFolder(pgame, c) {
+  const folderName = `Untangle - ${c.name}`;
+  let folder = c.rollTableFolderId ? pgame.folders.get(c.rollTableFolderId) : null;
+  if (!folder) folder = pgame.folders.find(f => f.type === 'RollTable' && f.name === folderName);
+  if (!folder) {
+    folder = await pgame.folders.documentClass.create(toFoundryPlain({ name: folderName, type: 'RollTable' }));
+  } else if (folder.name !== folderName) {
+    await folder.update(toFoundryPlain({ name: folderName }));
+  }
+  c.rollTableFolderId = folder.id;
+  return folder.id;
+}
+
+async function _upsertRollTable(pgame, existingId, tableName, names, folderId) {
   let table = existingId ? pgame.tables.get(existingId) : null;
   if (!table) table = pgame.tables.find(t => t.name === tableName);
 
@@ -2462,17 +2587,19 @@ async function _upsertRollTable(pgame, existingId, tableName, names) {
   const resultsData = names.map((name, i) => ({ type: resultType, text: name, range: [i + 1, i + 1], weight: 1 }));
 
   if (!table) {
-    table = await pgame.tables.documentClass.create(toFoundryPlain({ name: tableName, formula: `1d${n}`, replacement: true, displayRoll: true, results: resultsData }));
+    table = await pgame.tables.documentClass.create(toFoundryPlain({ name: tableName, formula: `1d${n}`, replacement: true, displayRoll: true, folder: folderId, results: resultsData }));
   } else {
     // Replace results wholesale so the table always mirrors the current
     // campaign list rather than accumulating stale/renamed entries. Also
-    // re-syncs the table's own name, since per-Location/per-Faction tables
-    // are now common enough that renaming the source Location/Faction
-    // (rather than just the campaign) is a routine thing to happen.
+    // re-syncs the table's own name and folder, since per-Location/per-
+    // Faction tables are now common enough that renaming the source
+    // Location/Faction (rather than just the campaign) is a routine thing to
+    // happen, and re-asserting the folder sweeps in any table synced before
+    // this feature existed.
     const existingIds = table.results.map(r => r.id);
     if (existingIds.length) await table.deleteEmbeddedDocuments('TableResult', existingIds);
     if (resultsData.length) await table.createEmbeddedDocuments('TableResult', toFoundryPlain(resultsData));
-    await table.update(toFoundryPlain({ name: tableName, formula: `1d${n}` }));
+    await table.update(toFoundryPlain({ name: tableName, formula: `1d${n}`, folder: folderId }));
     return { id: table.id, created: false };
   }
   return { id: table.id, created: true };
@@ -6090,7 +6217,7 @@ function renderSettings() {
       ${isFeatureEnabled('rollTableSync') && camp().rollTablesLastSynced?`<p class="text-xs text-dim" style="margin-bottom:12px">Roll Tables last synced: ${new Date(camp().rollTablesLastSynced).toLocaleString()}</p>`:''}
       <div class="flex gap-8" style="flex-wrap:wrap">
         ${isFeatureEnabled('campaignBible')?`<button class="btn btn-ghost" onclick="openCampaignBibleModal()">Print Campaign Bible</button>`:''}
-        ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="syncFoundryRollTables()">Sync Roll Tables to Foundry</button>`:''}
+        ${isFeatureEnabled('rollTableSync')?`<button class="btn btn-ghost" onclick="openRollTableSyncModal()">Sync Roll Tables to Foundry</button>`:''}
       </div>
     </div>
 
