@@ -5875,9 +5875,9 @@ function openPinModal(mapId, pinId) {
   document.body.appendChild(overlay);
 }
 
-// Applies a link/label change from openPinModal, then reopens the pin
-// popup so its title, description, "Based here" roster and Open-link button
-// all reflect the new target.
+// Applies a link/label change from openPinModal, then closes back to the
+// map view. The pin's tooltip/label picks up the new target on the next
+// render - no need to reopen the popup.
 function savePinLink(mapId, pinId) {
   const c = camp();
   const m = c.maps.find(mp=>mp.id===mapId);
@@ -5890,7 +5890,6 @@ function savePinLink(mapId, pinId) {
   save();
   document.querySelector('.modal-overlay')?.remove();
   render();
-  openPinModal(mapId, pinId);
 }
 
 function deletePin(mapId, pinId) {
