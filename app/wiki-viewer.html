@@ -33,6 +33,12 @@
     .wv-loc-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
     .wv-banner { height: 8px; border-radius: 4px; margin-bottom: 10px; }
     .wv-section-title { padding: 12px 16px 2px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+    /* The name/title of each listed entry (character, location, faction,
+       session, rumor, clock). Coloured with the theme accent so titles read
+       apart from the body text at a glance - the cards are otherwise only
+       separated by a hairline border. Swap `color` here to restyle all of
+       them at once. */
+    .wv-entry-title { font-size: 0.98rem; font-weight: 700; color: var(--accent); line-height: 1.35; }
     .wv-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; margin-right: 8px; }
     .wv-new-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: var(--accent); color: var(--bg); margin-right: 8px; vertical-align: middle; }
     .wv-chip { color: var(--accent); cursor: pointer; }
@@ -404,7 +410,7 @@ function wvSectionCharacters() {
       ${wvFavoriteStarHTML('characters', n.id)}
       ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="" style="object-position:${n.imageOffsetX ?? 50}% ${n.imageOffsetY ?? 50}%">` : ''}
       <div style="flex:1">
-        <div style="font-weight:600;padding-right:20px">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
+        <div class="wv-entry-title" style="padding-right:20px">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
         <div style="margin:4px 0 6px;font-size:0.8rem;color:var(--text-dim)">
           ${n.status && n.status !== 'alive' ? wvBadge(n.statusLabel || n.status, '#cc4444') : ''}
           ${n.locationName ? `<span style="margin-right:10px">Found in: ${wvChip({ type: 'locations', id: n.locationId, name: n.locationName })}</span>` : ''}
@@ -431,7 +437,7 @@ function wvSectionLocations() {
     <div class="wv-entry" id="wv-item-locations-${l.id}">
       ${wvFavoriteStarHTML('locations', l.id)}
       ${l.image ? `<img class="wv-loc-image" src="${esc(l.image)}" alt="" style="object-position:${l.imageOffsetX ?? 50}% ${l.imageOffsetY ?? 50}%">` : ''}
-      <div style="font-weight:600;margin-top:${l.image?'10px':'0'};padding-right:20px">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
+      <div class="wv-entry-title" style="margin-top:${l.image?'10px':'0'};padding-right:20px">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
       ${l.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(l.description)}</div>` : ''}
       ${l.residents?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Notable residents: ${l.residents.map(wvChip).join(', ')}</div>` : ''}
       ${wvNotesButtonHTML('locations', l.id)}
@@ -447,7 +453,7 @@ function wvSectionFactions() {
     <div class="wv-entry" id="wv-item-factions-${f.id}">
       ${wvFavoriteStarHTML('factions', f.id)}
       ${f.color ? `<div class="wv-banner" style="background:${f.color}"></div>` : ''}
-      <div style="font-weight:600;padding-right:20px">${wvNewBadge(f.revealedAt)}${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
+      <div class="wv-entry-title" style="padding-right:20px">${wvNewBadge(f.revealedAt)}${esc(f.name)} ${f.attitudeLabel ? wvBadge(f.attitudeLabel, f.attitudeColor || '#888') : ''}</div>
       ${gaugePct !== undefined ? wvGaugeHTML(gaugePct, f.attitudeColor || '#888') : ''}
       ${f.description ? `<div style="font-size:0.85rem;margin-top:8px">${esc(f.description)}</div>` : ''}
       ${f.members?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Known members: ${f.members.map(wvChip).join(', ')}</div>` : ''}
@@ -473,7 +479,7 @@ function wvSectionSessions() {
       </div>
       <div class="wv-timeline-content">
         ${wvFavoriteStarHTML('sessions', s.id)}
-        <div style="font-weight:600;padding-right:20px">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
+        <div class="wv-entry-title" style="padding-right:20px">${wvNewBadge(s.revealedAt)}Session ${s.number}${s.title ? `: ${esc(s.title)}` : ''}</div>
         ${s.date ? `<div style="font-size:0.75rem;color:var(--text-dim)">${esc(s.date)}</div>` : ''}
         ${s.summary ? `<div style="font-size:0.85rem;margin-top:6px">${esc(s.summary)}</div>` : ''}
         ${s.featuring?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Featuring: ${s.featuring.map(wvChip).join(', ')}</div>` : ''}
@@ -487,7 +493,7 @@ function wvSectionRumors() {
   return rumors.map(t => `
     <div class="wv-entry" id="wv-item-rumors-${t.id}">
       ${wvFavoriteStarHTML('rumors', t.id)}
-      <div style="font-weight:600;padding-right:20px">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
+      <div class="wv-entry-title" style="padding-right:20px">${wvNewBadge(t.revealedAt)}${esc(t.title)}</div>
       ${t.description ? `<div style="font-size:0.85rem;margin-top:6px">${esc(t.description)}</div>` : ''}
       ${t.clues?.length ? `<ul style="margin:8px 0 0 18px;font-size:0.85rem">${t.clues.map(cl => `<li>${wvLinkifyMentions(cl)}</li>`).join('')}</ul>` : ''}
       ${t.related?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Related: ${t.related.map(wvChip).join(', ')}</div>` : ''}
@@ -675,7 +681,7 @@ function wvSectionClocks() {
   if (!clocks.length) return wvEmpty('No clocks published yet.');
   return clocks.map(ck => `
     <div class="wv-entry" id="wv-item-clocks-${ck.id}">
-      <div style="font-weight:600">${esc(ck.label)}</div>
+      <div class="wv-entry-title">${esc(ck.label)}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin-top:2px">${ck.filled}/${ck.segments}</div>
       ${wvGaugeHTML(Math.round((ck.filled / ck.segments) * 100), ck.color || 'var(--accent)')}
     </div>`).join('');

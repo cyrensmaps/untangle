@@ -10,6 +10,9 @@ All notable changes to this module are documented here. Format loosely follows [
 - **Map pins can be linked (or re-linked) after they're placed.** Click a pin and its popup now has a "Link to NPC or Location" dropdown and a label field - previously the link could only be chosen in the Add Pin dialog, so an unlinked pin was stuck that way. Also cleanly handles a pin whose linked NPC/Location was later deleted.
 - **Location images can now be repositioned**, the same drag-to-reposition control NPC portraits have - the uploaded image is shown as a wide cropped thumbnail in the Player Companion, and there was previously no way to choose which part of it stays in frame.
 
+### Changed
+- Player Companion entry titles (character/location/faction/session/rumor/clock names) are now shown in the theme's accent colour so they stand out from the body text when scanning a long list.
+
 ### Fixed
 - NPC portrait repositioning now also applies in the Player Companion and the printable Campaign Bible, not just on the main Characters page - a repositioned portrait was still shown centre-cropped everywhere else.
 
