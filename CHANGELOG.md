@@ -7,6 +7,7 @@ All notable changes to this module are documented here. Format loosely follows [
 ### Added
 - **Manual "Merge…" button** on Characters, Locations, Factions, Plot Threads, and Clocks - tick two or more entries that are the same thing, pick which one to keep, optionally rename it, and merge. No AI or API key needed. Use it when you have, say, a separate entry for a leader and for that leader's name.
 - AI session analysis can now recognise an existing character/location/faction that the transcript refers to by a **different name** (a title, an epithet, a surname or first name alone) and fold the session onto that entry instead of creating a near-duplicate. Each row in the review screen shows a "Save onto" dropdown so you can confirm or override the match, or force a brand-new entry.
+- **Map pins can be linked (or re-linked) after they're placed.** Click a pin and its popup now has a "Link to NPC or Location" dropdown and a label field - previously the link could only be chosen in the Add Pin dialog, so an unlinked pin was stuck that way. Also cleanly handles a pin whose linked NPC/Location was later deleted.
 
 ### Changed
 - Merging entries (manually or via "Find Duplicates") now moves **every** reference from the removed entry onto the survivor - relationship-web links, plot-thread involvement, faction rosters, map pins, field notes, debts, timeline connections, Mystery Board pins and string, and stale-callback dismissals - instead of leaving some of them dangling.

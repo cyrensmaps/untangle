@@ -5780,6 +5780,12 @@ function openPinModal(mapId, pinId) {
   // Location pins automatically list whoever's based there — no separate
   // markers, just a clickable roster right in this popup.
   const npcsHere = pin.linkedType==='location' ? c.npcs.filter(n => n.locationId === pin.linkedId) : [];
+  // A pin's link can be set or changed here after it was placed — the Add
+  // Pin dialog was previously the only place to choose it, so an unlinked
+  // pin was stuck that way. Also covers a link pointing at an NPC/Location
+  // that's since been deleted (nothing selected -> saving clears it).
+  const npcOpts = c.npcs.map(n=>`<option value="npc:${n.id}" ${pin.linkedType==='npc'&&pin.linkedId===n.id?'selected':''}>${esc(n.name)} (NPC)</option>`).join('');
+  const locOpts = c.locations.map(l=>`<option value="location:${l.id}" ${pin.linkedType==='location'&&pin.linkedId===l.id?'selected':''}>${esc(l.name)} (Location)</option>`).join('');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -5787,6 +5793,10 @@ function openPinModal(mapId, pinId) {
       <div class="modal-header"><h3>${esc(label)}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       ${entity&&(entity.description||entity.role||entity.notes)?`<p class="text-sm text-dim" style="margin-bottom:16px;line-height:1.6">${esc((entity.description||entity.role||entity.notes||'').slice(0,200))}</p>`:''}
       ${npcsHere.length?`<div class="form-group"><label>Based here</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${npcsHere.map(n=>`<span class="npc-chip" onclick="this.closest('.modal-overlay').remove();openNPCModal('${n.id}')">${esc(n.name)}</span>`).join('')}</div></div>`:''}
+      <div class="form-group"><label>Link to NPC or Location</label>
+        <select id="pin-edit-link"><option value="">- Unlinked -</option><optgroup label="NPCs">${npcOpts}</optgroup><optgroup label="Locations">${locOpts}</optgroup></select>
+      </div>
+      <div class="form-group"><label>Label (if unlinked)</label><input type="text" id="pin-edit-label" value="${esc(pin.label||'')}" placeholder="Custom label…"></div>
       <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px">
         <input type="checkbox" style="width:auto;accent-color:var(--accent)" ${pin.playerVisible?'checked':''} onchange="togglePinVisible('${mapId}','${pinId}',this.checked)"> Visible to players
       </label>
@@ -5794,9 +5804,28 @@ function openPinModal(mapId, pinId) {
         <button class="btn btn-danger btn-sm" onclick="deletePin('${mapId}','${pinId}')">Delete Pin</button>
         ${openLink}
         <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
+        <button class="btn btn-primary" onclick="savePinLink('${mapId}','${pinId}')">Save</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// Applies a link/label change from openPinModal, then reopens the pin
+// popup so its title, description, "Based here" roster and Open-link button
+// all reflect the new target.
+function savePinLink(mapId, pinId) {
+  const c = camp();
+  const m = c.maps.find(mp=>mp.id===mapId);
+  const pin = (m?.pins||[]).find(p=>p.id===pinId);
+  if (!pin) return;
+  const linkVal = document.getElementById('pin-edit-link')?.value || '';
+  pin.label = document.getElementById('pin-edit-label')?.value.trim() || '';
+  if (linkVal) { const [t, id] = linkVal.split(':'); pin.linkedType = t; pin.linkedId = id; }
+  else { pin.linkedType = null; pin.linkedId = null; }
+  save();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+  openPinModal(mapId, pinId);
 }
 
 function deletePin(mapId, pinId) {
