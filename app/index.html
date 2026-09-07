@@ -1798,16 +1798,29 @@ async function runAIExtraction(transcript, existingSession, playerNames = []) {
   // contradiction (e.g. a restated name/role/description that conflicts with
   // what's already logged) — capped per category so prompt size stays
   // bounded on large campaigns.
-  function trimmedList(items, cap, detailFn) {
-    const list = items.slice(0, cap).map(it => {
-      const d = (detailFn(it) || '').slice(0, 100).trim();
-      return d ? `${it.name} (${d})` : it.name;
+  // Id'd roster so Claude can point back at an EXACT existing entry it thinks
+  // a transcript mention refers to (see the "match" field in the schema and
+  // the MATCHING EXISTING ENTRIES rules below) - not just a name string,
+  // which broke down the moment a character was called by a title or first
+  // name only. Sorted most-recently-featured first and capped, so on a long
+  // campaign the entries actually likely to come up this session survive the
+  // cut instead of an arbitrary first-40.
+  function _roster(items, cap, sessKey, detailFn) {
+    const scored = items.map(it => {
+      const sids = sessKey ? (it[sessKey] || []) : [];
+      const recent = sids.reduce((m, sid) => { const s = c.sessions.find(x => x.id === sid); return s && s.number > m ? s.number : m; }, 0);
+      return { it, recent };
     });
-    return list.length ? list.join('; ') : 'none';
+    scored.sort((a, b) => b.recent - a.recent);
+    const lines = scored.slice(0, cap).map(({ it }) => {
+      const d = (detailFn(it) || '').slice(0, 90).trim();
+      return `[${it.id}] ${it.name}${d ? ' — ' + d : ''}`;
+    });
+    return lines.length ? lines.join('\n') : 'none';
   }
-  const existingNPCs     = trimmedList(c.npcs, 40, n => [n.role, n.notes].filter(Boolean).join(' - '));
-  const existingLocs     = trimmedList(c.locations, 40, l => l.description);
-  const existingFactions = trimmedList(c.factions, 40, f => f.description);
+  const existingNPCs     = _roster(c.npcs, 80, 'sessions', n => [n.role, n.notes].filter(Boolean).join(' · '));
+  const existingLocs     = _roster(c.locations, 80, 'sessionIds', l => l.description);
+  const existingFactions = _roster(c.factions, 60, null, f => f.description);
 
   // GM Truth is included here on purpose - this is the GM's own tool running
   // under their own API key against their own transcript, so there's no
@@ -1845,9 +1858,12 @@ async function runAIExtraction(transcript, existingSession, playerNames = []) {
 
 IMPORTANT: Write all text values (summary, keyEvents, role, notes, descriptions, hook titles and descriptions) in the same language as the transcript. Do not translate to English.
 
-Known NPCs already in campaign (with what's already known about them): ${existingNPCs}
-Known locations already in campaign: ${existingLocs}
-Known factions already in campaign: ${existingFactions}${playerNote}
+Known NPCs already in campaign, one per line as "[id] Name — what's known":
+${existingNPCs}
+Known locations already in campaign, one per line as "[id] Name — description":
+${existingLocs}
+Known factions already in campaign, one per line as "[id] Name — description":
+${existingFactions}${playerNote}
 Active Plot Threads already in campaign (title, what players know, and the GM's private truth/logged clues where they exist): ${existingThreads}
 Tracked Clocks already in campaign: ${existingClocks}
 
@@ -1857,16 +1873,16 @@ Return exactly this structure:
   "summary": "2-3 sentence summary of what happened",
   "keyEvents": ["event 1", "event 2", "event 3"],
   "npcs": [
-    { "name": "Name", "role": "brief role", "notes": "what happened with them", "isNew": true }
+    { "name": "Name", "role": "brief role", "notes": "what happened with them", "isNew": true, "match": null }
   ],
   "locations": [
-    { "name": "Name", "description": "brief description", "isNew": true }
+    { "name": "Name", "description": "brief description", "isNew": true, "match": null }
   ],
   "hooks": [
     { "title": "Hook title", "description": "what the thread is about" }
   ],
   "factions": [
-    { "name": "Faction name", "notes": "what they did or were mentioned doing this session", "isNew": true }
+    { "name": "Faction name", "notes": "what they did or were mentioned doing this session", "isNew": true, "match": null }
   ],
   "threadClues": [
     { "threadTitle": "must exactly match a title from Active Plot Threads above, or a title from hooks you're proposing in this same response", "clue": "specific clue/evidence this session revealed or implied, phrased as something a player could plausibly have heard or found" }
@@ -1886,7 +1902,7 @@ Return exactly this structure:
   "openQuestions": ["a question raised in the transcript that was never answered or resolved"]
 }
 
-Set isNew to false if the name matches something already in the campaign. For factions: only include factions explicitly named or clearly active this session - not every group in passing. Empty array if nothing fits a category.
+MATCHING EXISTING ENTRIES (npcs, locations, factions): the same person, place, or group is often referred to different ways across a campaign - by title ("the Warden"), rank, epithet, surname alone, or given name alone. Before treating a mention as new, check whether it is plausibly one of the "[id] Name — …" entries listed above under a different name. If it is, set "isNew": false and set "match" to that entry's exact id from the square brackets. Only set "isNew": true and "match": null when you are genuinely confident it is not already tracked. Use exactly ONE entry per real person/place/group in your response: if the transcript refers to the same character by several names, reconcile them yourself into a single entry (with "match" set if it is an existing one) rather than emitting one entry per name. For factions: only include factions explicitly named or clearly active this session - not every group mentioned in passing. Empty array if nothing fits a category.
 
 For threadClues: only include a clue if the transcript actually reveals, implies, or hints at something relevant to that specific thread - not a vague thematic echo. Don't repeat a clue already logged for that thread (shown above). Empty array if nothing fits.
 
@@ -1963,6 +1979,28 @@ function saveManual() {
 }
 
 // ── Review modal ──
+// Which existing entry an AI-extracted npc/location/faction should fold
+// into: Claude's "match" id if it still resolves, else an exact
+// case-insensitive name hit, else '' meaning "create a new entry". The
+// review modal renders this as a <select> the GM can override per row.
+function _resolveExtractMatch(type, item) {
+  const c = camp();
+  const list = type === 'npc' ? c.npcs : type === 'location' ? c.locations : c.factions;
+  if (item.match) { const byId = list.find(x => x.id === item.match); if (byId) return byId.id; }
+  const nm = (item.name || '').trim().toLowerCase();
+  const byName = list.find(x => (x.name || '').trim().toLowerCase() === nm);
+  return byName ? byName.id : '';
+}
+function _extractMatchSelect(type, selectId, selectedId) {
+  const c = camp();
+  const list = type === 'npc' ? c.npcs : type === 'location' ? c.locations : c.factions;
+  const opts = [`<option value="">— New entry —</option>`]
+    .concat(list.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .map(x => `<option value="${x.id}" ${x.id === selectedId ? 'selected' : ''}>${esc(x.name)}</option>`))
+    .join('');
+  return `<select id="${selectId}" style="font-size:0.78rem;max-width:240px">${opts}</select>`;
+}
+
 function showReviewModal(session, extracted) {
   window._ps = session;
   window._pe = extracted;
@@ -1993,25 +2031,37 @@ function showReviewModal(session, extracted) {
       ${npcs.length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">NPCs Found (${npcs.length})</div>
-        ${npcs.map((n,i) => `
+        ${npcs.map((n,i) => {
+          const matched = _resolveExtractMatch('npc', n);
+          return `
           <div class="review-item">
             <input type="checkbox" id="nc-${i}" checked>
             <div class="review-item-content">
-              <h4>${esc(n.name)} ${n.isNew?'<span class="badge badge-new">New</span>':''}</h4>
+              <h4>${esc(n.name)} ${matched?'':'<span class="badge badge-new">New</span>'}</h4>
               <p>${esc(n.role||'')}${n.role&&n.notes?' · ':''}${esc(n.notes||'')}</p>
+              <div class="text-xs" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="text-dim">Save onto:</span>${_extractMatchSelect('npc', 'nc-match-'+i, matched)}
+              </div>
             </div>
-          </div>`).join('')}` : ''}
+          </div>`;
+        }).join('')}` : ''}
       ${locs.length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Locations Found (${locs.length})</div>
-        ${locs.map((l,i) => `
+        ${locs.map((l,i) => {
+          const matched = _resolveExtractMatch('location', l);
+          return `
           <div class="review-item">
             <input type="checkbox" id="lc-${i}" checked>
             <div class="review-item-content">
-              <h4>${esc(l.name)} ${l.isNew?'<span class="badge badge-new">New</span>':''}</h4>
+              <h4>${esc(l.name)} ${matched?'':'<span class="badge badge-new">New</span>'}</h4>
               <p>${esc(l.description||'')}</p>
+              <div class="text-xs" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="text-dim">Save onto:</span>${_extractMatchSelect('location', 'lc-match-'+i, matched)}
+              </div>
             </div>
-          </div>`).join('')}` : ''}
+          </div>`;
+        }).join('')}` : ''}
       ${hooks.length ? `
         <hr>
         <div style="margin:16px 0 8px;font-size:0.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">Hooks & Threads (${hooks.length})</div>
@@ -2047,7 +2097,8 @@ function showReviewModal(session, extracted) {
           // color as soon as the campaign already had any factions.
           let newFactionCount = camp().factions.length;
           return factions.map((f,i) => {
-          const existing = camp().factions.find(x => x.name.toLowerCase() === f.name.toLowerCase());
+          const matchedId = _resolveExtractMatch('faction', f);
+          const existing = matchedId ? camp().factions.find(x => x.id === matchedId) : null;
           const col = existing?.color || FACTION_COLORS[newFactionCount++ % FACTION_COLORS.length];
           return `
           <div class="review-item">
@@ -2055,9 +2106,12 @@ function showReviewModal(session, extracted) {
             <div class="review-item-content">
               <h4 style="display:flex;align-items:center;gap:8px">
                 <span style="width:10px;height:10px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>
-                ${esc(f.name)} ${f.isNew?'<span class="badge badge-new">New</span>':''}
+                ${esc(f.name)} ${matchedId?'':'<span class="badge badge-new">New</span>'}
               </h4>
               <p>${esc(f.notes||'')}</p>
+              <div class="text-xs" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="text-dim">Save onto:</span>${_extractMatchSelect('faction', 'fc-r-match-'+i, matchedId)}
+              </div>
             </div>
           </div>`;
           }).join('');
@@ -2177,26 +2231,41 @@ function confirmSave() {
   session.title = document.getElementById('r-title').value || session.title;
   session.summary = document.getElementById('r-summary').value;
 
+  // Extracted-name → resolved id, so the relationship / faction-member
+  // suggestions further down can still find an NPC even when it was folded
+  // onto an existing entry under a different canonical name.
+  const npcIdByExtractName = {};
   npcs.forEach((npc, i) => {
     if (!document.getElementById(`nc-${i}`)?.checked) return;
-    const existing = c.npcs.find(n => n.name.toLowerCase() === npc.name.toLowerCase());
+    const sel = document.getElementById(`nc-match-${i}`);
+    const existing = sel
+      ? (sel.value ? c.npcs.find(n => n.id === sel.value) : null)
+      : c.npcs.find(n => n.name.toLowerCase() === npc.name.toLowerCase());
     if (existing) {
       if (!existing.sessions) existing.sessions = [];
       if (!existing.events) existing.events = [];
       if (!existing.sessions.includes(session.id)) existing.sessions.push(session.id);
       if (npc.notes) existing.events.push({ id: uid(), sessionId: session.id, text: npc.notes });
+      if (!existing.role && npc.role) existing.role = npc.role;
+      npcIdByExtractName[(npc.name || '').toLowerCase()] = existing.id;
     } else {
       const ev = npc.notes ? [{ id: uid(), sessionId: session.id, text: npc.notes }] : [];
-      c.npcs.push({ id: uid(), name: npc.name, role: npc.role||'', notes: '', motivation: '', secrets: '', locationId: null, status: 'alive', type: 'npc', voiceDescription: '', sessions: [session.id], events: ev });
+      const created = { id: uid(), name: npc.name, role: npc.role||'', notes: '', motivation: '', secrets: '', locationId: null, status: 'alive', type: 'npc', voiceDescription: '', sessions: [session.id], events: ev };
+      c.npcs.push(created);
+      npcIdByExtractName[(npc.name || '').toLowerCase()] = created.id;
     }
   });
 
   locs.forEach((loc, i) => {
     if (!document.getElementById(`lc-${i}`)?.checked) return;
-    const existing = c.locations.find(l => l.name.toLowerCase() === loc.name.toLowerCase());
+    const sel = document.getElementById(`lc-match-${i}`);
+    const existing = sel
+      ? (sel.value ? c.locations.find(l => l.id === sel.value) : null)
+      : c.locations.find(l => l.name.toLowerCase() === loc.name.toLowerCase());
     if (existing) {
       if (!existing.sessionIds) existing.sessionIds = [];
       if (!existing.sessionIds.includes(session.id)) existing.sessionIds.push(session.id);
+      if (!existing.description && loc.description) existing.description = loc.description;
     } else {
       c.locations.push({ id: uid(), name: loc.name, description: loc.description||'', notes: '', sessionIds: [session.id] });
     }
@@ -2234,18 +2303,25 @@ function confirmSave() {
   });
 
   const extractedFactions = (window._pe.factions || []);
+  const factionIdByExtractName = {};
   let fChk = 0;
   extractedFactions.forEach((f, i) => {
     if (!document.getElementById(`fc-r-${i}`)?.checked) return;
     fChk++;
-    const existing = c.factions.find(x => x.name.toLowerCase() === f.name.toLowerCase());
+    const sel = document.getElementById(`fc-r-match-${i}`);
+    const existing = sel
+      ? (sel.value ? c.factions.find(x => x.id === sel.value) : null)
+      : c.factions.find(x => x.name.toLowerCase() === f.name.toLowerCase());
     if (existing) {
       // Append session note to the faction description if it adds new info
-      if (f.notes && !existing.description.includes(f.notes.slice(0, 30))) {
+      if (f.notes && !(existing.description || '').includes(f.notes.slice(0, 30))) {
         existing.description = (existing.description ? existing.description + '\n\n' : '') + `[Session ${session.number}] ${f.notes}`;
       }
+      factionIdByExtractName[(f.name || '').toLowerCase()] = existing.id;
     } else {
-      c.factions.push({ id: uid(), name: f.name, description: f.notes||'', goals: '', secrets: '', attitude: 'unknown', status: 'active', color: FACTION_COLORS[c.factions.length % FACTION_COLORS.length], memberIds: [], threadIds: [] });
+      const created = { id: uid(), name: f.name, description: f.notes||'', goals: '', secrets: '', attitude: 'unknown', status: 'active', color: FACTION_COLORS[c.factions.length % FACTION_COLORS.length], memberIds: [], threadIds: [] };
+      c.factions.push(created);
+      factionIdByExtractName[(f.name || '').toLowerCase()] = created.id;
     }
   });
 
@@ -2255,8 +2331,10 @@ function confirmSave() {
   let relsChk = 0;
   relSuggestions.forEach((rs, i) => {
     if (!document.getElementById(`rs-${i}`)?.checked) return;
-    const from = c.npcs.find(n => n.name.toLowerCase() === (rs.fromName||'').toLowerCase());
-    const to = c.npcs.find(n => n.name.toLowerCase() === (rs.toName||'').toLowerCase());
+    const _findNpc = nm => c.npcs.find(n => n.name.toLowerCase() === (nm||'').toLowerCase())
+      || c.npcs.find(n => n.id === npcIdByExtractName[(nm||'').toLowerCase()]);
+    const from = _findNpc(rs.fromName);
+    const to = _findNpc(rs.toName);
     if (!from || !to || from.id === to.id) return;
     const dup = c.relationships.some(r => (r.fromId===from.id && r.toId===to.id) || (r.fromId===to.id && r.toId===from.id));
     if (dup) return;
@@ -2269,8 +2347,10 @@ function confirmSave() {
   let fmsChk = 0;
   factionMemberSuggestions.forEach((fms, i) => {
     if (!document.getElementById(`fms-${i}`)?.checked) return;
-    const npc = c.npcs.find(n => n.name.toLowerCase() === (fms.npcName||'').toLowerCase());
-    const faction = c.factions.find(f => f.name.toLowerCase() === (fms.factionName||'').toLowerCase());
+    const npc = c.npcs.find(n => n.name.toLowerCase() === (fms.npcName||'').toLowerCase())
+      || c.npcs.find(n => n.id === npcIdByExtractName[(fms.npcName||'').toLowerCase()]);
+    const faction = c.factions.find(f => f.name.toLowerCase() === (fms.factionName||'').toLowerCase())
+      || c.factions.find(f => f.id === factionIdByExtractName[(fms.factionName||'').toLowerCase()]);
     if (!npc || !faction) return;
     if (!faction.memberIds) faction.memberIds = [];
     if (faction.memberIds.includes(npc.id)) return;
@@ -3213,6 +3293,7 @@ function renderNPCs() {
       <div style="display:flex;gap:8px">
         ${isFeatureEnabled('nameGenerator')?`<button class="btn btn-ghost" onclick="openNameGeneratorModal()">Names</button>`:''}
         ${isFeatureEnabled('pullFromFoundry')?`<button class="btn btn-ghost" onclick="openPullFromFoundryModal()">Pull from Foundry</button>`:''}
+        ${c.npcs.length>=2?`<button class="btn btn-ghost" onclick="openManualMergeModal('npc')">Merge…</button>`:''}
         ${c.npcs.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateCharacters()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddNPC()">+ Add</button>
       </div>
@@ -3411,6 +3492,323 @@ const NPC_STATUSES = [
 function getNpcStatuses() { return [...NPC_STATUSES, ...(state.settings.customListValues.npcStatuses||[])]; }
 function npcStatusOptions(sel) { return getNpcStatuses().map(s=>`<option value="${s.value}" ${(sel||'alive')===s.value?'selected':''}>${s.label}</option>`).join(''); }
 
+// ── Merge core ─────────────────────────────────────────────
+// Shared by BOTH the AI "Find Duplicates" flows and the manual "Merge…"
+// picker. Rewrites every reference to a removed entity's id so nothing is
+// left orphaned (relationships, plot-thread involvement, faction rosters,
+// map pins, field notes, debts, timeline connections, mystery-board pins &
+// string, stale-callback dismissals, PC spotlight, relationship-web
+// positions), unions list-shaped data, and fills blank scalar fields on the
+// survivor from the entries being removed. Callers own save()/render().
+
+function _mergeUniq(a) { return [...new Set(a)]; }
+
+// Generic reference rewrite for a removed entity of a given type. Handles
+// every place an id of that type can be stored EXCEPT the type-specific
+// list fields (npcIds, memberIds, …) the per-type merge functions below
+// handle themselves.
+function _reassignEntityRefs(c, type, oldId, newId) {
+  // Relationship web edges
+  (c.relationships || []).forEach(r => {
+    if (r.fromType === type && r.fromId === oldId) r.fromId = newId;
+    if (r.toType === type && r.toId === oldId) r.toId = newId;
+  });
+  // Drop self-links and duplicate pairs the remap may have created
+  const relSeen = new Set();
+  c.relationships = (c.relationships || []).filter(r => {
+    if (r.fromId === r.toId && r.fromType === r.toType) return false;
+    const k = [`${r.fromType}:${r.fromId}`, `${r.toType}:${r.toId}`].sort().join('~');
+    if (relSeen.has(k)) return false;
+    relSeen.add(k);
+    return true;
+  });
+  // Debts & Favors ledger
+  (c.debts || []).forEach(d => {
+    if (d.fromType === type && d.fromId === oldId) d.fromId = newId;
+    if (d.toType === type && d.toId === oldId) d.toId = newId;
+  });
+  // Timeline event connections
+  (c.timelineEvents || []).forEach(ev => {
+    if (!ev.connections) return;
+    ev.connections.forEach(cn => { if (cn.type === type && cn.id === oldId) cn.id = newId; });
+    const s = new Set();
+    ev.connections = ev.connections.filter(cn => { const k = `${cn.type}:${cn.id}`; if (s.has(k)) return false; s.add(k); return true; });
+  });
+  // Field notes "About" link
+  (c.quickNotes || []).forEach(n => { if (n.aboutType === type && n.aboutId === oldId) n.aboutId = newId; });
+  // Map pins
+  (c.maps || []).forEach(mp => (mp.pins || []).forEach(p => { if (p.linkedType === type && p.linkedId === oldId) p.linkedId = newId; }));
+  // Stale-callback dismissals (keyed "type:id")
+  if (c.dismissedStale) {
+    const ok = `${type}:${oldId}`, nk = `${type}:${newId}`;
+    if (ok in c.dismissedStale) {
+      c.dismissedStale[nk] = (nk in c.dismissedStale) ? Math.min(c.dismissedStale[nk], c.dismissedStale[ok]) : c.dismissedStale[ok];
+      delete c.dismissedStale[ok];
+    }
+  }
+  // Mystery Board node positions & string endpoints (per-thread boards + the
+  // General Board). Board node keys use "loc:" for locations, not "location:".
+  const bp = { npc: 'npc', location: 'loc', faction: 'faction' }[type];
+  if (bp) {
+    const ok = `${bp}:${oldId}`, nk = `${bp}:${newId}`;
+    [c.generalBoard, ...(c.plotThreads || [])].filter(Boolean).forEach(b => {
+      if (b.boardPositions && b.boardPositions[ok]) {
+        if (!b.boardPositions[nk]) b.boardPositions[nk] = b.boardPositions[ok];
+        delete b.boardPositions[ok];
+      }
+      if (b.boardConnections) {
+        b.boardConnections.forEach(cn => { if (cn.a === ok) cn.a = nk; if (cn.b === ok) cn.b = nk; });
+        const s = new Set();
+        b.boardConnections = b.boardConnections.filter(cn => {
+          if (cn.a === cn.b) return false;
+          const k = [cn.a, cn.b].sort().join('~');
+          if (s.has(k)) return false;
+          s.add(k);
+          return true;
+        });
+      }
+    });
+  }
+}
+
+// Returns how many of removeIds actually got folded in.
+function mergeNpcs(keepId, removeIds, finalName) {
+  const c = camp();
+  const keep = c.npcs.find(n => n.id === keepId);
+  if (!keep) return 0;
+  let merged = 0;
+  (removeIds || []).forEach(rid => {
+    if (rid === keepId) return;
+    const dup = c.npcs.find(n => n.id === rid);
+    if (!dup) return;
+    keep.sessions = _mergeUniq([...(keep.sessions || []), ...(dup.sessions || [])]);
+    const seen = new Set((keep.events || []).map(e => (e.text || '').trim()));
+    (dup.events || []).forEach(ev => {
+      const t = (ev.text || '').trim();
+      if (t && !seen.has(t)) { (keep.events = keep.events || []).push(ev); seen.add(t); }
+    });
+    if ((dup.goals || []).length) {
+      const g = new Set((keep.goals || []).map(x => (typeof x === 'string' ? x : x.text || '').trim()));
+      (dup.goals || []).forEach(x => {
+        const key = (typeof x === 'string' ? x : x.text || '').trim();
+        if (key && !g.has(key)) { (keep.goals = keep.goals || []).push(x); g.add(key); }
+      });
+    }
+    ['role', 'motivation', 'notes', 'secrets', 'voiceDescription', 'foundryActorId'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    if (!keep.image && dup.image) { keep.image = dup.image; keep.imageOffsetX = dup.imageOffsetX ?? 50; keep.imageOffsetY = dup.imageOffsetY ?? 50; }
+    if (keep.locationId == null && dup.locationId != null) keep.locationId = dup.locationId;
+    if ((!keep.status || keep.status === 'alive') && dup.status && dup.status !== 'alive') keep.status = dup.status;
+    if (c.npcPositions) {
+      if (c.npcPositions[rid] && !c.npcPositions[keepId]) c.npcPositions[keepId] = c.npcPositions[rid];
+      delete c.npcPositions[rid];
+    }
+    (c.sessions || []).forEach(s => { if ((s.spotlightPcIds || []).includes(rid)) s.spotlightPcIds = _mergeUniq(s.spotlightPcIds.map(x => x === rid ? keepId : x)); });
+    if (c.sessionPrep?.plannedSpotlightPcIds?.includes(rid)) c.sessionPrep.plannedSpotlightPcIds = _mergeUniq(c.sessionPrep.plannedSpotlightPcIds.map(x => x === rid ? keepId : x));
+    (c.plotThreads || []).forEach(t => ['npcIds', 'boardNpcIds'].forEach(k => { if ((t[k] || []).includes(rid)) t[k] = _mergeUniq(t[k].map(x => x === rid ? keepId : x)); }));
+    (c.factions || []).forEach(f => { if ((f.memberIds || []).includes(rid)) f.memberIds = _mergeUniq(f.memberIds.map(x => x === rid ? keepId : x)); });
+    _reassignEntityRefs(c, 'npc', rid, keepId);
+    c.npcs = c.npcs.filter(n => n.id !== rid);
+    merged++;
+  });
+  if (finalName && finalName.trim()) keep.name = finalName.trim();
+  return merged;
+}
+
+function mergeLocations(keepId, removeIds, finalName) {
+  const c = camp();
+  const keep = c.locations.find(l => l.id === keepId);
+  if (!keep) return 0;
+  let merged = 0;
+  (removeIds || []).forEach(rid => {
+    if (rid === keepId) return;
+    const dup = c.locations.find(l => l.id === rid);
+    if (!dup) return;
+    keep.sessionIds = _mergeUniq([...(keep.sessionIds || []), ...(dup.sessionIds || [])]);
+    ['description', 'type', 'image', 'notes'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    (c.npcs || []).forEach(n => { if (n.locationId === rid) n.locationId = keepId; });
+    (c.plotThreads || []).forEach(t => ['locationIds', 'boardLocationIds'].forEach(k => { if ((t[k] || []).includes(rid)) t[k] = _mergeUniq(t[k].map(x => x === rid ? keepId : x)); }));
+    _reassignEntityRefs(c, 'location', rid, keepId);
+    c.locations = c.locations.filter(l => l.id !== rid);
+    merged++;
+  });
+  if (finalName && finalName.trim()) keep.name = finalName.trim();
+  return merged;
+}
+
+function mergeFactions(keepId, removeIds, finalName) {
+  const c = camp();
+  const keep = c.factions.find(f => f.id === keepId);
+  if (!keep) return 0;
+  let merged = 0;
+  (removeIds || []).forEach(rid => {
+    if (rid === keepId) return;
+    const dup = c.factions.find(f => f.id === rid);
+    if (!dup) return;
+    keep.memberIds = _mergeUniq([...(keep.memberIds || []), ...(dup.memberIds || [])]);
+    keep.threadIds = _mergeUniq([...(keep.threadIds || []), ...(dup.threadIds || [])]);
+    ['description', 'goals', 'secrets', 'color'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    if ((!keep.attitude || keep.attitude === 'unknown') && dup.attitude && dup.attitude !== 'unknown') keep.attitude = dup.attitude;
+    if ((!keep.status || keep.status === 'active') && dup.status && dup.status !== 'active') keep.status = dup.status;
+    if (c.factionPositions) {
+      if (c.factionPositions[rid] && !c.factionPositions[keepId]) c.factionPositions[keepId] = c.factionPositions[rid];
+      delete c.factionPositions[rid];
+    }
+    (c.clocks || []).forEach(ck => { if (ck.linkedType === 'faction' && ck.linkedId === rid) ck.linkedId = keepId; });
+    (c.plotThreads || []).forEach(t => { if ((t.boardFactionIds || []).includes(rid)) t.boardFactionIds = _mergeUniq(t.boardFactionIds.map(x => x === rid ? keepId : x)); });
+    _reassignEntityRefs(c, 'faction', rid, keepId);
+    c.factions = c.factions.filter(f => f.id !== rid);
+    merged++;
+  });
+  if (finalName && finalName.trim()) keep.name = finalName.trim();
+  return merged;
+}
+
+function mergeThreads(keepId, removeIds, finalName) {
+  const c = camp();
+  const keep = c.plotThreads.find(t => t.id === keepId);
+  if (!keep) return 0;
+  let merged = 0;
+  (removeIds || []).forEach(rid => {
+    if (rid === keepId) return;
+    const dup = c.plotThreads.find(t => t.id === rid);
+    if (!dup) return;
+    const seen = new Set((keep.clues || []).map(cl => (cl.text || '').trim().toLowerCase()));
+    (dup.clues || []).forEach(cl => {
+      const k = (cl.text || '').trim().toLowerCase();
+      if (k && !seen.has(k)) { (keep.clues = keep.clues || []).push(cl); seen.add(k); }
+    });
+    ['npcIds', 'locationIds', 'boardNpcIds', 'boardLocationIds', 'boardFactionIds'].forEach(k => {
+      if ((dup[k] || []).length) keep[k] = _mergeUniq([...(keep[k] || []), ...dup[k]]);
+    });
+    if ((dup.boardCustomNodes || []).length) keep.boardCustomNodes = [...(keep.boardCustomNodes || []), ...dup.boardCustomNodes];
+    if ((dup.boardConnections || []).length) keep.boardConnections = [...(keep.boardConnections || []), ...dup.boardConnections];
+    if (dup.boardPositions) keep.boardPositions = { ...dup.boardPositions, ...(keep.boardPositions || {}) };
+    if ((dup.truths || []).length) {
+      const have = new Set((keep.truths || []).map(tr => (tr.text || '').trim().toLowerCase()));
+      (dup.truths || []).forEach(tr => {
+        const k = (tr.text || '').trim().toLowerCase();
+        if (k && !have.has(k) && (keep.truths || []).length < 3) { (keep.truths = keep.truths || []).push(tr); have.add(k); }
+      });
+      if ((keep.truths || []).length > 1 && keep.resolvedTruthId && !keep.truths.some(tr => tr.id === keep.resolvedTruthId)) keep.resolvedTruthId = null;
+    }
+    ['description', 'truth'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    if (isThreadOngoing(dup) && !isThreadOngoing(keep)) keep.status = dup.status || 'active';
+    (c.factions || []).forEach(f => { if ((f.threadIds || []).includes(rid)) f.threadIds = _mergeUniq(f.threadIds.map(x => x === rid ? keepId : x)); });
+    (c.clocks || []).forEach(ck => { if (ck.linkedType === 'thread' && ck.linkedId === rid) ck.linkedId = keepId; });
+    if (window._boardThreadId === rid) window._boardThreadId = keepId;
+    _reassignEntityRefs(c, 'thread', rid, keepId);
+    c.plotThreads = c.plotThreads.filter(t => t.id !== rid);
+    merged++;
+  });
+  if (finalName && finalName.trim()) keep.title = finalName.trim();
+  return merged;
+}
+
+function mergeClocks(keepId, removeIds, finalName) {
+  const c = camp();
+  const keep = (c.clocks || []).find(ck => ck.id === keepId);
+  if (!keep) return 0;
+  let merged = 0;
+  (removeIds || []).forEach(rid => {
+    if (rid === keepId) return;
+    const dup = c.clocks.find(ck => ck.id === rid);
+    if (!dup) return;
+    ['color', 'linkedType', 'linkedId'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    keep.filled = Math.min(keep.segments || dup.segments || 6, Math.max(keep.filled || 0, dup.filled || 0));
+    c.clocks = c.clocks.filter(ck => ck.id !== rid);
+    merged++;
+  });
+  if (finalName && finalName.trim()) keep.label = finalName.trim();
+  return merged;
+}
+
+// ── Manual "Merge…" picker (no AI) ─────────────────────────
+// Reachable from the page header on Characters, Locations, Factions, Plot
+// Threads and Clocks. The GM ticks two or more entries that are the same
+// thing, picks which one to keep, optionally renames it, and merges — the
+// same merge core the AI "Find Duplicates" flows use.
+const MERGE_TYPES = {
+  npc:      { list: 'npcs',        nameKey: 'name',  label: 'Characters',   fn: mergeNpcs },
+  location: { list: 'locations',   nameKey: 'name',  label: 'Locations',    fn: mergeLocations },
+  faction:  { list: 'factions',    nameKey: 'name',  label: 'Factions',     fn: mergeFactions },
+  thread:   { list: 'plotThreads', nameKey: 'title', label: 'Plot Threads', fn: mergeThreads },
+  clock:    { list: 'clocks',      nameKey: 'label', label: 'Clocks',       fn: mergeClocks },
+};
+
+function openManualMergeModal(type) {
+  const cfg = MERGE_TYPES[type];
+  if (!cfg) return;
+  const items = camp()[cfg.list] || [];
+  if (items.length < 2) { toast(`Need at least 2 to merge.`, 'error'); return; }
+  window._manualMergeType = type;
+  const rows = items.map((it, i) => `
+    <div class="review-item" style="gap:10px">
+      <input type="checkbox" class="mm-cb" id="mm-cb-${i}" value="${it.id}" onchange="_manualMergeSync()">
+      <div class="review-item-content" style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+        <label for="mm-cb-${i}" style="cursor:pointer;flex:1">${esc(it[cfg.nameKey] || '(untitled)')}</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.76rem;color:var(--text-dim);cursor:pointer;white-space:nowrap">
+          <input type="radio" name="mm-keep" class="mm-keep" value="${it.id}" disabled onchange="_manualMergeSync()">keep
+        </label>
+      </div>
+    </div>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'manual-merge-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div>
+          <h3>Merge ${cfg.label}</h3>
+          <div class="text-xs text-dim mt-4">Tick two or more entries that are the same, choose which one to keep, then merge. Sessions, links, notes and board pins from the others move onto the kept entry; the others are deleted. This can't be undone.</div>
+        </div>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div style="max-height:50vh;overflow-y:auto;margin:4px 0">${rows}</div>
+      <div class="form-group" style="margin-top:12px">
+        <label>Final name <span class="text-dim text-xs">(optional — defaults to the kept entry's)</span></label>
+        <input type="text" id="mm-final-name" placeholder="Leave blank to keep as-is">
+      </div>
+      <div class="flex gap-10" style="justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" id="mm-confirm" disabled onclick="confirmManualMerge()">Merge</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function _manualMergeSync() {
+  const cfg = MERGE_TYPES[window._manualMergeType];
+  const checked = [...document.querySelectorAll('.mm-cb:checked')].map(cb => cb.value);
+  document.querySelectorAll('.mm-keep').forEach(r => {
+    r.disabled = !checked.includes(r.value);
+    if (r.checked && !checked.includes(r.value)) r.checked = false;
+  });
+  if (checked.length && ![...document.querySelectorAll('.mm-keep')].some(r => r.checked)) {
+    const first = document.querySelector(`.mm-keep[value="${checked[0]}"]`);
+    if (first) first.checked = true;
+  }
+  const keep = document.querySelector('.mm-keep:checked')?.value;
+  const btn = document.getElementById('mm-confirm');
+  if (btn) btn.disabled = !(checked.length >= 2 && keep && checked.includes(keep));
+  const nameInput = document.getElementById('mm-final-name');
+  const it = keep && (camp()[cfg.list] || []).find(x => x.id === keep);
+  if (nameInput && it) nameInput.placeholder = it[cfg.nameKey] || 'Leave blank to keep as-is';
+}
+
+function confirmManualMerge() {
+  const cfg = MERGE_TYPES[window._manualMergeType];
+  const checked = [...document.querySelectorAll('.mm-cb:checked')].map(cb => cb.value);
+  const keep = document.querySelector('.mm-keep:checked')?.value;
+  if (!cfg || checked.length < 2 || !keep || !checked.includes(keep)) return;
+  const removeIds = checked.filter(id => id !== keep);
+  const finalName = document.getElementById('mm-final-name')?.value?.trim() || '';
+  const n = cfg.fn(keep, removeIds, finalName);
+  save();
+  document.getElementById('manual-merge-overlay')?.remove();
+  toast(n ? `Merged ${n + 1} entries into one.` : 'Nothing to merge - those entries may have changed.', n ? 'success' : 'error');
+  render();
+}
+
 // ── Find & merge duplicate characters ──
 async function findDuplicateCharacters() {
   if (!getClaudeKey()) { toast('Claude API key required - add it in Foundry Configure Settings.', 'error'); navigate('settings'); return; }
@@ -3563,62 +3961,14 @@ function showMergeReviewModal(merges) {
 function confirmMerges() {
   const merges = window._pendingMerges || [];
   window._pendingMerges = null;
-  const c = camp();
   let count = 0;
-
   merges.forEach((m, i) => {
     if (!document.getElementById(`mg-${i}`)?.checked) return;
-
     const sel = document.getElementById(`mg-name-${i}`);
     const cust = document.getElementById(`mg-custom-${i}`);
     const chosenName = sel?.value === '__custom__' ? (cust?.value?.trim() || '') : (sel?.value || '');
-
-    const keep = c.npcs.find(n => n.id === m.keepId);
-    if (!keep) return;
-
-    // Merge each duplicate into keep
-    (m.removeIds || []).forEach(rid => {
-      const dup = c.npcs.find(n => n.id === rid);
-      if (!dup) return;
-
-      // Merge sessions (union)
-      const dupSessions = (dup.sessions || []).filter(sid => !(keep.sessions || []).includes(sid));
-      keep.sessions = [...(keep.sessions || []), ...dupSessions];
-
-      // Merge events (append, avoid exact text duplicates)
-      const existingTexts = new Set((keep.events || []).map(e => e.text.trim()));
-      (dup.events || []).forEach(ev => {
-        if (!existingTexts.has(ev.text.trim())) {
-          keep.events = keep.events || [];
-          keep.events.push(ev);
-          existingTexts.add(ev.text.trim());
-        }
-      });
-
-      // Fill in blanks from duplicate if keep is missing data
-      if (!keep.role && dup.role) keep.role = dup.role;
-      if (!keep.motivation && dup.motivation) keep.motivation = dup.motivation;
-      if (!keep.notes && dup.notes) keep.notes = dup.notes;
-      if (!keep.secrets && dup.secrets) keep.secrets = dup.secrets;
-      if (!keep.voiceDescription && dup.voiceDescription) keep.voiceDescription = dup.voiceDescription;
-      if (keep.locationId === null && dup.locationId) keep.locationId = dup.locationId;
-
-      // Reassign any map pins pointing to the removed NPC
-      (c.maps || []).forEach(map => {
-        (map.pins || []).forEach(pin => {
-          if (pin.linkedType === 'npc' && pin.linkedId === rid) pin.linkedId = m.keepId;
-        });
-      });
-
-      // Remove the duplicate
-      c.npcs = c.npcs.filter(n => n.id !== rid);
-    });
-
-    // Apply chosen name
-    if (chosenName) keep.name = chosenName;
-    count++;
+    if (mergeNpcs(m.keepId, m.removeIds || [], chosenName)) count++;
   });
-
   save();
   document.getElementById('merge-overlay')?.remove();
   toast(count > 0 ? `${count} merge${count!==1?'s':''} applied.` : 'No merges applied.', 'success');
@@ -3762,30 +4112,13 @@ function showLocationMergeModal(merges) {
 function confirmLocationMerges() {
   const merges = window._pendingLocationMerges || [];
   window._pendingLocationMerges = null;
-  const c = camp();
   let count = 0;
   merges.forEach((m, i) => {
     if (!document.getElementById(`mg-${i}`)?.checked) return;
     const sel = document.getElementById(`mg-name-${i}`);
     const cust = document.getElementById(`mg-custom-${i}`);
     const chosenName = sel?.value === '__custom__' ? (cust?.value?.trim() || '') : (sel?.value || '');
-    const keep = c.locations.find(l => l.id === m.keepId);
-    if (!keep) return;
-    (m.removeIds || []).forEach(rid => {
-      const dup = c.locations.find(l => l.id === rid);
-      if (!dup) return;
-      const dupSessions = (dup.sessionIds || []).filter(sid => !(keep.sessionIds || []).includes(sid));
-      keep.sessionIds = [...(keep.sessionIds || []), ...dupSessions];
-      if (!keep.description && dup.description) keep.description = dup.description;
-      if (!keep.type && dup.type) keep.type = dup.type;
-      c.npcs.forEach(n => { if (n.locationId === rid) n.locationId = m.keepId; });
-      (c.maps || []).forEach(map => {
-        (map.pins || []).forEach(pin => { if (pin.linkedType === 'location' && pin.linkedId === rid) pin.linkedId = m.keepId; });
-      });
-      c.locations = c.locations.filter(l => l.id !== rid);
-    });
-    if (chosenName) keep.name = chosenName;
-    count++;
+    if (mergeLocations(m.keepId, m.removeIds || [], chosenName)) count++;
   });
   save();
   document.getElementById('merge-overlay')?.remove();
@@ -3931,29 +4264,13 @@ function showFactionMergeModal(merges) {
 function confirmFactionMerges() {
   const merges = window._pendingFactionMerges || [];
   window._pendingFactionMerges = null;
-  const c = camp();
   let count = 0;
   merges.forEach((m, i) => {
     if (!document.getElementById(`mg-${i}`)?.checked) return;
     const sel = document.getElementById(`mg-name-${i}`);
     const cust = document.getElementById(`mg-custom-${i}`);
     const chosenName = sel?.value === '__custom__' ? (cust?.value?.trim() || '') : (sel?.value || '');
-    const keep = c.factions.find(f => f.id === m.keepId);
-    if (!keep) return;
-    (m.removeIds || []).forEach(rid => {
-      const dup = c.factions.find(f => f.id === rid);
-      if (!dup) return;
-      const dupMembers = (dup.memberIds || []).filter(id => !(keep.memberIds || []).includes(id));
-      keep.memberIds = [...(keep.memberIds || []), ...dupMembers];
-      const dupThreads = (dup.threadIds || []).filter(id => !(keep.threadIds || []).includes(id));
-      keep.threadIds = [...(keep.threadIds || []), ...dupThreads];
-      if (!keep.description && dup.description) keep.description = dup.description;
-      if (!keep.goals && dup.goals) keep.goals = dup.goals;
-      if (!keep.secrets && dup.secrets) keep.secrets = dup.secrets;
-      c.factions = c.factions.filter(f => f.id !== rid);
-    });
-    if (chosenName) keep.name = chosenName;
-    count++;
+    if (mergeFactions(m.keepId, m.removeIds || [], chosenName)) count++;
   });
   save();
   document.getElementById('merge-overlay')?.remove();
@@ -4417,6 +4734,7 @@ function renderLocations() {
     <div class="page-header">
       <div><h2>Locations</h2><p class="subtitle">${c.locations.length} location${c.locations.length!==1?'s':''}</p></div>
       <div style="display:flex;gap:8px">
+        ${c.locations.length>=2?`<button class="btn btn-ghost" onclick="openManualMergeModal('location')">Merge…</button>`:''}
         ${c.locations.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateLocations()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddLocation()">+ Add Location</button>
       </div>
@@ -7355,6 +7673,7 @@ function renderPlotThreads() {
     <div class="page-header">
       <div><h2>Plot Threads</h2><p class="subtitle">${c.plotThreads.length} thread${c.plotThreads.length!==1?'s':''} · ${counts.active||0} active</p></div>
       <div style="display:flex;gap:8px">
+        ${c.plotThreads.length>=2?`<button class="btn btn-ghost" onclick="openManualMergeModal('thread')">Merge…</button>`:''}
         ${isFeatureEnabled('mysteryBoard')?`<button class="btn btn-ghost" onclick="navigate('mysteryboard')">Mystery Board</button>`:''}
         <button class="btn btn-primary" onclick="openAddThreadModal()">+ New Thread</button>
       </div>
@@ -8711,6 +9030,7 @@ function renderFactions() {
     <div class="page-header">
       <div><h2>Factions</h2><p class="subtitle">${c.factions.length} faction${c.factions.length!==1?'s':''}</p></div>
       <div style="display:flex;gap:8px">
+        ${c.factions.length>=2?`<button class="btn btn-ghost" onclick="openManualMergeModal('faction')">Merge…</button>`:''}
         ${c.factions.length>=2?`<button class="btn btn-ghost" onclick="findDuplicateFactions()">${aiIconHTML()}Find Duplicates</button>`:''}
         <button class="btn btn-primary" onclick="openAddFactionModal()">+ New Faction</button>
       </div>
@@ -8845,7 +9165,10 @@ function renderClocks() {
   return `
     <div class="page-header">
       <div><h2>Clocks</h2><p class="subtitle">${c.clocks.length} clock${c.clocks.length!==1?'s':''} · background momentum - tick a segment whenever it advances</p></div>
-      <button class="btn btn-primary" onclick="openAddClockModal()">+ New Clock</button>
+      <div style="display:flex;gap:8px">
+        ${c.clocks.length>=2?`<button class="btn btn-ghost" onclick="openManualMergeModal('clock')">Merge…</button>`:''}
+        <button class="btn btn-primary" onclick="openAddClockModal()">+ New Clock</button>
+      </div>
     </div>
     ${c.clocks.length===0
       ? `<div class="empty-state"><h3>No clocks yet</h3><p>Track slow-building threats or plans - a ritual, a rival's patience, an approaching army. Tick a segment whenever it advances, no need to plan out what happens when it fills.</p></div>`
