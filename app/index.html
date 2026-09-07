@@ -150,6 +150,9 @@
     .loc-img-upload { width: 100%; height: 110px; border-radius: var(--radius); background: rgba(var(--accent-rgb),0.08); border: 2px dashed rgba(var(--accent-rgb),0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-dim); overflow: hidden; transition: border-color 0.15s; }
     .loc-img-upload:hover { border-color: var(--accent); }
     .loc-img-upload img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .loc-img-drag-box { width: 260px; max-width: 100%; height: 120px; border-radius: var(--radius); overflow: hidden; cursor: grab; user-select: none; border: 2px solid var(--accent-dim); flex-shrink: 0; touch-action: none; }
+    .loc-img-drag-box.dragging { cursor: grabbing; }
+    .loc-img-drag-box img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block; }
 
     /* ── SESSION LIST ── */
     .session-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; display: flex; justify-content: space-between; align-items: center; }
@@ -2926,6 +2929,7 @@ function buildPlayerWikiSnapshot(c) {
       id: n.id, name: n.name, role: n.role || '', type: n.type || 'npc',
       status: n.status || 'alive', statusLabel: getNpcStatuses().find(s=>s.value===n.status)?.label || '',
       image: n.image ? resolveFoundryImgSrc(n.image) : '',
+      imageOffsetX: n.imageOffsetX ?? 50, imageOffsetY: n.imageOffsetY ?? 50,
       notes: n.notes || '',
       locationId: loc?.playerVisible ? loc.id : null, locationName: loc?.playerVisible ? loc.name : '',
       factionId: faction?.playerVisible ? faction.id : null, factionName: faction?.playerVisible ? faction.name : '',
@@ -2937,6 +2941,7 @@ function buildPlayerWikiSnapshot(c) {
   const locations = c.locations.filter(l => l.playerVisible).map(l => ({
     id: l.id, name: l.name, description: l.description || '',
     image: l.image ? resolveFoundryImgSrc(l.image) : '',
+    imageOffsetX: l.imageOffsetX ?? 50, imageOffsetY: l.imageOffsetY ?? 50,
     residents: c.npcs.filter(n => n.locationId === l.id && n.playerVisible).map(npcRef),
     revealedAt: l.revealedAt || null,
   }));
@@ -3624,7 +3629,8 @@ function mergeLocations(keepId, removeIds, finalName) {
     const dup = c.locations.find(l => l.id === rid);
     if (!dup) return;
     keep.sessionIds = _mergeUniq([...(keep.sessionIds || []), ...(dup.sessionIds || [])]);
-    ['description', 'type', 'image', 'notes'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    ['description', 'type', 'notes'].forEach(k => { if (!keep[k] && dup[k]) keep[k] = dup[k]; });
+    if (!keep.image && dup.image) { keep.image = dup.image; keep.imageOffsetX = dup.imageOffsetX ?? 50; keep.imageOffsetY = dup.imageOffsetY ?? 50; }
     (c.npcs || []).forEach(n => { if (n.locationId === rid) n.locationId = keepId; });
     (c.plotThreads || []).forEach(t => ['locationIds', 'boardLocationIds'].forEach(k => { if ((t[k] || []).includes(rid)) t[k] = _mergeUniq(t[k].map(x => x === rid ? keepId : x)); }));
     _reassignEntityRefs(c, 'location', rid, keepId);
@@ -4766,6 +4772,8 @@ function openLocationModal(id) {
   const sceneOpts = scenes.map(s => `<option value="${s.id}" ${l.sceneId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 
   window._locationImageData = undefined; // undefined = no change; null = removed; string = new image
+  window._locationImageOffsetX = l.imageOffsetX ?? 50;
+  window._locationImageOffsetY = l.imageOffsetY ?? 50;
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -4774,9 +4782,17 @@ function openLocationModal(id) {
       <div class="modal-header"><h3>Edit Location</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="form-group">
         <label>Image <span class="text-dim text-xs">(optional - shown in Player Companion)</span></label>
-        <div class="loc-img-upload" id="loc-img-preview" onclick="document.getElementById('loc-img-input').click()" title="Upload image">${l.image?`<img src="${l.image}" alt="location image">`:'Click to add an image'}</div>
+        <div class="loc-img-upload" id="loc-img-preview" onclick="document.getElementById('loc-img-input').click()" title="Upload image">${l.image?`<img src="${l.image}" alt="location image" style="object-position:${l.imageOffsetX??50}% ${l.imageOffsetY??50}%">`:'Click to add an image'}</div>
         <input type="file" id="loc-img-input" accept="image/*" style="display:none" onchange="onLocationImageSelected(this)">
-        <button type="button" class="btn btn-ghost btn-sm" id="loc-img-remove" style="margin-top:6px;${l.image?'':'display:none'}" onclick="removeLocationImage()">Remove image</button>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" id="loc-img-remove" style="${l.image?'':'display:none'}" onclick="removeLocationImage()">Remove image</button>
+          <div id="loc-img-reposition" style="${l.image?'display:flex':'display:none'};flex-direction:column;align-items:center;gap:5px">
+            <div class="loc-img-drag-box" id="loc-img-drag-box" onmousedown="startLocationImageDrag(event)" ontouchstart="startLocationImageDrag(event)">
+              <img id="loc-img-drag-preview" src="${l.image||''}" alt="preview" style="object-position:${l.imageOffsetX??50}% ${l.imageOffsetY??50}%">
+            </div>
+            <div class="text-xs text-dim">Drag to reposition</div>
+          </div>
+        </div>
       </div>
       <div class="form-group"><label>Name</label><input type="text" id="el-name" value="${esc(l.name)}"></div>
       <div class="form-group"><label>Description</label><textarea id="el-desc" rows="4">${esc(l.description||'')}</textarea></div>
@@ -4838,10 +4854,16 @@ function onLocationImageSelected(input) {
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       window._locationImageData = dataUrl;
+      window._locationImageOffsetX = 50;
+      window._locationImageOffsetY = 50;
       const preview = document.getElementById('loc-img-preview');
-      if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="location image">`;
+      if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="location image" style="object-position:50% 50%">`;
       const removeBtn = document.getElementById('loc-img-remove');
       if (removeBtn) removeBtn.style.display = '';
+      const reposition = document.getElementById('loc-img-reposition');
+      if (reposition) reposition.style.display = 'flex';
+      const dragPreview = document.getElementById('loc-img-drag-preview');
+      if (dragPreview) { dragPreview.src = dataUrl; dragPreview.style.objectPosition = '50% 50%'; }
     };
     img.src = e.target.result;
   };
@@ -4850,10 +4872,51 @@ function onLocationImageSelected(input) {
 
 function removeLocationImage() {
   window._locationImageData = null;
+  window._locationImageOffsetX = 50;
+  window._locationImageOffsetY = 50;
   const preview = document.getElementById('loc-img-preview');
   if (preview) preview.innerHTML = 'Click to add an image';
   const removeBtn = document.getElementById('loc-img-remove');
   if (removeBtn) removeBtn.style.display = 'none';
+  const reposition = document.getElementById('loc-img-reposition');
+  if (reposition) reposition.style.display = 'none';
+}
+
+// Mirrors startNpcImageDrag - drag the wide preview to pan the crop's focal
+// point, written into window._locationImageOffsetX/Y and committed by
+// saveLocation(). Landscape box rather than the NPC's circle.
+function startLocationImageDrag(e) {
+  e.preventDefault();
+  const isTouch = e.type === 'touchstart';
+  const startX = isTouch ? e.touches[0].clientX : e.clientX;
+  const startY = isTouch ? e.touches[0].clientY : e.clientY;
+  const startOffX = window._locationImageOffsetX ?? 50;
+  const startOffY = window._locationImageOffsetY ?? 50;
+  const box = document.getElementById('loc-img-drag-box');
+  if (box) box.classList.add('dragging');
+
+  function onMove(ev) {
+    const cx = isTouch ? ev.touches[0].clientX : ev.clientX;
+    const cy = isTouch ? ev.touches[0].clientY : ev.clientY;
+    const newX = Math.max(0, Math.min(100, startOffX + (cx - startX) * 0.3));
+    const newY = Math.max(0, Math.min(100, startOffY + (cy - startY) * 0.3));
+    window._locationImageOffsetX = newX;
+    window._locationImageOffsetY = newY;
+    const pos = `${newX}% ${newY}%`;
+    const dragImg = document.getElementById('loc-img-drag-preview');
+    if (dragImg) dragImg.style.objectPosition = pos;
+    const previewImg = document.getElementById('loc-img-preview')?.querySelector('img');
+    if (previewImg) previewImg.style.objectPosition = pos;
+  }
+
+  function onEnd() {
+    document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', onMove);
+    document.removeEventListener(isTouch ? 'touchend'  : 'mouseup',   onEnd);
+    if (box) box.classList.remove('dragging');
+  }
+
+  document.addEventListener(isTouch ? 'touchmove' : 'mousemove', onMove, { passive: false });
+  document.addEventListener(isTouch ? 'touchend'  : 'mouseup',   onEnd);
 }
 
 function saveLocation(id) {
@@ -4864,6 +4927,8 @@ function saveLocation(id) {
   l.notes = document.getElementById('el-notes').value;
   l.gmNotes = collectGmNotesFromModal();
   if (window._locationImageData !== undefined) l.image = window._locationImageData;
+  l.imageOffsetX = window._locationImageOffsetX ?? l.imageOffsetX ?? 50;
+  l.imageOffsetY = window._locationImageOffsetY ?? l.imageOffsetY ?? 50;
   const sceneSel = document.getElementById('el-scene');
   if (sceneSel) l.sceneId = sceneSel.value || null;
   save();
@@ -6320,7 +6385,7 @@ function renderCampaignBible() {
         <h2>Characters</h2>
         ${keyNpcs.map(n => `
           <div class="cb-entry cb-entry-npc">
-            ${n.image?`<img class="cb-portrait" src="${esc(resolveFoundryImgSrc(n.image))}" alt="">`:''}
+            ${n.image?`<img class="cb-portrait" src="${esc(resolveFoundryImgSrc(n.image))}" alt="" style="object-position:${n.imageOffsetX??50}% ${n.imageOffsetY??50}%">`:''}
             <div>
               <h3>${esc(n.name)}${n.role?` <span class="cb-tag">${esc(n.role)}</span>`:''} ${excludeBtn('npc', n.id)}</h3>
               ${!playerSafe && n[GM_SECRET_FIELDS.npc]?`<p><strong>Wants:</strong> ${esc(n[GM_SECRET_FIELDS.npc])}</p>`:''}

@@ -402,7 +402,7 @@ function wvSectionCharacters() {
   const card = n => `
     <div class="wv-card" id="wv-item-characters-${n.id}">
       ${wvFavoriteStarHTML('characters', n.id)}
-      ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="">` : ''}
+      ${n.image ? `<img class="wv-portrait" src="${esc(n.image)}" alt="" style="object-position:${n.imageOffsetX ?? 50}% ${n.imageOffsetY ?? 50}%">` : ''}
       <div style="flex:1">
         <div style="font-weight:600;padding-right:20px">${wvNewBadge(n.revealedAt)}${esc(n.name)}${n.role ? ` <span style="font-weight:400;color:var(--text-dim)">- ${esc(n.role)}</span>` : ''}</div>
         <div style="margin:4px 0 6px;font-size:0.8rem;color:var(--text-dim)">
@@ -430,7 +430,7 @@ function wvSectionLocations() {
   return locs.map(l => `
     <div class="wv-entry" id="wv-item-locations-${l.id}">
       ${wvFavoriteStarHTML('locations', l.id)}
-      ${l.image ? `<img class="wv-loc-image" src="${esc(l.image)}" alt="">` : ''}
+      ${l.image ? `<img class="wv-loc-image" src="${esc(l.image)}" alt="" style="object-position:${l.imageOffsetX ?? 50}% ${l.imageOffsetY ?? 50}%">` : ''}
       <div style="font-weight:600;margin-top:${l.image?'10px':'0'};padding-right:20px">${wvNewBadge(l.revealedAt)}${esc(l.name)}</div>
       ${l.description ? `<div style="font-size:0.85rem;margin-top:4px">${esc(l.description)}</div>` : ''}
       ${l.residents?.length ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">Notable residents: ${l.residents.map(wvChip).join(', ')}</div>` : ''}
